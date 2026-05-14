@@ -5,16 +5,26 @@ import { logger }  from "../utils/logger.js";
 let calendar = null;
 
 export function initCalendar() {
-  const keyPath = process.env.GOOGLE_KEY_PATH || "./credentials.json";
-  if (!fs.existsSync(keyPath)) {
-    logger.warn("credentials.json not found — Calendar disabled");
-    return;
-  }
   try {
-    const auth = new google.auth.GoogleAuth({
-      keyFile: keyPath,
-      scopes:  ["https://www.googleapis.com/auth/calendar"],
-    });
+    let auth;
+    const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SA_B64 ? Buffer.from(process.env.GOOGLE_SA_B64, "base64").toString() : null);
+    if (saJson) {
+      const credentials = JSON.parse(saJson);
+      auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ["https://www.googleapis.com/auth/calendar"],
+      });
+    } else {
+      const keyPath = process.env.GOOGLE_KEY_PATH || "./credentials.json";
+      if (!fs.existsSync(keyPath)) {
+        logger.warn("credentials.json not found — Calendar disabled");
+        return;
+      }
+      auth = new google.auth.GoogleAuth({
+        keyFile: keyPath,
+        scopes: ["https://www.googleapis.com/auth/calendar"],
+      });
+    }
     calendar = google.calendar({ version: "v3", auth });
     logger.info("Google Calendar ready ✅");
   } catch (e) {
