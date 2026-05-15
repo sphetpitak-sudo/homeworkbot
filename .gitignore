@@ -5,3 +5,4 @@ credentials.json
 homebot.json
 .corrections.json
 *.tmp
+.opencode/
