@@ -94,7 +94,7 @@ tr:hover td { background: #ffffff08; }
   <div class="header-inner">
     <h1 onclick="showHome()">📚 Homework Bot</h1>
     <div class="header-actions" id="headerActions">
-      <button class="btn btn-outline btn-sm" onclick="showHome()">🏠 หน้าหลัก</button>
+      <button class="btn btn-primary" onclick="showHome()">🏠 กลับหน้าหลัก</button>
     </div>
   </div>
 </div>
@@ -144,8 +144,9 @@ tr:hover td { background: #ffffff08; }
     <h3>⏰ ตามช่วงเวลา</h3>
     <div class="badge-list" id="timeGroupList"></div>
   </div>
-  <div style="text-align:center;margin-top:-8px;">
+  <div style="text-align:center;margin-top:-8px;display:flex;gap:8px;justify-content:center;">
     <button class="btn btn-primary" onclick="showHomework()">📋 ดูรายการทั้งหมด</button>
+    <button class="btn btn-outline" onclick="showHome()">🏠 กลับหน้าหลัก</button>
   </div>
 </div>
 
@@ -159,6 +160,9 @@ tr:hover td { background: #ffffff08; }
         <thead><tr><th>สถานะ</th><th>ชื่อ</th><th>วิชา</th><th>กำหนดส่ง</th><th>เหลือ</th></tr></thead>
         <tbody id="homeworkTable"></tbody>
       </table>
+    </div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="btn btn-outline" onclick="showHome()">🏠 กลับหน้าหลัก</button>
     </div>
     <div class="last-update" id="lastUpdate"></div>
   </div>
