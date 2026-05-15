@@ -99,9 +99,26 @@ setInterval(() => {
     if (cleaned) logger.debug(`Cleaned ${cleaned} stale user states`);
 }, 30 * 60 * 1000);
 
-/* ── launch ── */
-bot.launch();
-logger.info("🤖 Homework Bot running...");
+/* ── launch with retry on 409 conflict ── */
+async function launchBot(retries = 5, delay = 3000) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await bot.launch();
+            logger.info("🤖 Homework Bot running...");
+            return;
+        } catch (err) {
+            const is409 = err?.response?.error_code === 409;
+            if (is409 && i < retries - 1) {
+                logger.warn(`409 Conflict (attempt ${i + 1}/${retries}), retrying in ${delay}ms...`);
+                await new Promise((r) => setTimeout(r, delay));
+                delay *= 2;
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+launchBot();
 
 /* ── graceful shutdown ── */
 const shutdown = (sig) => { logger.info(`Received ${sig}, stopping...`); bot.stop(sig); };
