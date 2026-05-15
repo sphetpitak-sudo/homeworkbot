@@ -88,6 +88,14 @@ setInterval(() => {
     if (cleaned) logger.debug(`Cleaned ${cleaned} stale user states`);
 }, 30 * 60 * 1000);
 
+/* ── health check HTTP server ── */
+import http from "http";
+const PORT = process.env.PORT || 8080;
+http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+}).listen(PORT, () => logger.info(`Health check server on port ${PORT}`));
+
 /* ── launch ── */
 bot.launch();
 logger.info("🤖 Homework Bot running...");
