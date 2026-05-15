@@ -56,7 +56,14 @@ export function startWebServer(port = 8080) {
                 return dt >= today && dt <= urgentLimit;
             }).length;
 
-            res.json({ todo, prog, done, total, pct, bySubject, urgent });
+            const overdue = activePages.filter((p) => {
+                const d = p.properties.Due?.date?.start;
+                if (!d) return false;
+                const dt = new Date(d + "T00:00:00");
+                return dt < today;
+            }).length;
+
+            res.json({ todo, prog, done, total, pct, bySubject, urgent, overdue });
         } catch (err) {
             logger.error("API /api/stats:", err);
             res.status(500).json({ error: err.message });

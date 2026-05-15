@@ -6,149 +6,323 @@
 <title>Homework Dashboard</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
-.container { max-width: 1000px; margin: 0 auto; }
-h1 { font-size: 24px; margin-bottom: 20px; color: #f8fafc; }
-h1 span { color: #64748b; font-size: 14px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.card { background: #1e293b; border-radius: 12px; padding: 16px; text-align: center; }
-.card .num { font-size: 28px; font-weight: 700; }
-.card .label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
-.card.todo .num { color: #f87171; }
-.card.prog .num { color: #fbbf24; }
-.card.done .num { color: #34d399; }
-.card.total .num { color: #60a5fa; }
-.card.urgent .num { color: #f97316; }
-.progress-section { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
-.progress-section h3 { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
-.bar-bg { background: #334155; border-radius: 8px; height: 20px; overflow: hidden; }
-.bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 8px; transition: width 0.5s; }
-.bar-label { display: flex; justify-content: space-between; font-size: 13px; color: #94a3b8; margin-top: 4px; }
-.subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 12px; }
-.subject-item { background: #334155; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
-.subject-name { font-size: 14px; }
-.subject-count { font-size: 13px; color: #94a3b8; }
-.table-section { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { text-align: left; padding: 8px 12px; color: #94a3b8; font-weight: 500; border-bottom: 1px solid #334155; }
-td { padding: 8px 12px; border-bottom: 1px solid #1e293b; }
-tr:hover td { background: #33415540; }
-.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.status-dot.todo { background: #f87171; }
-.status-dot.prog { background: #fbbf24; }
-.status-dot.done { background: #34d399; }
-.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #334155; color: #94a3b8; }
-.overdue { color: #f87171; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 0; }
+.header { background: #1e293b; padding: 16px 20px; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #334155; }
+.header-inner { max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 20px; color: #f8fafc; }
+.header h1 span { color: #64748b; font-size: 13px; font-weight: 400; }
+.header-actions { display: flex; gap: 8px; }
+.btn { background: #334155; color: #e2e8f0; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; transition: background .2s; }
+.btn:hover { background: #475569; }
+.btn-primary { background: #3b82f6; }
+.btn-primary:hover { background: #2563eb; }
+.container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.stat { background: #1e293b; border-radius: 12px; padding: 14px; text-align: center; }
+.stat .num { font-size: 26px; font-weight: 700; }
+.stat .lbl { font-size: 12px; color: #94a3b8; margin-top: 3px; }
+.stat.todo .num { color: #f87171; }
+.stat.prog .num { color: #fbbf24; }
+.stat.done .num { color: #34d399; }
+.stat.total .num { color: #60a5fa; }
+.stat.urgent .num { color: #f97316; }
+.stat.overdue .num { color: #ef4444; }
+
+.section { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.section h3 { font-size: 14px; color: #94a3b8; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.bar-bg { background: #334155; border-radius: 8px; height: 22px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 8px; transition: width .6s; }
+.bar-labels { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+.filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-btn { background: #334155; color: #94a3b8; border: none; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 12px; transition: all .2s; }
+.filter-btn.active { background: #3b82f6; color: #fff; }
+.filter-btn:hover { background: #475569; }
+.filter-btn.active:hover { background: #2563eb; }
+
+.search-box { background: #334155; border: none; border-radius: 8px; padding: 10px 14px; color: #e2e8f0; font-size: 13px; width: 100%; margin-bottom: 14px; outline: none; }
+.search-box::placeholder { color: #64748b; }
+.search-box:focus { box-shadow: 0 0 0 2px #3b82f680; }
+
+.subjects { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.subject-pill { background: #334155; border-radius: 999px; padding: 6px 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.subject-pill .bar { width: 40px; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+.subject-pill .bar-fill-sm { height: 100%; background: #3b82f6; border-radius: 3px; }
+.subject-pill .count { color: #94a3b8; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 10px; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+td { padding: 8px 10px; border-bottom: 1px solid #1e293b; }
+tr:hover td { background: #ffffff08; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+.dot.todo { background: #f87171; }
+.dot.prog { background: #fbbf24; }
+.dot.done { background: #34d399; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #334155; color: #94a3b8; display: inline-block; }
+.overdue { color: #f87171; font-weight: 600; }
 .soon { color: #fbbf24; }
 .safe { color: #34d399; }
-.loading { text-align: center; padding: 40px; color: #64748b; }
-.error { text-align: center; padding: 40px; color: #f87171; }
-.refresh-btn { background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; float: right; margin-top: -40px; }
-.refresh-btn:hover { background: #2563eb; }
-@media (max-width: 600px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+.grp-header td { color: #94a3b8; font-size: 12px; font-weight: 600; padding-top: 14px; border-bottom: none; background: transparent !important; pointer-events: none; }
+
+.empty { text-align: center; padding: 30px; color: #64748b; font-size: 14px; }
+.error-box { text-align: center; padding: 30px; color: #f87171; }
+
+.last-update { text-align: right; font-size: 11px; color: #475569; margin-top: 8px; }
+
+@media (max-width: 600px) {
+  .stats { grid-template-columns: repeat(3, 1fr); }
+  .header h1 span { display: none; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+}
 </style>
 </head>
 <body>
+<div class="header">
+  <div class="header-inner">
+    <h1>📚 Homework <span>| ภาพรวมการบ้าน</span></h1>
+    <div class="header-actions">
+      <button class="btn btn-primary" onclick="loadData()">🔄 โหลดใหม่</button>
+    </div>
+  </div>
+</div>
+
 <div class="container" id="app">
-  <h1>📚 Homework Dashboard <span>| ภาพรวมการบ้าน</span></h1>
-  <button class="refresh-btn" onclick="loadData()">🔄 รีเฟรช</button>
+  <div class="stats" id="statsCards"></div>
 
-  <div class="cards" id="statsCards"></div>
+  <div class="section">
+    <h3>📊 ความคืบหน้า</h3>
+    <div class="bar-bg"><div class="bar-fill" id="progressBar" style="width:0%"></div></div>
+    <div class="bar-labels"><span id="progressLabel">0 / 0</span><span id="progressPct">0%</span></div>
+  </div>
 
-  <div class="progress-section" id="progressSection"></div>
+  <div class="section">
+    <h3>📖 วิชาที่ยังค้าง</h3>
+    <div class="subjects" id="subjectList"></div>
+  </div>
 
-  <div class="table-section">
-    <h3 style="margin-bottom:12px;">📋 รายการทั้งหมด</h3>
-    <table>
-      <thead><tr><th>สถานะ</th><th>ชื่อ</th><th>วิชา</th><th>กำหนดส่ง</th></tr></thead>
-      <tbody id="homeworkTable"></tbody>
-    </table>
+  <div class="section">
+    <h3>⏰ ตามระยะเวลา</h3>
+    <div class="subjects" id="timeGroupList"></div>
+  </div>
+
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <h3 style="margin:0;">📋 รายการทั้งหมด</h3>
+      <span style="font-size:12px;color:#64748b;" id="itemCount"></span>
+    </div>
+    <input class="search-box" id="searchBox" placeholder="🔍 ค้นหาชื่อการบ้าน หรือวิชา..." oninput="filterTable()">
+    <div class="filters" id="filterTabs"></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>สถานะ</th><th>ชื่อ</th><th>วิชา</th><th>กำหนดส่ง</th><th>เหลือ</th></tr></thead>
+        <tbody id="homeworkTable"></tbody>
+      </table>
+    </div>
+    <div class="last-update" id="lastUpdate"></div>
   </div>
 </div>
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get("token");
+let allItems = [];
+let currentFilter = "all";
+let currentSearch = "";
+
+function qs(id) { return document.getElementById(id); }
 
 async function loadData() {
   if (!TOKEN) {
-    document.getElementById("statsCards").innerHTML = '<div class="error">❌ ไม่มี token กรุณาใส่ ?token=... ใน URL</div>';
+    qs("statsCards").innerHTML = '<div class="error-box">❌ ไม่มี token กรุณาใส่ ?token=... ใน URL</div>';
     return;
   }
-
   try {
     const [stats, homework] = await Promise.all([
-      fetch(`/api/stats?token=${TOKEN}`).then(r => r.json()),
-      fetch(`/api/homework?token=${TOKEN}`).then(r => r.json()),
+      fetch(`/api/stats?token=${TOKEN}`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); }),
+      fetch(`/api/homework?token=${TOKEN}`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); }),
     ]);
-
+    allItems = homework;
     renderStats(stats);
     renderProgress(stats);
-    renderTable(homework);
+    renderSubjects(stats);
+    renderTimeGroups(homework);
+    renderFilters();
+    filterTable();
+    qs("lastUpdate").textContent = "อัปเดตล่าสุด: " + new Date().toLocaleString("th-TH");
   } catch (err) {
-    document.getElementById("statsCards").innerHTML = `<div class="error">❌ โหลดข้อมูลไม่ได้: ${err.message}</div>`;
+    qs("statsCards").innerHTML = `<div class="error-box">❌ โหลดข้อมูลไม่ได้: ${err.message}</div>`;
   }
 }
 
 function renderStats(s) {
-  document.getElementById("statsCards").innerHTML = `
-    <div class="card todo"><div class="num">${s.todo}</div><div class="label">📌 ยังไม่ทำ</div></div>
-    <div class="card prog"><div class="num">${s.prog}</div><div class="label">🔄 กำลังทำ</div></div>
-    <div class="card done"><div class="num">${s.done}</div><div class="label">✅ เสร็จแล้ว</div></div>
-    <div class="card total"><div class="num">${s.total}</div><div class="label">📦 รวมทั้งหมด</div></div>
-    <div class="card urgent"><div class="num">${s.urgent}</div><div class="label">⚡ เร่งด่วน</div></div>
+  qs("statsCards").innerHTML = `
+    <div class="stat todo"><div class="num">${s.todo}</div><div class="lbl">📌 ยังไม่ทำ</div></div>
+    <div class="stat prog"><div class="num">${s.prog}</div><div class="lbl">🔄 กำลังทำ</div></div>
+    <div class="stat done"><div class="num">${s.done}</div><div class="lbl">✅ เสร็จแล้ว</div></div>
+    <div class="stat total"><div class="num">${s.total}</div><div class="lbl">📦 รวม</div></div>
+    <div class="stat urgent"><div class="num">${s.urgent}</div><div class="lbl">⚡ เร่งด่วน</div></div>
+    <div class="stat overdue"><div class="num">${s.overdue||0}</div><div class="lbl">🚨 เลยกำหนด</div></div>
   `;
 }
 
 function renderProgress(s) {
-  const subjects = Object.entries(s.bySubject).sort((a, b) => b[1] - a[1]);
-  const subjectHtml = subjects.length ? subjects.map(([name, count]) =>
-    `<div class="subject-item"><span class="subject-name">${name}</span><span class="subject-count">${count} รายการ</span></div>`
-  ).join("") : '<div style="color:#64748b;font-size:13px;">🎉 ไม่มีการบ้านค้าง</div>';
+  qs("progressBar").style.width = s.pct + "%";
+  qs("progressLabel").textContent = s.done + " / " + s.total + " รายการ";
+  qs("progressPct").textContent = s.pct + "%";
+}
 
-  document.getElementById("progressSection").innerHTML = `
-    <h3>📊 ความคืบหน้า (${s.pct}%)</h3>
-    <div class="bar-bg"><div class="bar-fill" style="width:${s.pct}%"></div></div>
-    <div class="bar-label"><span>${s.done} / ${s.total} รายการ</span><span>${s.pct}%</span></div>
-    <h3 style="margin-top:16px;">📖 วิชาที่ยังค้าง</h3>
-    <div class="subject-grid">${subjectHtml}</div>
-  `;
+function renderSubjects(s) {
+  const subs = Object.entries(s.bySubject).sort((a, b) => b[1] - a[1]);
+  const maxCount = subs.length ? subs[0][1] : 0;
+  qs("subjectList").innerHTML = subs.length
+    ? subs.map(([name, count]) => `
+      <div class="subject-pill">
+        <span>${escapeHtml(name)}</span>
+        <span class="count">${count}</span>
+        <div class="bar"><div class="bar-fill-sm" style="width:${maxCount ? (count/maxCount*100) : 0}%"></div></div>
+      </div>`).join("")
+    : '<span style="color:#64748b;font-size:13px;">🎉 ไม่มีการบ้านค้าง</span>';
+}
+
+function renderTimeGroups(items) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const groups = { overdue: [], thisWeek: [], nextWeek: [], later: [], noDate: [] };
+  const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+  const endOfNextWeek = new Date(endOfWeek); endOfNextWeek.setDate(endOfWeek.getDate() + 7);
+
+  for (const item of items) {
+    if (item.status === "Done") continue;
+    if (!item.due) { groups.noDate.push(item); continue; }
+    const dt = new Date(item.due + "T00:00:00");
+    if (dt < today) { groups.overdue.push(item); }
+    else if (dt <= endOfWeek) { groups.thisWeek.push(item); }
+    else if (dt <= endOfNextWeek) { groups.nextWeek.push(item); }
+    else { groups.later.push(item); }
+  }
+
+  const labels = [
+    ["🚨 เลยกำหนด", groups.overdue, "#f87171"],
+    ["📅 อาทิตย์นี้", groups.thisWeek, "#fbbf24"],
+    ["📅 อาทิตย์หน้า", groups.nextWeek, "#60a5fa"],
+    ["📅 ยังอีกนาน", groups.later, "#64748b"],
+    ["📅 ไม่กำหนดวัน", groups.noDate, "#475569"],
+  ];
+
+  const todayNum = today.getTime();
+  qs("timeGroupList").innerHTML = labels
+    .filter(([_, items]) => items.length)
+    .map(([label, items, color]) => `
+      <div class="subject-pill" style="border-left:3px solid ${color};padding-left:10px;">
+        <span>${label}</span>
+        <span class="count">${items.length} รายการ</span>
+      </div>`).join("");
+}
+
+function renderFilters() {
+  const counts = { all: allItems.length };
+  for (const item of allItems) {
+    const s = item.status === "Todo" ? "todo" : item.status === "In Progress" ? "prog" : "done";
+    counts[s] = (counts[s] || 0) + 1;
+  }
+  const tabs = [
+    ["all", `ทั้งหมด (${counts.all||0})`],
+    ["todo", `📌 ยังไม่ทำ (${counts.todo||0})`],
+    ["prog", `🔄 กำลังทำ (${counts.prog||0})`],
+    ["done", `✅ เสร็จแล้ว (${counts.done||0})`],
+  ];
+  qs("filterTabs").innerHTML = tabs.map(([key, label]) =>
+    `<button class="filter-btn${currentFilter===key?' active':''}" onclick="setFilter('${key}')">${label}</button>`
+  ).join("");
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  renderFilters();
+  filterTable();
+}
+
+function filterTable() {
+  currentSearch = qs("searchBox").value.toLowerCase().trim();
+  let filtered = allItems;
+
+  if (currentFilter === "todo") filtered = filtered.filter(i => i.status === "Todo");
+  else if (currentFilter === "prog") filtered = filtered.filter(i => i.status === "In Progress");
+  else if (currentFilter === "done") filtered = filtered.filter(i => i.status === "Done");
+
+  if (currentSearch) {
+    filtered = filtered.filter(i =>
+      i.title.toLowerCase().includes(currentSearch) ||
+      i.subject.toLowerCase().includes(currentSearch)
+    );
+  }
+
+  qs("itemCount").textContent = filtered.length + " รายการ";
+  renderTable(filtered);
 }
 
 function renderTable(items) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const tbody = document.getElementById("homeworkTable");
+  const tbody = qs("homeworkTable");
 
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">ไม่มีข้อมูล</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">📭 ไม่มีรายการที่ตรงเงื่อนไข</td></tr>';
     return;
   }
 
-  tbody.innerHTML = items.map(item => {
-    const statusClass = item.status === "Todo" ? "todo" : item.status === "In Progress" ? "prog" : "done";
-    const statusLabel = item.status === "Todo" ? "ยังไม่ทำ" : item.status === "In Progress" ? "กำลังทำ" : "เสร็จแล้ว";
+  const groups = { overdue: [], thisWeek: [], nextWeek: [], later: [], noDate: [] };
+  const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+  const endOfNextWeek = new Date(endOfWeek); endOfNextWeek.setDate(endOfWeek.getDate() + 7);
 
-    let dueClass = "";
-    let dueLabel = item.due || "-";
-    if (item.due) {
-      const dt = new Date(item.due + "T00:00:00");
-      const diff = Math.ceil((dt - today) / 86400000);
-      if (diff < 0) { dueClass = "overdue"; dueLabel += " (เลยกำหนด)"; }
-      else if (diff <= 3) { dueClass = "soon"; dueLabel += ` (อีก ${diff} วัน)`; }
-      else { dueClass = "safe"; }
-    }
+  for (const item of items) {
+    if (!item.due) { groups.noDate.push(item); continue; }
+    const dt = new Date(item.due + "T00:00:00");
+    if (dt < today) { groups.overdue.push(item); }
+    else if (dt <= endOfWeek) { groups.thisWeek.push(item); }
+    else if (dt <= endOfNextWeek) { groups.nextWeek.push(item); }
+    else { groups.later.push(item); }
+  }
 
-    return `<tr>
-      <td><span class="status-dot ${statusClass}"></span>${statusLabel}</td>
-      <td>${escapeHtml(item.title)}</td>
-      <td><span class="badge">${escapeHtml(item.subject)}</span></td>
-      <td class="${dueClass}">${dueLabel}</td>
-    </tr>`;
-  }).join("");
+  const groupConfig = [
+    ["🚨 เลยกำหนด", groups.overdue],
+    ["📅 อาทิตย์นี้", groups.thisWeek],
+    ["📅 อาทิตย์หน้า", groups.nextWeek],
+    ["📅 ยังอีกนาน", groups.later],
+    ["📅 ไม่กำหนดวัน", groups.noDate],
+  ];
+
+  let html = "";
+  for (const [header, gItems] of groupConfig) {
+    if (!gItems.length) continue;
+    gItems.sort((a, b) => a.due && b.due ? a.due.localeCompare(b.due) : (a.due ? -1 : 1));
+    html += `<tr class="grp-header"><td colspan="5">${header} (${gItems.length})</td></tr>`;
+    html += gItems.map(item => {
+      const sc = item.status === "Todo" ? "todo" : item.status === "In Progress" ? "prog" : "done";
+      const sl = item.status === "Todo" ? "ยังไม่ทำ" : item.status === "In Progress" ? "กำลังทำ" : "เสร็จแล้ว";
+      let dc = "", dl = item.due || "-", remain = "-";
+      if (item.due) {
+        const dt = new Date(item.due + "T00:00:00");
+        const diff = Math.ceil((dt - today) / 86400000);
+        if (diff < 0) { dc = "overdue"; dl = item.due; remain = `เลย ${-diff} วัน`; }
+        else if (diff === 0) { dc = "overdue"; dl = item.due; remain = "วันนี้"; }
+        else if (diff <= 3) { dc = "soon"; dl = item.due; remain = `อีก ${diff} วัน`; }
+        else { dc = "safe"; dl = item.due; remain = `อีก ${diff} วัน`; }
+      }
+      return `<tr>
+        <td><span class="dot ${sc}"></span>${sl}</td>
+        <td>${escapeHtml(item.title)}</td>
+        <td><span class="badge">${escapeHtml(item.subject)}</span></td>
+        <td class="${dc}">${dl}</td>
+        <td class="${dc}">${remain}</td>
+      </tr>`;
+    }).join("");
+  }
+  tbody.innerHTML = html;
 }
 
-function escapeHtml(text) {
+function escapeHtml(t) {
   const d = document.createElement("div");
-  d.textContent = text;
+  d.textContent = t;
   return d.innerHTML;
 }
 
