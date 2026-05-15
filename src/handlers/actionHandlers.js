@@ -381,6 +381,22 @@ export function registerActionHandlers(bot, userState) {
         );
     });
 
+    /* ASK AI */
+    bot.action("ASK_AI", async (ctx) => {
+        const uid = ctx.from.id;
+        userState.set(uid, { mode: "ASK_AI", _timestamp: Date.now() });
+        await ctx.answerCbQuery().catch(() => {});
+        return ctx.reply(
+            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
+                `${safeItalic("พิมพ์คำถามที่อยากรู้ เช่น")}\n` +
+                "• `งานคณิตส่งวันไหนบ้าง`\n" +
+                "• `มีงานอะไรที่ยังไม่ทำ`\n" +
+                "• `อาทิตย์นี้มีงานกี่ชิ้น`\n\n" +
+                "พิมพ์คำถามได้เลย หรือกดยกเลิก",
+            { parse_mode: "Markdown", ...cancelMenu },
+        );
+    });
+
     /* LIST ACTIVE */
     bot.action("LIST_ACTIVE", async (ctx) => {
         await ctx.answerCbQuery().catch(() => {});

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homework Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+.container { max-width: 1000px; margin: 0 auto; }
+h1 { font-size: 24px; margin-bottom: 20px; color: #f8fafc; }
+h1 span { color: #64748b; font-size: 14px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.card { background: #1e293b; border-radius: 12px; padding: 16px; text-align: center; }
+.card .num { font-size: 28px; font-weight: 700; }
+.card .label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+.card.todo .num { color: #f87171; }
+.card.prog .num { color: #fbbf24; }
+.card.done .num { color: #34d399; }
+.card.total .num { color: #60a5fa; }
+.card.urgent .num { color: #f97316; }
+.progress-section { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+.progress-section h3 { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+.bar-bg { background: #334155; border-radius: 8px; height: 20px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 8px; transition: width 0.5s; }
+.bar-label { display: flex; justify-content: space-between; font-size: 13px; color: #94a3b8; margin-top: 4px; }
+.subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 12px; }
+.subject-item { background: #334155; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+.subject-name { font-size: 14px; }
+.subject-count { font-size: 13px; color: #94a3b8; }
+.table-section { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; padding: 8px 12px; color: #94a3b8; font-weight: 500; border-bottom: 1px solid #334155; }
+td { padding: 8px 12px; border-bottom: 1px solid #1e293b; }
+tr:hover td { background: #33415540; }
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.status-dot.todo { background: #f87171; }
+.status-dot.prog { background: #fbbf24; }
+.status-dot.done { background: #34d399; }
+.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #334155; color: #94a3b8; }
+.overdue { color: #f87171; }
+.soon { color: #fbbf24; }
+.safe { color: #34d399; }
+.loading { text-align: center; padding: 40px; color: #64748b; }
+.error { text-align: center; padding: 40px; color: #f87171; }
+.refresh-btn { background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; float: right; margin-top: -40px; }
+.refresh-btn:hover { background: #2563eb; }
+@media (max-width: 600px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <h1>📚 Homework Dashboard <span>| ภาพรวมการบ้าน</span></h1>
+  <button class="refresh-btn" onclick="loadData()">🔄 รีเฟรช</button>
+
+  <div class="cards" id="statsCards"></div>
+
+  <div class="progress-section" id="progressSection"></div>
+
+  <div class="table-section">
+    <h3 style="margin-bottom:12px;">📋 รายการทั้งหมด</h3>
+    <table>
+      <thead><tr><th>สถานะ</th><th>ชื่อ</th><th>วิชา</th><th>กำหนดส่ง</th></tr></thead>
+      <tbody id="homeworkTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("token");
+
+async function loadData() {
+  if (!TOKEN) {
+    document.getElementById("statsCards").innerHTML = '<div class="error">❌ ไม่มี token กรุณาใส่ ?token=... ใน URL</div>';
+    return;
+  }
+
+  try {
+    const [stats, homework] = await Promise.all([
+      fetch(`/api/stats?token=${TOKEN}`).then(r => r.json()),
+      fetch(`/api/homework?token=${TOKEN}`).then(r => r.json()),
+    ]);
+
+    renderStats(stats);
+    renderProgress(stats);
+    renderTable(homework);
+  } catch (err) {
+    document.getElementById("statsCards").innerHTML = `<div class="error">❌ โหลดข้อมูลไม่ได้: ${err.message}</div>`;
+  }
+}
+
+function renderStats(s) {
+  document.getElementById("statsCards").innerHTML = `
+    <div class="card todo"><div class="num">${s.todo}</div><div class="label">📌 ยังไม่ทำ</div></div>
+    <div class="card prog"><div class="num">${s.prog}</div><div class="label">🔄 กำลังทำ</div></div>
+    <div class="card done"><div class="num">${s.done}</div><div class="label">✅ เสร็จแล้ว</div></div>
+    <div class="card total"><div class="num">${s.total}</div><div class="label">📦 รวมทั้งหมด</div></div>
+    <div class="card urgent"><div class="num">${s.urgent}</div><div class="label">⚡ เร่งด่วน</div></div>
+  `;
+}
+
+function renderProgress(s) {
+  const subjects = Object.entries(s.bySubject).sort((a, b) => b[1] - a[1]);
+  const subjectHtml = subjects.length ? subjects.map(([name, count]) =>
+    `<div class="subject-item"><span class="subject-name">${name}</span><span class="subject-count">${count} รายการ</span></div>`
+  ).join("") : '<div style="color:#64748b;font-size:13px;">🎉 ไม่มีการบ้านค้าง</div>';
+
+  document.getElementById("progressSection").innerHTML = `
+    <h3>📊 ความคืบหน้า (${s.pct}%)</h3>
+    <div class="bar-bg"><div class="bar-fill" style="width:${s.pct}%"></div></div>
+    <div class="bar-label"><span>${s.done} / ${s.total} รายการ</span><span>${s.pct}%</span></div>
+    <h3 style="margin-top:16px;">📖 วิชาที่ยังค้าง</h3>
+    <div class="subject-grid">${subjectHtml}</div>
+  `;
+}
+
+function renderTable(items) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tbody = document.getElementById("homeworkTable");
+
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = items.map(item => {
+    const statusClass = item.status === "Todo" ? "todo" : item.status === "In Progress" ? "prog" : "done";
+    const statusLabel = item.status === "Todo" ? "ยังไม่ทำ" : item.status === "In Progress" ? "กำลังทำ" : "เสร็จแล้ว";
+
+    let dueClass = "";
+    let dueLabel = item.due || "-";
+    if (item.due) {
+      const dt = new Date(item.due + "T00:00:00");
+      const diff = Math.ceil((dt - today) / 86400000);
+      if (diff < 0) { dueClass = "overdue"; dueLabel += " (เลยกำหนด)"; }
+      else if (diff <= 3) { dueClass = "soon"; dueLabel += ` (อีก ${diff} วัน)`; }
+      else { dueClass = "safe"; }
+    }
+
+    return `<tr>
+      <td><span class="status-dot ${statusClass}"></span>${statusLabel}</td>
+      <td>${escapeHtml(item.title)}</td>
+      <td><span class="badge">${escapeHtml(item.subject)}</span></td>
+      <td class="${dueClass}">${dueLabel}</td>
+    </tr>`;
+  }).join("");
+}
+
+function escapeHtml(text) {
+  const d = document.createElement("div");
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+loadData();
+</script>
+</body>
+</html>

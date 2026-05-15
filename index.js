@@ -1,5 +1,4 @@
 import "dotenv/config";
-import http            from "http";
 import { Telegraf }    from "telegraf";
 import cron            from "node-cron";
 import { validateEnv } from "./src/utils/validateEnv.js";
@@ -11,16 +10,14 @@ import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
-
-/* ── health check first (so Back4app sees port open immediately) ── */
-const PORT = process.env.PORT || 8080;
-http.createServer((_req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("OK");
-}).listen(PORT, () => logger.info(`Health check server on port ${PORT}`));
+import { startWebServer }      from "./src/web/server.js";
 
 /* ── validate env ── */
 validateEnv();
+
+/* ── web server (dashboard + health check) ── */
+const PORT = process.env.PORT || 8080;
+startWebServer(PORT);
 
 /* ── init ── */
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);

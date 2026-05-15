@@ -7,12 +7,15 @@ import {
 } from "../utils/subjectDetector.js";
 import { isCalendarReady } from "../services/googleCalendarService.js";
 import { parseHomework, isAIReady } from "../services/aiService.js";
+import { isQaReady, askAI } from "../services/qaService.js";
 import {
     escapeMarkdown,
     safeBold,
     safeItalic,
     safeCode,
 } from "../utils/telegramFormat.js";
+
+const WEB_URL = process.env.WEB_URL || "";
 
 export const mainMenu = Markup.inlineKeyboard([
     [
@@ -23,7 +26,13 @@ export const mainMenu = Markup.inlineKeyboard([
         Markup.button.callback("📋 งานค้าง", "LIST_ACTIVE"),
         Markup.button.callback("✅ งานเสร็จ", "LIST_DONE"),
     ],
-    [Markup.button.callback("🗓 ปฏิทิน 7 วัน", "CAL_VIEW")],
+    [
+        Markup.button.callback("🗓 ปฏิทิน 7 วัน", "CAL_VIEW"),
+        Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
+    ],
+    ...(WEB_URL
+        ? [[Markup.button.url("🌐 Web Dashboard", WEB_URL)]]
+        : []),
 ]);
 
 export const cancelMenu = Markup.inlineKeyboard([
@@ -133,6 +142,25 @@ export function registerCommandHandlers(bot, userState) {
         }),
     );
 
+    bot.command("ask", async (ctx) => {
+        if (!isQaReady()) {
+            return ctx.reply("⚠️ ยังไม่ได้ตั้งค่า GROQ_API_KEY", {
+                parse_mode: "Markdown",
+                ...mainMenu,
+            });
+        }
+        userState.set(ctx.from.id, { mode: "ASK_AI", _timestamp: Date.now() });
+        return ctx.reply(
+            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
+                `${safeItalic("พิมพ์คำถามที่อยากรู้ เช่น")}\n` +
+                `• \`งานคณิตส่งวันไหนบ้าง\`\n` +
+                `• \`มีงานอะไรที่ยังไม่ทำ\`\n` +
+                `• \`อาทิตย์นี้มีงานกี่ชิ้น\`\n\n` +
+                `พิมพ์คำถามได้เลย หรือกดยกเลิก`,
+            { parse_mode: "Markdown", ...cancelMenu },
+        );
+    });
+
     bot.command("help", (ctx) =>
         ctx.reply(
             `🆘 ${safeBold("วิธีใช้งาน")}\n` +
@@ -196,6 +224,18 @@ export function registerCommandHandlers(bot, userState) {
             const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, rawText: text };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
             return showConfirm(ctx, pending, parsed.usedAI, parsed.model);
+        }
+
+        if (state?.mode === "ASK_AI") {
+            userState.delete(uid);
+            await ctx.reply("⏳ *กำลังค้นหาคำตอบ...*", { parse_mode: "Markdown" });
+            const answer = await askAI(text);
+            return ctx.reply(
+                answer
+                    ? `🤖 ${safeBold("คำตอบ")}\n━━━━━━━━━━━━━━━━━━\n${answer}`
+                    : "❌ ไม่สามารถตอบคำถามได้ กรุณาลองใหม่",
+                { parse_mode: "Markdown", ...mainMenu },
+            );
         }
 
         // Not in any mode — smart preview with AI or regex
