@@ -7,6 +7,59 @@ import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function computeStats(activePages, donePages) {
+    const todo = activePages.filter(
+        (p) => p.properties.Status?.select?.name === STATUS.TODO,
+    ).length;
+    const prog = activePages.filter(
+        (p) => p.properties.Status?.select?.name === STATUS.IN_PROGRESS,
+    ).length;
+    const done = donePages.length;
+    const total = todo + prog + done;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    const bySubject = {};
+    for (const p of activePages) {
+        const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
+        bySubject[sub] = (bySubject[sub] || 0) + 1;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const urgentLimit = new Date(today);
+    urgentLimit.setDate(today.getDate() + 3);
+
+    const urgent = activePages.filter((p) => {
+        const d = p.properties.Due?.date?.start;
+        if (!d) return false;
+        const dt = new Date(d + "T00:00:00");
+        return dt >= today && dt <= urgentLimit;
+    }).length;
+
+    const overdue = activePages.filter((p) => {
+        const d = p.properties.Due?.date?.start;
+        if (!d) return false;
+        const dt = new Date(d + "T00:00:00");
+        return dt < today;
+    }).length;
+
+    return { todo, prog, done, total, pct, bySubject, urgent, overdue };
+}
+
+function buildHomeworkList(activePages, donePages) {
+    const items = [...activePages, ...donePages].map((p) => ({
+        id: p.id,
+        ...getPageProps(p),
+        url: p.url,
+    }));
+    items.sort((a, b) => {
+        if (!a.due) return 1;
+        if (!b.due) return -1;
+        return a.due.localeCompare(b.due);
+    });
+    return items;
+}
+
 export function startWebServer(port = 8080) {
     const app = express();
     const TOKEN = process.env.TELEGRAM_TOKEN || "";
@@ -21,49 +74,31 @@ export function startWebServer(port = 8080) {
         next();
     }
 
+    /* single endpoint: returns stats + homework in one call */
+    app.get("/api/all", requireAuth, async (req, res) => {
+        try {
+            const [activePages, donePages] = await Promise.all([
+                fetchActive(),
+                fetchDone(),
+            ]);
+            res.json({
+                stats: computeStats(activePages, donePages),
+                homework: buildHomeworkList(activePages, donePages),
+            });
+        } catch (err) {
+            logger.error("API /api/all:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /* kept for backward compat */
     app.get("/api/stats", requireAuth, async (req, res) => {
         try {
             const [activePages, donePages] = await Promise.all([
                 fetchActive(),
                 fetchDone(),
             ]);
-
-            const todo = activePages.filter(
-                (p) => p.properties.Status?.select?.name === STATUS.TODO,
-            ).length;
-            const prog = activePages.filter(
-                (p) => p.properties.Status?.select?.name === STATUS.IN_PROGRESS,
-            ).length;
-            const done = donePages.length;
-            const total = todo + prog + done;
-            const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-            const bySubject = {};
-            for (const p of activePages) {
-                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
-                bySubject[sub] = (bySubject[sub] || 0) + 1;
-            }
-
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const urgentLimit = new Date(today);
-            urgentLimit.setDate(today.getDate() + 3);
-
-            const urgent = activePages.filter((p) => {
-                const d = p.properties.Due?.date?.start;
-                if (!d) return false;
-                const dt = new Date(d + "T00:00:00");
-                return dt >= today && dt <= urgentLimit;
-            }).length;
-
-            const overdue = activePages.filter((p) => {
-                const d = p.properties.Due?.date?.start;
-                if (!d) return false;
-                const dt = new Date(d + "T00:00:00");
-                return dt < today;
-            }).length;
-
-            res.json({ todo, prog, done, total, pct, bySubject, urgent, overdue });
+            res.json(computeStats(activePages, donePages));
         } catch (err) {
             logger.error("API /api/stats:", err);
             res.status(500).json({ error: err.message });
@@ -76,20 +111,7 @@ export function startWebServer(port = 8080) {
                 fetchActive(),
                 fetchDone(),
             ]);
-
-            const items = [...activePages, ...donePages].map((p) => ({
-                id: p.id,
-                ...getPageProps(p),
-                url: p.url,
-            }));
-
-            items.sort((a, b) => {
-                if (!a.due) return 1;
-                if (!b.due) return -1;
-                return a.due.localeCompare(b.due);
-            });
-
-            res.json(items);
+            res.json(buildHomeworkList(activePages, donePages));
         } catch (err) {
             logger.error("API /api/homework:", err);
             res.status(500).json({ error: err.message });
