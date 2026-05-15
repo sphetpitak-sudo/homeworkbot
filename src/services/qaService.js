@@ -34,9 +34,9 @@ export async function askAI(question) {
         }
 
         const homeworkLines = pages.map((p, i) => {
-            const { title, status, due, subject } = getPageProps(p);
+            const { title, status, due, subject, priority } = getPageProps(p);
             const emoji = status === "In Progress" ? "🔄" : "📌";
-            return `${i + 1}. ${emoji} [${subject}] "${title}" — ส่ง: ${due || "ไม่กำหนด"} (${statusLabel(status)})`;
+            return `${i + 1}. ${emoji} [${subject}] "${title}" — ส่ง: ${due || "ไม่กำหนด"} (${statusLabel(status)}) ความสำคัญ: ${priority}`;
         });
 
         const homeworkText = homeworkLines.join("\n");
