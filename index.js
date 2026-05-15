@@ -1,15 +1,23 @@
 import "dotenv/config";
-import { Telegraf } from "telegraf";
-import cron from "node-cron";
+import http            from "http";
+import { Telegraf }    from "telegraf";
+import cron            from "node-cron";
 import { validateEnv } from "./src/utils/validateEnv.js";
-import { logger } from "./src/utils/logger.js";
-import { initCalendar } from "./src/services/googleCalendarService.js";
-import { initAI } from "./src/services/aiService.js";
-import { fetchUpcoming } from "./src/services/notionService.js";
+import { logger }      from "./src/utils/logger.js";
+import { initCalendar }        from "./src/services/googleCalendarService.js";
+import { initAI }              from "./src/services/aiService.js";
+import { fetchUpcoming }       from "./src/services/notionService.js";
 import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
-import { escapeMarkdown } from "./src/utils/telegramFormat.js";
+import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
-import { registerActionHandlers } from "./src/handlers/actionHandlers.js";
+import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
+
+/* ── health check first (so Back4app sees port open immediately) ── */
+const PORT = process.env.PORT || 8080;
+http.createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+}).listen(PORT, () => logger.info(`Health check server on port ${PORT}`));
 
 /* ── validate env ── */
 validateEnv();
@@ -24,6 +32,12 @@ initAI();
 /* ── register handlers ── */
 registerCommandHandlers(bot, userState);
 registerActionHandlers(bot, userState);
+
+/* ── global error handler (prevents crash on polling conflicts) ── */
+bot.catch((err) => {
+    const desc = err?.response?.description || err?.message || err?.code || err;
+    logger.error(`Bot error: ${desc}`);
+});
 
 /* ── reminder ── */
 async function sendReminders() {
@@ -71,12 +85,12 @@ async function sendReminders() {
     }
 }
 
-// ทุกวัน 08:00 น. ตาม timezone ไทย
+/* ── cron: 08:00 ทุกวัน ── */
 cron.schedule("0 8 * * *", sendReminders, { timezone: "Asia/Bangkok" });
 
 /* ── clean stale user states every 30 min ── */
 setInterval(() => {
-    const TTL = 3_600_000; // 1 hour
+    const TTL = 3_600_000;
     const now = Date.now();
     let cleaned = 0;
     for (const [uid, state] of userState) {
@@ -88,17 +102,11 @@ setInterval(() => {
     if (cleaned) logger.debug(`Cleaned ${cleaned} stale user states`);
 }, 30 * 60 * 1000);
 
-/* ── health check HTTP server ── */
-import http from "http";
-const PORT = process.env.PORT || 8080;
-http.createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("OK");
-}).listen(PORT, () => logger.info(`Health check server on port ${PORT}`));
-
 /* ── launch ── */
 bot.launch();
 logger.info("🤖 Homework Bot running...");
 
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+/* ── graceful shutdown ── */
+const shutdown = (sig) => { logger.info(`Received ${sig}, stopping...`); bot.stop(sig); };
+process.once("SIGINT",  () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
