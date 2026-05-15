@@ -1,6 +1,6 @@
 import { Client } from "@notionhq/client";
 import { logger } from "../utils/logger.js";
-import { STATUS, NOTION_PAGE_SIZE } from "../utils/constants.js";
+import { STATUS, PRIORITY_DEFAULT, NOTION_PAGE_SIZE } from "../utils/constants.js";
 import { cacheGet, cacheSet, cacheInvalidate } from "./cache.js";
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN?.trim() });
@@ -33,6 +33,7 @@ export function getPageProps(page) {
         subject:
             page.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป",
         eventId: page.properties.EventId?.rich_text?.[0]?.plain_text || null,
+        priority: page.properties.Priority?.select?.name || PRIORITY_DEFAULT,
     };
 }
 
@@ -101,6 +102,7 @@ export async function createHomework({
     due,
     rawText,
     eventId,
+    priority,
 }) {
     const props = {
         Name: { title: [{ text: { content: title } }] },
@@ -112,6 +114,8 @@ export async function createHomework({
     if (due) props.Due = { date: { start: due } };
     if (eventId)
         props.EventId = { rich_text: [{ text: { content: eventId } }] };
+    if (priority)
+        props.Priority = { select: { name: priority } };
 
     await notion.pages.create({
         parent: { database_id: DB },
@@ -128,6 +132,15 @@ export async function updateStatus(pageId, status) {
     });
     cacheInvalidate("notion:");
     logger.info(`Status updated: ${pageId} → ${status}`);
+}
+
+export async function updatePriority(pageId, priority) {
+    await notion.pages.update({
+        page_id: pageId,
+        properties: { Priority: { select: { name: priority } } },
+    });
+    cacheInvalidate("notion:");
+    logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
 
 export async function archivePage(pageId) {

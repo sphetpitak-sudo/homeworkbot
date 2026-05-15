@@ -47,7 +47,10 @@ export const confirmMenu = Markup.inlineKeyboard([
         Markup.button.callback("📚 วิชา", "EDIT_SUBJECT"),
         Markup.button.callback("📅 วันที่", "EDIT_DATE"),
     ],
-    [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
+    [
+        Markup.button.callback("🎯 ความสำคัญ", "EDIT_PRIORITY"),
+        Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+    ],
 ]);
 
 function buildWelcomeMessage(name) {
@@ -81,6 +84,7 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     const title = pending?.title || "ไม่มีชื่อ";
     const subject = pending?.subject || "ทั่วไป";
     const due = pending?.due ? formatDueDisplay(pending.due) : "ไม่กำหนดวัน";
+    const priority = pending?.priority || "🟡 กลาง";
     const aiBadge = aiUsed
         ? `\n🤖 ${safeItalic("วิเคราะห์โดย AI")}${model ? ` (${safeCode(model)})` : ""}`
         : "";
@@ -93,6 +97,7 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
             `━━━━━━━━━━━━━━━━━━\n` +
             `${subjectEmoji(subject)} ${safeBold(escapeMarkdown(title))}\n` +
             `📚 วิชา: ${safeBold(escapeMarkdown(subject))}\n` +
+            `🎯 ความสำคัญ: ${priority}\n` +
             `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(due))}` +
             calLine +
             aiBadge +
@@ -112,6 +117,7 @@ async function parseText(text) {
             due: aiResult.dueDate,
             subject: aiResult.subject || detectSubject(text),
             title: aiResult.title || cleanTitle(text) || text,
+            priority: aiResult.priority || "🟡 กลาง",
             usedAI: true,
             model: aiResult.model || "",
         };
@@ -120,6 +126,7 @@ async function parseText(text) {
         due: parseThaiDate(text),
         subject: detectSubject(text),
         title: cleanTitle(text) || text,
+        priority: "🟡 กลาง",
         usedAI: false,
         model: "",
     };
@@ -220,7 +227,7 @@ export function registerCommandHandlers(bot, userState) {
         if (state?.mode === "ADD") {
             userState.delete(uid);
             const parsed = await parseText(text);
-            const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, rawText: text };
+            const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
             return showConfirm(ctx, pending, parsed.usedAI, parsed.model);
         }
@@ -244,6 +251,7 @@ export function registerCommandHandlers(bot, userState) {
             `━━━━━━━━━━━━━━━━━━\n` +
             `${subjectEmoji(parsed.subject)} ${safeBold(escapeMarkdown(parsed.title))}\n` +
             `📚 วิชา: ${safeBold(escapeMarkdown(parsed.subject))}\n` +
+            `🎯 ความสำคัญ: ${parsed.priority || "🟡 กลาง"}\n` +
             `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"))}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `${safeItalic("กด ➕ เพิ่มการบ้าน แล้วส่งข้อความนี้อีกครั้งเพื่อบันทึก")}`;

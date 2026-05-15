@@ -111,9 +111,14 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         'Examples: "คนิด" → คณิต, "พุท" → พุธ or พรุ่งนี้, "อิ๊ง" → อังกฤษ',
         "",
         "Return ONLY JSON:",
-        '  {"title": "assignment name", "subject": "subject", "dueDate": "YYYY-MM-DD or null"}',
+        '  {"title": "assignment name", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ"}',
         "",
         "subject: one of คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม, ทั่วไป",
+        "",
+        "priority rules:",
+        '- "สูง" if due is urgent (≤3 days), or words like "ด่วน", "สำคัญ", "สอบ", "ส่งพรุ่งนี้"',
+        '- "ต่ำ" if due is far (>14 days) or words like "งานกลุ่ม", "รายงาน", "สอบปลายภาค"',
+        '- "กลาง" for everything else',
         "",
         "Calculate dueDate from the text relative to today's date:",
         `- "พรุ่งนี้" → ${tomorrow}`,
@@ -123,11 +128,13 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         "",
         "Examples:",
         `Input: "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้"`,
-        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"คณิต","dueDate":"${tomorrow}"}`,
+        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"คณิต","dueDate":"${tomorrow}","priority":"สูง"}`,
         `Input: "สอบคนิด พุทหน้า"`,
-        `Output: {"title":"สอบคณิต","subject":"คณิต","dueDate":"${nextWed}"}`,
-        `Input: "รายงานอังกฤษ วันศุกร์"`,
-        `Output: {"title":"รายงานอังกฤษ","subject":"อังกฤษ","dueDate":"${nextFri}"}`,
+        `Output: {"title":"สอบคณิต","subject":"คณิต","dueDate":"${nextWed}","priority":"สูง"}`,
+        `Input: "รายงานอังกฤษส่งอาทิตย์หน้า วันศุกร์"`,
+        `Output: {"title":"รายงานอังกฤษ","subject":"อังกฤษ","dueDate":"${nextFri}","priority":"กลาง"}`,
+        `Input: "งานกลุ่มสังคม อีก 2 อาทิตย์"`,
+        `Output: {"title":"งานกลุ่มสังคม","subject":"สังคม","dueDate":"...","priority":"ต่ำ"}`,
         "",
         "IMPORTANT: Always output a subject if text relates to homework/exam.",
     ].join("\n");
@@ -143,6 +150,7 @@ export async function parseHomework(text) {
             title: cached.title || cleanTitle(text) || text,
             subject: cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text),
             dueDate: cached.dueDate || parseThaiDate(text),
+            priority: cached.priority,
             model: cached.source,
         };
     }
@@ -173,10 +181,14 @@ export async function parseHomework(text) {
             return null;
         }
 
+        const PRIORITY_MAP = { สูง: "🔴 สูง", กลาง: "🟡 กลาง", ต่ำ: "🟢 ต่ำ" };
+        const priority = PRIORITY_MAP[parsed.priority] || "🟡 กลาง";
+
         const result = {
             title: parsed.title || cleanTitle(text) || text,
             subject: parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text),
             dueDate: parsed.dueDate || parseThaiDate(text),
+            priority,
             model,
         };
 

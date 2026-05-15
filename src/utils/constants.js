@@ -5,6 +5,20 @@ export const STATUS = {
     DONE: "Done",
 };
 
+// ── Priority ──
+export const PRIORITY = {
+    HIGH: "🔴 สูง",
+    MEDIUM: "🟡 กลาง",
+    LOW: "🟢 ต่ำ",
+};
+export const PRIORITY_ORDER = [PRIORITY.HIGH, PRIORITY.MEDIUM, PRIORITY.LOW];
+export const PRIORITY_DEFAULT = PRIORITY.MEDIUM;
+
+export function priorityWeight(p) {
+    const idx = PRIORITY_ORDER.indexOf(p);
+    return idx === -1 ? 1 : PRIORITY_ORDER.length - idx;
+}
+
 // ── Dashboard limits ──
 export const URGENT_DAYS = 3;
 export const URGENT_DISPLAY_MAX = 5;

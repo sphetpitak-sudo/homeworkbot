@@ -43,6 +43,7 @@ export function setCorrection(text, pending) {
         title: pending.title || null,
         subject: pending.subject || null,
         dueDate: pending.due || null,
+        priority: pending.priority || null,
     };
     const entries = Object.entries(corrections);
     if (entries.length > MAX_CORRECTIONS) {
@@ -66,7 +67,8 @@ export function setAICache(text, result) {
     cacheSet(`ai:${key}`, {
         title: result.title || null,
         subject: result.subject || null,
-        dueDate: result.due || null,
+        dueDate: result.due || result.dueDate || null,
+        priority: result.priority || null,
     }, AI_CACHE_TTL);
 }
 

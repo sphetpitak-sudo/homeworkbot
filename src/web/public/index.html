@@ -178,8 +178,8 @@ tr:hover td { background: rgba(59, 130, 246, 0.04); }
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th style="width:100px;">สถานะ</th><th>ชื่อ</th><th style="width:80px;">วิชา</th><th style="width:120px;">กำหนดส่ง</th><th style="width:80px;">เหลือ</th></tr></thead>
-        <tbody id="homeworkTable"><tr><td colspan="5"><div class="skel skel-bar"></div><div class="skel skel-bar"></div><div class="skel skel-bar"></div></td></tr></tbody>
+        <thead><tr><th style="width:100px;">สถานะ</th><th>ชื่อ</th><th style="width:80px;">วิชา</th><th style="width:90px;">สำคัญ</th><th style="width:120px;">กำหนดส่ง</th><th style="width:70px;">เหลือ</th></tr></thead>
+        <tbody id="homeworkTable"><tr><td colspan="6"><div class="skel skel-bar"></div><div class="skel skel-bar"></div><div class="skel skel-bar"></div></td></tr></tbody>
       </table>
     </div>
     <div class="meta">
@@ -364,7 +364,7 @@ async function loadList() {
   if (!TOKEN) return;
   try {
     const data = await loadAllData();
-    if (data?.error) { qs("homeworkTable").innerHTML = `<tr><td colspan="5" class="empty">❌ ${esc(data.error)}</td></tr>`; return; }
+    if (data?.error) { qs("homeworkTable").innerHTML = `<tr><td colspan="6" class="empty">❌ ${esc(data.error)}</td></tr>`; return; }
     renderFilters();
     filterTable();
     qs("lastUpdate").textContent = "อัปเดต: " + fmtTime();
@@ -372,7 +372,7 @@ async function loadList() {
     const done = allItems.filter(i => i.status === "Done").length;
     qs("listStatus").textContent = `📦 ${total} รายการ · ✅ ${done} เสร็จ`;
   } catch (err) {
-    qs("homeworkTable").innerHTML = `<tr><td colspan="5" class="empty">❌ ${esc(err.message)}</td></tr>`;
+    qs("homeworkTable").innerHTML = `<tr><td colspan="6" class="empty">❌ ${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -420,7 +420,7 @@ function renderTable(items) {
   const today = new Date(); today.setHours(0,0,0,0);
   const tbody = qs("homeworkTable");
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">📭 ไม่มีรายการที่ตรงเงื่อนไข</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">📭 ไม่มีรายการที่ตรงเงื่อนไข</td></tr>';
     return;
   }
   const groups = { overdue: [], thisWeek: [], nextWeek: [], later: [], noDate: [], done: [] };
@@ -447,10 +447,11 @@ function renderTable(items) {
   for (const [hdr, g] of config) {
     if (!g.length) continue;
     g.sort((a, b) => a.due && b.due ? a.due.localeCompare(b.due) : a.due ? -1 : 1);
-    html += `<tr class="grp"><td colspan="5">${hdr} (${g.length})</td></tr>`;
+    html += `<tr class="grp"><td colspan="6">${hdr} (${g.length})</td></tr>`;
     html += g.map(item => {
       const sc = item.status === "Todo" ? "todo" : item.status === "In Progress" ? "prog" : "done";
       const sl = LABELS[sc] || "เสร็จแล้ว";
+      const pri = item.priority || "🟡 กลาง";
       let dc = "", dl = item.due || "-", remain = "-";
       if (item.due) {
         const dt = new Date(item.due+"T00:00:00");
@@ -464,6 +465,7 @@ function renderTable(items) {
         <td><span class="dot ${sc}"></span>${sl}</td>
         <td>${esc(item.title)}</td>
         <td><span class="tag">${esc(item.subject)}</span></td>
+        <td style="font-size:12px;">${pri}</td>
         <td class="${dc}">${dl}</td>
         <td class="${dc}">${remain}</td>
       </tr>`;

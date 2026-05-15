@@ -12,6 +12,7 @@ import {
     fetchDone,
     createHomework,
     updateStatus,
+    updatePriority,
     archivePage,
     getPageProps,
 } from "../services/notionService.js";
@@ -29,6 +30,9 @@ import {
 } from "../utils/telegramFormat.js";
 import {
     STATUS,
+    PRIORITY,
+    PRIORITY_ORDER,
+    priorityWeight,
     URGENT_DAYS,
     URGENT_DISPLAY_MAX,
     SUBJECT_BAR_MAX,
@@ -123,7 +127,7 @@ function actionButtons(pageId, mode = "active") {
 
 /* ── card builder ── */
 function buildHomeworkCard(page, mode = "active") {
-    const { title, status, due, subject } = getPageProps(page);
+    const { title, status, due, subject, priority } = getPageProps(page);
     const safeTitle = escapeMarkdown(title);
     const safeSubject = escapeMarkdown(subject);
 
@@ -131,6 +135,7 @@ function buildHomeworkCard(page, mode = "active") {
         text:
             `${statusEmoji(status)} ${safeBold(safeTitle)}\n` +
             `${subjectEmoji(subject)} วิชา: ${safeBold(safeSubject)}\n` +
+            `${priority} ความสำคัญ: ${safeBold(priority)}\n` +
             `📍 สถานะ: ${safeBold(statusLabel(status))}\n` +
             `📅 ส่ง: ${escapeMarkdown(formatDueDisplay(due))}`,
         extra: {
@@ -181,9 +186,9 @@ function buildDashboard(activePages, donePages) {
         msg += `✨ ไม่มีการบ้านเร่งด่วน\n`;
     } else {
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
-            const { title, due, status, subject } = getPageProps(p);
+            const { title, due, status, subject, priority } = getPageProps(p);
             msg += `${statusEmoji(status)} ${safeBold(escapeMarkdown(title))} `;
-            msg += `${safeItalic(escapeMarkdown(subject))} — ${escapeMarkdown(formatDueDisplay(due))}\n`;
+            msg += `${priority} ${safeItalic(escapeMarkdown(subject))} — ${escapeMarkdown(formatDueDisplay(due))}\n`;
         }
         if (urgent.length > URGENT_DISPLAY_MAX) {
             msg += `… และอีก ${urgent.length - URGENT_DISPLAY_MAX} รายการ\n`;
@@ -275,7 +280,7 @@ export function registerActionHandlers(bot, userState) {
                 .catch(() => {});
         }
 
-        const { title, subject, due, rawText } = state.pending;
+        const { title, subject, due, rawText, priority } = state.pending;
 
         await ctx.answerCbQuery().catch(() => {});
         await ctx.editMessageText("⏳ *กำลังบันทึก...*", {
@@ -284,10 +289,10 @@ export function registerActionHandlers(bot, userState) {
 
         try {
             const eventId = await createCalendarEvent(title, subject, due);
-            await createHomework({ title, subject, due, rawText, eventId });
+            await createHomework({ title, subject, due, rawText, eventId, priority });
 
             if (state.originalText) {
-                setCorrection(state.originalText, { title, subject, due });
+                setCorrection(state.originalText, { title, subject, due, priority });
             }
 
             userState.delete(uid);
@@ -296,11 +301,13 @@ export function registerActionHandlers(bot, userState) {
             const safeSubject = escapeMarkdown(subject);
             const dueText = escapeMarkdown(formatDueDisplay(due));
 
+            const priText = priority || "🟡 กลาง";
             await ctx.editMessageText(
                 `🎉 ${safeBold("บันทึกสำเร็จ")}\n` +
                     `━━━━━━━━━━━━━━━━━━\n` +
                     `${subjectEmoji(subject)} ${safeBold(safeTitle)}\n` +
                     `📚 วิชา: ${safeBold(safeSubject)}\n` +
+                    `🎯 ความสำคัญ: ${priText}\n` +
                     `📅 กำหนดส่ง: ${safeBold(dueText)}\n` +
                     `${eventId ? "🗓 เพิ่มใน Google Calendar แล้ว ✅\n" : ""}` +
                     `━━━━━━━━━━━━━━━━━━\n` +
@@ -381,6 +388,58 @@ export function registerActionHandlers(bot, userState) {
         );
     });
 
+    /* EDIT PRIORITY */
+    bot.action("EDIT_PRIORITY", async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+
+        if (!state?.pending) {
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+        }
+
+        const current = state.pending.priority || PRIORITY.MEDIUM;
+        const options = PRIORITY_ORDER.map((p) =>
+            Markup.button.callback(
+                `${p === current ? "✅ " : ""}${p}`,
+                `SET_PRIORITY_${p}`,
+            ),
+        );
+
+        userState.set(uid, { mode: "EDIT_PRIORITY", pending: state.pending, _timestamp: Date.now() });
+        await ctx.answerCbQuery().catch(() => {});
+        return ctx.reply(
+            `🎯 ${safeBold("เลือกความสำคัญ")}\n` +
+                `ตอนนี้: ${current}\n\n` +
+                "เลือกระดับความสำคัญสำหรับการบ้านนี้",
+            {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard([
+                    options,
+                    [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
+                ]),
+            },
+        );
+    });
+
+    /* SET PRIORITY */
+    bot.action(/SET_PRIORITY_(.+)/, async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+        const priority = ctx.match[1];
+
+        if (!state?.pending) {
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+        }
+
+        const pending = { ...state.pending, priority };
+        userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
+        await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch(() => {});
+        try {
+            await ctx.deleteMessage();
+        } catch {}
+        return showConfirm(ctx, pending);
+    });
+
     /* ASK AI */
     bot.action("ASK_AI", async (ctx) => {
         const uid = ctx.from.id;
@@ -402,7 +461,16 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
 
         try {
-            const pages = await fetchActive();
+            const rawPages = await fetchActive();
+            const pages = [...rawPages].sort((a, b) => {
+                const pa = a.properties.Priority?.select?.name || PRIORITY.MEDIUM;
+                const pb = b.properties.Priority?.select?.name || PRIORITY.MEDIUM;
+                const w = priorityWeight(pb) - priorityWeight(pa);
+                if (w !== 0) return w;
+                const da = a.properties.Due?.date?.start || "9999-99-99";
+                const db = b.properties.Due?.date?.start || "9999-99-99";
+                return da.localeCompare(db);
+            });
 
             if (!pages.length) {
                 return ctx.reply(

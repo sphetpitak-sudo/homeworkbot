@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps } from "../services/notionService.js";
-import { STATUS } from "../utils/constants.js";
+import { STATUS, PRIORITY_DEFAULT } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
