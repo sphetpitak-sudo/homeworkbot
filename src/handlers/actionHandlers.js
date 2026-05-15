@@ -87,9 +87,9 @@ function dashboardMenu() {
         ],
         [
             Markup.button.callback("✅ งานเสร็จ", "LIST_DONE"),
-            Markup.button.callback("🗓 ปฏิทิน", "CAL_VIEW"),
+            Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
         ],
-        [Markup.button.callback("🔄 รีเฟรช", "DASHBOARD")],
+        [Markup.button.callback("🏠 กลับหน้าหลัก", "HOME")],
     ]);
 }
 
