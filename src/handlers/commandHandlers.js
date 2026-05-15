@@ -27,7 +27,6 @@ export const mainMenu = Markup.inlineKeyboard([
         Markup.button.callback("✅ งานเสร็จ", "LIST_DONE"),
     ],
     [
-        Markup.button.callback("🗓 ปฏิทิน 7 วัน", "CAL_VIEW"),
         Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
     ],
     ...(WEB_URL
