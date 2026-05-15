@@ -5,7 +5,8 @@ import { validateEnv } from "./src/utils/validateEnv.js";
 import { logger }      from "./src/utils/logger.js";
 import { initCalendar }        from "./src/services/googleCalendarService.js";
 import { initAI }              from "./src/services/aiService.js";
-import { fetchUpcoming }       from "./src/services/notionService.js";
+import { fetchUpcoming, fetchDone, archivePage } from "./src/services/notionService.js";
+import { deleteCalendarEvent } from "./src/services/googleCalendarService.js";
 import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
@@ -82,8 +83,35 @@ async function sendReminders() {
     }
 }
 
-/* ── cron: 08:00 ทุกวัน ── */
+/* ── auto-archive ── */
+async function autoArchive() {
+    try {
+        const pages = await fetchDone();
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 7);
+        cutoff.setHours(0, 0, 0, 0);
+        let archived = 0, calDeleted = 0;
+
+        for (const p of pages) {
+            const due = p.properties.Due?.date?.start;
+            if (!due) continue;
+            const dt = new Date(due + "T00:00:00");
+            if (dt >= cutoff) continue;
+
+            const eventId = await archivePage(p.id);
+            if (eventId) { await deleteCalendarEvent(eventId); calDeleted++; }
+            archived++;
+        }
+
+        if (archived) logger.info(`Auto-archived ${archived} items (${calDeleted} from Calendar)`);
+    } catch (err) {
+        logger.error("autoArchive:", err);
+    }
+}
+
+/* ── cron: 08:00 และ 02:00 ทุกวัน ── */
 cron.schedule("0 8 * * *", sendReminders, { timezone: "Asia/Bangkok" });
+cron.schedule("0 2 * * *", autoArchive, { timezone: "Asia/Bangkok" });
 
 /* ── clean stale user states every 30 min ── */
 setInterval(() => {
