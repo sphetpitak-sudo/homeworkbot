@@ -36,6 +36,7 @@ import {
     PROGRESS_BAR_SLOTS,
 } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
+import { setCorrection } from "../services/aiCache.js";
 
 /* ── small helpers ── */
 function statusEmoji(status) {
@@ -284,6 +285,10 @@ export function registerActionHandlers(bot, userState) {
         try {
             const eventId = await createCalendarEvent(title, subject, due);
             await createHomework({ title, subject, due, rawText, eventId });
+
+            if (state.originalText) {
+                setCorrection(state.originalText, { title, subject, due });
+            }
 
             userState.delete(uid);
 

@@ -6,6 +6,7 @@ export function validateEnv() {
   const missing = REQUIRED.filter((k) => !process.env[k]);
   if (missing.length) {
     logger.error("Missing required env vars:", missing.join(", "));
+    process.exit(1);
   }
 
   const optional = ["GOOGLE_KEY_PATH", "GOOGLE_CALENDAR_ID", "GROQ_API_KEY", "REMINDER_CHAT_ID"];

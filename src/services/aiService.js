@@ -1,10 +1,17 @@
 import OpenAI from "openai";
 import { logger } from "../utils/logger.js";
-import { formatDate } from "../utils/dateParser.js";
+import { formatDate, parseThaiDate } from "../utils/dateParser.js";
+import { detectSubject, cleanTitle } from "../utils/subjectDetector.js";
+import { getAICache, setAICache } from "./aiCache.js";
 
-export const AI_MODEL = "llama-3.3-70b-versatile";
+const MODELS = [
+    "llama-3.3-70b-versatile",
+    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant",
+];
 
 let client = null;
+let currentModelIdx = 0;
 let lastRequestTime = 0;
 const MIN_INTERVAL_MS = 2100;
 
@@ -19,7 +26,7 @@ export function initAI() {
             apiKey: key,
             baseURL: "https://api.groq.com/openai/v1",
         });
-        logger.info("AI service ready ✅ (Groq)");
+        logger.info(`AI service ready ✅ (${MODELS.length} models, primary: ${MODELS[0]})`);
     } catch (e) {
         logger.error("AI init failed:", e.message);
     }
@@ -33,16 +40,20 @@ function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
-async function completeWithRetry(systemMsg, userMsg, retries = 1) {
-    for (let attempt = 0; attempt <= retries; attempt++) {
+async function completeWithRetry(systemMsg, userMsg) {
+    const startIdx = currentModelIdx;
+    for (let attempt = 0; attempt < MODELS.length; attempt++) {
+        const idx = (startIdx + attempt) % MODELS.length;
+        const model = MODELS[idx];
+
         const now = Date.now();
         const wait = Math.max(0, MIN_INTERVAL_MS - (now - lastRequestTime));
         if (wait > 0) await sleep(wait);
 
         try {
             lastRequestTime = Date.now();
-            return await client.chat.completions.create({
-                model: AI_MODEL,
+            const resp = await client.chat.completions.create({
+                model,
                 messages: [
                     { role: "system", content: systemMsg },
                     { role: "user", content: userMsg },
@@ -50,12 +61,17 @@ async function completeWithRetry(systemMsg, userMsg, retries = 1) {
                 temperature: 0.1,
                 max_tokens: 150,
             });
+            currentModelIdx = idx;
+            return { resp, model };
         } catch (err) {
             const isQuota = String(err.status || err.message).includes("429");
-            if (isQuota && attempt < retries) {
-                logger.warn("Groq rate limit hit, retrying in 2s...");
-                await sleep(2000);
+            if (isQuota && attempt < MODELS.length - 1) {
+                logger.warn(`${model} quota hit, switching to ${MODELS[(idx + 1) % MODELS.length]}...`);
                 continue;
+            }
+            if (isQuota) {
+                logger.warn(`All models exhausted — falling back to regex`);
+                throw err;
             }
             throw err;
         }
@@ -120,6 +136,17 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
 export async function parseHomework(text) {
     if (!client || text.length >= 300) return null;
 
+    const cached = getAICache(text);
+    if (cached) {
+        logger.info(`AI cache hit: "${text.slice(0, 30)}..." (${cached.source})`);
+        return {
+            title: cached.title || cleanTitle(text) || text,
+            subject: cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text),
+            dueDate: cached.dueDate || parseThaiDate(text),
+            model: cached.source,
+        };
+    }
+
     const today = formatDate(new Date());
     const tomorrow = formatDate(new Date(Date.now() + 86400000));
     const nextWed = nextWeekday(3);
@@ -127,13 +154,13 @@ export async function parseHomework(text) {
     const systemMsg = buildSystemMsg(today, tomorrow, nextWed, nextFri);
 
     try {
-        const resp = await completeWithRetry(systemMsg, text);
+        const { resp, model } = await completeWithRetry(systemMsg, text);
         const raw = resp.choices[0]?.message?.content;
         let parsed = extractJson(raw);
 
         if (!parsed) {
-            logger.warn("AI bad format, retrying once...");
-            const resp2 = await completeWithRetry(
+            logger.warn(`${model} bad format, retrying once...`);
+            const { resp: resp2 } = await completeWithRetry(
                 "Extract homework as JSON: {\"title\":...,\"subject\":...,\"dueDate\":...}",
                 text,
             );
@@ -142,16 +169,19 @@ export async function parseHomework(text) {
         }
 
         if (!parsed) {
-            logger.warn("AI returned unparseable response");
+            logger.warn("AI returned unparseable response, falling back to regex");
             return null;
         }
 
-        return {
-            title: parsed.title || null,
-            subject: parsed.subject || null,
-            dueDate: parsed.dueDate || null,
-            model: AI_MODEL,
+        const result = {
+            title: parsed.title || cleanTitle(text) || text,
+            subject: parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text),
+            dueDate: parsed.dueDate || parseThaiDate(text),
+            model,
         };
+
+        setAICache(text, result);
+        return result;
     } catch (err) {
         const msg = String(err.message || err).slice(0, 120);
         logger.error("AI error:", msg);
