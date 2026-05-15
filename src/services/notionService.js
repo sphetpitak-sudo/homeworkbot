@@ -122,7 +122,7 @@ export async function createHomework({
         properties: props,
     });
     cacheInvalidate("notion:");
-    logger.info(`Created: "${title}" [${subject}] due=${due || "none"}`);
+    logger.info(`Created: "${title}" [${subject}] due=${due || "none"} priority=${priority || "none"}`);
 }
 
 export async function updateStatus(pageId, status) {
