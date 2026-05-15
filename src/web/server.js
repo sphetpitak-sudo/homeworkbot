@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps } from "../services/notionService.js";
-import { STATUS, PRIORITY_DEFAULT } from "../utils/constants.js";
+import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +24,12 @@ function computeStats(activePages, donePages) {
         bySubject[sub] = (bySubject[sub] || 0) + 1;
     }
 
+    const byPriority = {};
+    for (const p of activePages) {
+        const pri = p.properties.Priority?.select?.name || PRIORITY_DEFAULT;
+        byPriority[pri] = (byPriority[pri] || 0) + 1;
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const urgentLimit = new Date(today);
@@ -43,13 +49,14 @@ function computeStats(activePages, donePages) {
         return dt < today;
     }).length;
 
-    return { todo, prog, done, total, pct, bySubject, urgent, overdue };
+    return { todo, prog, done, total, pct, bySubject, byPriority, urgent, overdue };
 }
 
 function buildHomeworkList(activePages, donePages) {
     const items = [...activePages, ...donePages].map((p) => ({
         id: p.id,
         ...getPageProps(p),
+        note: p.properties.Note?.rich_text?.[0]?.plain_text || "",
         url: p.url,
     }));
     items.sort((a, b) => {
@@ -58,6 +65,24 @@ function buildHomeworkList(activePages, donePages) {
         return a.due.localeCompare(b.due);
     });
     return items;
+}
+
+function computeTrend(donePages) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayMap = {};
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        dayMap[key] = { date: key, label: `${d.getDate()}/${d.getMonth() + 1}`, count: 0 };
+    }
+    for (const p of donePages) {
+        const due = p.properties.Due?.date?.start;
+        if (!due) continue;
+        if (dayMap[due]) dayMap[due].count++;
+    }
+    return Object.values(dayMap);
 }
 
 export function startWebServer(port = 8080) {
@@ -74,7 +99,7 @@ export function startWebServer(port = 8080) {
         next();
     }
 
-    /* single endpoint: returns stats + homework in one call */
+    /* single endpoint: returns stats + homework + trend in one call */
     app.get("/api/all", requireAuth, async (req, res) => {
         try {
             const [activePages, donePages] = await Promise.all([
@@ -84,6 +109,7 @@ export function startWebServer(port = 8080) {
             res.json({
                 stats: computeStats(activePages, donePages),
                 homework: buildHomeworkList(activePages, donePages),
+                trend: computeTrend(donePages),
             });
         } catch (err) {
             logger.error("API /api/all:", err);
