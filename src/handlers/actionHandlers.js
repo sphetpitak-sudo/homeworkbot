@@ -137,7 +137,7 @@ function buildHomeworkCard(page, mode = "active") {
             `${subjectEmoji(subject)} วิชา: ${safeBold(safeSubject)}\n` +
             `${priority} ความสำคัญ: ${safeBold(priority)}\n` +
             `📍 สถานะ: ${safeBold(statusLabel(status))}\n` +
-            `📅 ส่ง: ${escapeMarkdown(formatDueDisplay(due))}`,
+            `📅 ส่ง: ${formatDueDisplay(due)}`,
         extra: {
             parse_mode: "Markdown",
             ...actionButtons(page.id, mode),
@@ -188,7 +188,7 @@ function buildDashboard(activePages, donePages) {
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
             const { title, due, status, subject, priority } = getPageProps(p);
             msg += `${statusEmoji(status)} ${safeBold(escapeMarkdown(title))} `;
-            msg += `${priority} ${safeItalic(escapeMarkdown(subject))} — ${escapeMarkdown(formatDueDisplay(due))}\n`;
+            msg += `${priority} ${safeItalic(escapeMarkdown(subject))} — ${formatDueDisplay(due)}\n`;
         }
         if (urgent.length > URGENT_DISPLAY_MAX) {
             msg += `… และอีก ${urgent.length - URGENT_DISPLAY_MAX} รายการ\n`;
@@ -299,7 +299,7 @@ export function registerActionHandlers(bot, userState) {
 
             const safeTitle = escapeMarkdown(title);
             const safeSubject = escapeMarkdown(subject);
-            const dueText = escapeMarkdown(formatDueDisplay(due));
+            const dueText = formatDueDisplay(due);
 
             const priText = priority || "🟡 กลาง";
             await ctx.editMessageText(

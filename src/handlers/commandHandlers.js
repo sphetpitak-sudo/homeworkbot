@@ -252,7 +252,7 @@ export function registerCommandHandlers(bot, userState) {
             `${subjectEmoji(parsed.subject)} ${safeBold(escapeMarkdown(parsed.title))}\n` +
             `📚 วิชา: ${safeBold(escapeMarkdown(parsed.subject))}\n` +
             `🎯 ความสำคัญ: ${parsed.priority || "🟡 กลาง"}\n` +
-            `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"))}\n` +
+            `📅 กำหนดส่ง: ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `${safeItalic("กด ➕ เพิ่มการบ้าน แล้วส่งข้อความนี้อีกครั้งเพื่อบันทึก")}`;
 
