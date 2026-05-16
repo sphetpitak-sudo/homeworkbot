@@ -69,10 +69,13 @@ src/utils/
 
 ## Web Dashboard
 - URL: `https://gitr_je3z9-ec1.j.jrnm.app/?token=<TELEGRAM_TOKEN>`
-- Pages: Home | Dashboard | Calendar | List
-- Dashboard: status donut, priority donut, trend line (30d), subject bars, week grid
-- Calendar: monthly grid, click day → show items
-- List: search, subject filter, date range, colored rows, click for detail panel, CSV export
+- Pages: Home | Dashboard (แดชบอร์ด) | Calendar (ปฏิทิน) | List (รายการ)
+- Home: stats cards (6 items), today+tomorrow schedule, overdue alert, quick links
+- Dashboard: 6 stats cards, 4 big stat counters, status+priority donuts, progress bar with shimmer, time-group pills with urgency bar, subject bar chart (Chart.js), 30-day trend line, 7-day mini grid
+- Calendar: monthly grid with status dots (red/amber/green for todo/prog/done), click day → show items with priority tags, Buddhist year display
+- List: sortable columns (click header), subject emoji, search in title+subject+note, subject filter + date range, status filter tabs with counts, grouped by (overdue/this week/next week/later/no date/done), colored rows (done dimmed), click for detail panel
+- Detail panel: priority badge, time remaining with color, status, subject, note, Notion link
+- Export: CSV with BOM for Excel
 
 ## Auto-archive
 - cron `0 2 * * *` — runs daily at 02:00 Bangkok time
