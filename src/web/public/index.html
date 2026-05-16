@@ -119,7 +119,9 @@ body {
 .stat .icon { font-size: 20px; margin-bottom: 5px; }
 .stat .val { font-size: 28px; font-weight: 700; line-height: 1.1; transition: all .3s; }
 .stat .lbl { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: .2px; }
-.stat canvas.spark { position: absolute; bottom: 4px; right: 4px; width: 64px; height: 28px; opacity: .3; pointer-events: none; border-radius: 4px; }
+.card canvas.spark { position: absolute; bottom: 4px; right: 4px; width: 64px; height: 28px; opacity: .3; pointer-events: none; border-radius: 4px; }
+.dash-stat-large { font-size: 32px; font-weight: 700; line-height: 1.1; }
+.dash-stat-label { font-size: 11px; color: var(--text3); margin-top: 4px; }
 
 /* ── grid layouts ── */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -127,7 +129,6 @@ body {
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 .full { margin-bottom: 20px; }
 .chart-wrap { max-width: 240px; margin: 0 auto; }
-.chart-sm { height: 140px; }
 
 /* ── progress ── */
 .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -215,7 +216,7 @@ tr.done-row:hover td { opacity: .75; }
   display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 99px;
   background: rgba(51,65,85,0.4); color: var(--text2);
 }
-.pri-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+
 .pri-high { color: var(--red); }
 .pri-med { color: var(--amber); }
 .pri-low { color: var(--green); }
@@ -463,7 +464,6 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
     </div>
   </div>
 
-
   <div class="full">
     <div class="card">
       <div class="card-title">📖 Subject Breakdown <span style="color:var(--text3);font-weight:400;">(active tasks)</span></div>
@@ -552,7 +552,7 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get("token");
-let allItems = [];
+let allItems = [], lastStats = null;
 let currentFilter = "all", currentSearch = "", currentSubject = "";
 let chart1 = null, chart2 = null, chart4 = null;
 let cachedTs = 0, calDate = new Date(), selectedCalDay = null;
@@ -567,7 +567,6 @@ const PRI_CLASS = {"🔴 สูง":"high","🟡 กลาง":"med","🟢 ต�
 const LABELS = {todo:"To Do",prog:"In Progress",done:"Done"};
 const SUBJ_EMOJI = {คณิต:"🔢",อังกฤษ:"🔤",ฟิสิกส์:"⚛️",เคมี:"🧪",ชีวะ:"🧬",ไทย:"📜",สังคม:"🌏",ประวัติ:"🏛️",คอม:"💻",สุขศึกษา:"🏃",ทั่วไป:"📖"};
 const VIEWS = ["homeView","dashView","calView","listView"];
-const VIEW_NAV = ["homeView","dashView","calView","listView"];
 let currentViewIdx = 0;
 
 function qs(id){return document.getElementById(id)}
@@ -631,16 +630,15 @@ async function fetchJson(url){const r=await fetch(url+"&_t="+now());if(!r.ok)thr
 
 async function loadAll(force){
   if(!TOKEN)return null;
-  if(!force&&allItems.length&&now()-cachedTs<CACHE_TTL)return {stats:null,homework:allItems};
+  if(!force&&allItems.length&&now()-cachedTs<CACHE_TTL)return {stats:lastStats,homework:allItems};
   try{
     const data=await fetchJson(`/api/all?token=${TOKEN}`);
-    allItems=data.homework||[];cachedTs=now();
+    allItems=data.homework||[];lastStats=data.stats||null;cachedTs=now();
     return data;
   }catch(e){return {error:e.message}}
 }
 
 /* ── sparkline helper ── */
-let sparkCharts=[];
 function drawSpark(id,color,data){
   const cvs=qs(id);if(!cvs)return;
   const ctx=cvs.getContext("2d");
@@ -771,7 +769,6 @@ async function loadDash(){
     const pLabels=Object.keys(bp),pVals=Object.values(bp);
     const c2=qs("priorityChart").getContext("2d");
     chart2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}});
-
 
     // subject bar chart
     const subs=Object.entries(s.bySubject).sort((a,b)=>b[1]-a[1]);
@@ -1049,7 +1046,7 @@ function closeDetail(){
 function exportCSV(){
   const headers=["Title","Subject","Status","Priority","Due Date","Note","Notion URL"];
   const rows=allItems.map(i=>[
-    `"${i.title}"`,`"${i.subject}"`,`"${LABELS[i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done"]}"`,`"${i.priority||"🟡 กลาง"}"`,i.due||"",`"${(i.note||"").replace(/"/g,'""')}"`,i.url||""
+    `"${(i.title||"").replace(/"/g,'""')}"`,`"${(i.subject||"").replace(/"/g,'""')}"`,`"${(LABELS[i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done"]||"").replace(/"/g,'""')}"`,`"${(i.priority||"🟡 กลาง").replace(/"/g,'""')}"`,i.due||"",`"${(i.note||"").replace(/"/g,'""')}"`,i.url||""
   ]);
   const csv=[headers.join(","),...rows.map(r=>r.join(","))].join("\n");
   const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
