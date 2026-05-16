@@ -8,6 +8,12 @@ npm test
 node index.js
 ```
 
+## Mock server (test dashboard locally)
+```bash
+node mock-server.js
+# → http://localhost:3000/?token=test123
+```
+
 ## Git push shortcuts
 ```bash
 git push origin main                                                     # GitHub
