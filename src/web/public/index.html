@@ -987,12 +987,13 @@ function listRenderTable(items){
     html+=g.map(i=>{
       const sc=i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done";
       const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";
+      const pcls=PRI_CLASS[pri]||"med";
       const dr=dueClass(i.due);
       return `<tr onclick="showDetail('${i.id}')"${i.status==="Done"?' class="done-row"':''}>
         <td><span class="dot ${sc}"></span>${sl}</td>
         <td>${subjEmoji(i.subject)} ${esc(i.title)}</td>
         <td><span class="tag">${esc(i.subject)}</span></td>
-        <td class="pri-${dr||'safe'}">${pri}</td>
+        <td class="pri-${pcls}">${pri}</td>
         <td class="${dr}">${i.due||"-"}</td>
         <td class="${dr}">${i.due?dueLabel(i.due):"-"}</td>
       </tr>`;
