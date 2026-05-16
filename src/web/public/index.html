@@ -552,6 +552,22 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get("token");
+const FAKE_TOKEN = "demo";
+const FAKE_DATA = {
+  stats: {todo:4,prog:2,done:3,total:9,pct:33,bySubject:{คณิต:2,ไทย:1,อังกฤษ:2,ฟิสิกส์:1,เคมี:1,สังคม:1},byPriority:{"🔴 สูง":2,"🟡 กลาง":4,"🟢 ต่ำ":3},urgent:3,overdue:1},
+  homework:[
+    {id:"d1",title:"แบบฝึกหัดเลข exponential",status:"Todo",due:"2026-05-20",subject:"คณิต",priority:"🔴 สูง",note:"ทำข้อ 1-15 ในหนังสือ",url:"#"},
+    {id:"d2",title:"รายงานสังคม ประเทศในอาเซียน",status:"In Progress",due:"2026-05-25",subject:"สังคม",priority:"🟡 กลาง",note:"ส่งเป็น PDF ขั้นต่ำ 10 หน้า",url:"#"},
+    {id:"d3",title:"ท่องอาขยานบทที่ 5",status:"Todo",due:"2026-06-15",subject:"ไทย",priority:"🟡 กลาง",note:"",url:"#"},
+    {id:"d4",title:"การทดลอง pH สารต่างๆ",status:"Done",due:"2026-05-10",subject:"เคมี",priority:"🟢 ต่ำ",note:"บันทึกผลการทดลองลงตาราง",url:"#"},
+    {id:"d5",title:"ปริศนาคำศัพท์บทที่ 3",status:"Todo",due:"2026-05-22",subject:"อังกฤษ",priority:"🟡 กลาง",note:"",url:"#"},
+    {id:"d6",title:"ฟิสิกส์การเคลื่อนที่แนวตรง",status:"In Progress",due:"2026-05-19",subject:"ฟิสิกส์",priority:"🔴 สูง",note:"ส่งพรุ่งนี้ก่อนเที่ยง!",url:"#"},
+    {id:"d7",title:"งานนำเสนอกลุ่มห้องเรียน",status:"Done",due:"2026-05-08",subject:"อังกฤษ",priority:"🟢 ต่ำ",note:"Present หน้าชั้น 5 นาที",url:"#"},
+    {id:"d8",title:"แยกตัวประกอบพหุนาม",status:"Todo",due:null,subject:"คณิต",priority:"🟢 ต่ำ",note:"ส่งเมื่อไหร่ก็ได้",url:"#"},
+    {id:"d9",title:"ความน่าจะเป็นเพิ่มเติม",status:"Done",due:"2026-05-12",subject:"คณิต",priority:"🟡 กลาง",note:"ตรวจคำตอบจากเฉลย",url:"#"}
+  ],
+  trend:Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:Math.round(Math.random()*2)}})
+};
 let allItems = [], lastStats = null;
 let currentFilter = "all", currentSearch = "", currentSubject = "";
 let chart1 = null, chart2 = null, chart4 = null;
@@ -630,6 +646,10 @@ async function fetchJson(url){const r=await fetch(url+"&_t="+now());if(!r.ok)thr
 
 async function loadAll(force){
   if(!TOKEN)return null;
+  if(TOKEN===FAKE_TOKEN){
+    allItems=FAKE_DATA.homework;lastStats=FAKE_DATA.stats;cachedTs=now();
+    return FAKE_DATA;
+  }
   if(!force&&allItems.length&&now()-cachedTs<CACHE_TTL)return {stats:lastStats,homework:allItems};
   try{
     const data=await fetchJson(`/api/all?token=${TOKEN}`);
