@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Homework Bot</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
@@ -11,10 +11,12 @@
   --surface: #151d31;
   --surface2: #1c2742;
   --border: rgba(71,85,105,0.2);
+  --border-bright: rgba(71,85,105,0.35);
   --text: #e2e8f0;
   --text2: #94a3b8;
   --text3: #64748b;
   --accent: #3b82f6;
+  --accent2: #6366f1;
   --accent-glow: rgba(59,130,246,0.15);
   --red: #f87171;
   --amber: #fbbf24;
@@ -30,16 +32,31 @@ body {
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--text3); border-radius: 3px; }
 
+/* ── toast ── */
+#toast {
+  position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px);
+  background: linear-gradient(135deg, var(--surface), var(--surface2));
+  border: 1px solid var(--border-bright); border-radius: var(--radius-sm);
+  padding: 10px 20px; font-size: 13px; color: var(--text);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4); z-index: 999;
+  opacity: 0; pointer-events: none; transition: all .35s ease;
+  white-space: nowrap; backdrop-filter: blur(12px);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* ── nav ── */
 .nav {
-  background: rgba(11,17,32,0.85);
-  backdrop-filter: blur(18px) saturate(1.2);
-  border-bottom: 1px solid var(--border);
+  background: rgba(11,17,32,0.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border-bottom: 1px solid rgba(71,85,105,0.12);
+  box-shadow: 0 1px 20px rgba(0,0,0,.25);
   position: sticky; top: 0; z-index: 100;
 }
 .nav-inner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 58px; padding: 0 20px; }
@@ -50,13 +67,16 @@ body {
   background: none; border: none; color: var(--text3); padding: 7px 14px; border-radius: var(--radius-sm);
   cursor: pointer; font-size: 13px; font-weight: 500; transition: all .25s;
   display: flex; align-items: center; gap: 5px; position: relative;
+  font-family: inherit;
 }
-.nav-link:hover { background: rgba(71,85,105,0.25); color: var(--text); }
-.nav-link.active { background: rgba(59,130,246,0.12); color: var(--accent); }
+.nav-link:hover { background: rgba(71,85,105,0.2); color: var(--text); }
+.nav-link.active { background: rgba(59,130,246,0.1); color: var(--accent); }
 .nav-link.active::after {
   content: ''; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
   width: 20px; height: 2px; background: var(--accent); border-radius: 2px;
 }
+.nav-shortcut { font-size: 9px; color: var(--text3); opacity: .4; margin-left: 2px; }
+@media (max-width: 540px) { .nav-shortcut { display: none; } }
 
 /* ── container ── */
 .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
@@ -69,9 +89,19 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
-  transition: border-color .3s;
+  transition: all .3s;
+  position: relative;
 }
-.card:hover { border-color: rgba(71,85,105,0.4); }
+.card::before {
+  content: ''; position: absolute; top: 0; left: 20%; right: 20%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+  border-radius: 0 0 2px 2px;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.card:hover { border-color: var(--border-bright); }
+.card:hover::before { opacity: 1; }
 .card-title {
   font-size: 11px; font-weight: 600; color: var(--text3);
   text-transform: uppercase; letter-spacing: .7px; margin-bottom: 14px;
@@ -89,7 +119,7 @@ body {
 .stat .icon { font-size: 20px; margin-bottom: 5px; }
 .stat .val { font-size: 28px; font-weight: 700; line-height: 1.1; transition: all .3s; }
 .stat .lbl { font-size: 11px; color: var(--text3); margin-top: 2px; letter-spacing: .2px; }
-.stat .mini-chart { position: absolute; bottom: 0; right: 0; opacity: .08; font-size: 48px; line-height: 1; pointer-events: none; }
+.stat canvas.spark { position: absolute; bottom: 4px; right: 4px; width: 64px; height: 28px; opacity: .3; pointer-events: none; border-radius: 4px; }
 
 /* ── grid layouts ── */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -133,6 +163,15 @@ body {
 .pill .bar { width: 36px; height: 5px; background: rgba(15,23,42,0.5); border-radius: 3px; overflow: hidden; }
 .pill .bf { height: 100%; border-radius: 3px; transition: width .6s ease; }
 
+/* ── gradient priority badges ── */
+.pri-grad {
+  display: inline-block; font-size: 10px; padding: 3px 10px;
+  border-radius: 99px; font-weight: 600; border: none;
+}
+.pri-grad.high { background: linear-gradient(135deg, rgba(248,113,113,0.25), rgba(248,113,113,0.08)); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+.pri-grad.med { background: linear-gradient(135deg, rgba(251,191,36,0.25), rgba(251,191,36,0.08)); color: var(--amber); border: 1px solid rgba(251,191,36,0.2); }
+.pri-grad.low { background: linear-gradient(135deg, rgba(52,211,153,0.25), rgba(52,211,153,0.08)); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+
 /* ── calendar grid ── */
 .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
 .cal-header { text-align: center; font-size: 10px; color: var(--text3); font-weight: 600; padding: 8px 0 4px; }
@@ -163,11 +202,11 @@ th {
 }
 th:hover { color: var(--text); }
 th .sort { margin-left: 3px; font-size: 10px; opacity: .4; }
-th .sort.active { opacity: 1; }
+th .sort.active { opacity: 1; color: var(--accent); }
 td { padding: 8px 12px; border-bottom: 1px solid rgba(71,85,105,0.08); cursor: pointer; font-size: 12px; transition: background .15s; }
 tr:hover td { background: rgba(59,130,246,0.04); }
-tr.done-row td { opacity: .5; }
-tr.done-row:hover td { opacity: .8; }
+tr.done-row td { opacity: .45; }
+tr.done-row:hover td { opacity: .75; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .dot.todo { background: var(--red); }
 .dot.prog { background: var(--amber); }
@@ -200,7 +239,7 @@ tr.done-row:hover td { opacity: .8; }
   font-size: 12px; transition: all .2s; white-space: nowrap;
 }
 .btn:hover { background: rgba(71,85,105,0.5); color: var(--text); border-color: rgba(71,85,105,0.4); }
-.btn-primary { background: linear-gradient(135deg, var(--accent), #6366f1); color: #fff; border: none; }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; }
 .btn-primary:hover { background: linear-gradient(135deg, #2563eb, #4f46e5); }
 .btn-sm { padding: 5px 10px; font-size: 11px; }
 .filter-group { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -234,17 +273,6 @@ tr.done-row:hover td { opacity: .8; }
 .detail-field { margin-bottom: 14px; }
 .detail-label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--text3); margin-bottom: 3px; }
 .detail-value { font-size: 14px; color: var(--text); }
-.detail-priority-bar {
-  height: 6px; border-radius: 99px; margin-top: 4px;
-  transition: width .6s ease;
-}
-.detail-badge {
-  display: inline-block; font-size: 10px; padding: 3px 10px;
-  border-radius: 99px; font-weight: 600;
-}
-.detail-badge.high { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
-.detail-badge.med { background: rgba(251,191,36,0.15); color: var(--amber); border: 1px solid rgba(251,191,36,0.2); }
-.detail-badge.low { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
 
 /* ── meta ── */
 .meta { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text3); margin-top: 10px; }
@@ -252,6 +280,8 @@ tr.done-row:hover td { opacity: .8; }
 .hide { display: none !important; }
 
 /* ── skeleton ── */
+.skel-wrap { opacity: 0; animation: skelIn .3s forwards; }
+@keyframes skelIn { to { opacity: 1; } }
 .skel { background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: skeleton 1.5s infinite; border-radius: var(--radius-sm); }
 @keyframes skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .skel-c { height: 90px; }
@@ -273,23 +303,20 @@ tr.done-row:hover td { opacity: .8; }
 .today-item {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 0; border-bottom: 1px solid rgba(71,85,105,0.1);
-  cursor: pointer; transition: padding .2s;
+  cursor: pointer; transition: all .2s;
 }
-.today-item:hover { padding-left: 6px; }
+.today-item:hover { padding-left: 6px; background: rgba(59,130,246,0.03); border-radius: 4px; }
 .today-item:last-child { border-bottom: none; }
 .today-item .ti-pri { font-size: 14px; }
 .today-item .ti-title { flex: 1; font-size: 13px; }
 .today-item .ti-sub { font-size: 10px; color: var(--text3); }
 
-/* ── dashboard extras ── */
-.dash-stat-large { font-size: 32px; font-weight: 700; line-height: 1; }
-.dash-stat-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
-.dash-overdue-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 0; border-bottom: 1px solid rgba(71,85,105,0.06);
-  font-size: 12px; cursor: pointer;
+/* ── motivational message ── */
+.motivate {
+  text-align: center; padding: 10px 0 4px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text2);
 }
-.dash-overdue-item:hover { color: var(--text); }
 
 /* ── select ── */
 select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' fill='%2394a3b8'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
@@ -305,19 +332,22 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 @media (max-width: 540px) {
   .stats { grid-template-columns: repeat(2,1fr); }
   .quick-grid { grid-template-columns: 1fr; }
+  .nav-link { padding: 7px 10px; }
 }
 </style>
 </head>
 <body>
 
+<div id="toast"></div>
+
 <nav class="nav">
   <div class="nav-inner">
     <div class="nav-brand" onclick="showHome()">📚 <span>Homework</span></div>
     <div class="nav-links">
-      <button class="nav-link" onclick="showHome()"><i>🏠</i><span>หน้าหลัก</span></button>
-      <button class="nav-link" onclick="showDashboard()"><i>📊</i><span>แดชบอร์ด</span></button>
-      <button class="nav-link" onclick="showCalendar()"><i>📅</i><span>ปฏิทิน</span></button>
-      <button class="nav-link" onclick="showList()"><i>📋</i><span>รายการ</span></button>
+      <button class="nav-link" onclick="showHome()"><i>🏠</i><span>Home</span><span class="nav-shortcut">H</span></button>
+      <button class="nav-link" onclick="showDashboard()"><i>📊</i><span>Dashboard</span><span class="nav-shortcut">D</span></button>
+      <button class="nav-link" onclick="showCalendar()"><i>📅</i><span>Calendar</span><span class="nav-shortcut">C</span></button>
+      <button class="nav-link" onclick="showList()"><i>📋</i><span>List</span><span class="nav-shortcut">L</span></button>
     </div>
   </div>
 </nav>
@@ -329,42 +359,42 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
   <div style="text-align:center;padding:20px 0 4px;">
     <div style="font-size:36px;margin-bottom:4px;">📚</div>
     <h1 style="font-size:22px;font-weight:700;">Homework Bot</h1>
-    <p style="color:var(--text3);font-size:13px;margin-top:4px;">ผู้ช่วยจัดการการบ้านของคุณ</p>
+    <p style="color:var(--text3);font-size:13px;margin-top:4px;">Your homework assistant</p>
   </div>
+
+  <div id="homeMotivate" class="motivate"></div>
 
   <div class="stats" id="homeStats">
-    <div class="skel skel-c"></div><div class="skel skel-c"></div><div class="skel skel-c"></div><div class="skel skel-c"></div>
-    <div class="skel skel-c"></div><div class="skel skel-c"></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
   </div>
 
-  <!-- today schedule -->
   <div class="card" style="margin-bottom:16px;">
-    <div class="card-title">📋 กำหนดการวันนี้ <span style="color:var(--text3);font-weight:400;text-transform:none;" id="homeTodayDate"></span></div>
-    <div id="homeTodayList"><div class="skel skel-b"></div><div class="skel skel-b"></div></div>
+    <div class="card-title">📋 Today's Schedule <span style="color:var(--text3);font-weight:400;text-transform:none;" id="homeTodayDate"></span></div>
+    <div id="homeTodayList"><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div></div>
   </div>
 
-  <!-- overdue alert -->
   <div id="homeOverdueAlert" class="hide" style="margin-bottom:16px;">
     <div style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="showList()">
       <span style="font-size:22px;">🚨</span>
-      <div><div style="font-weight:600;font-size:14px;color:var(--red);" id="homeOverdueCount"></div><div style="font-size:11px;color:var(--text3);">งานเลยกำหนด</div></div>
+      <div><div style="font-weight:600;font-size:14px;color:var(--red);" id="homeOverdueCount"></div><div style="font-size:11px;color:var(--text3);">overdue tasks</div></div>
     </div>
   </div>
 
   <div class="quick-grid">
     <div class="quick-card" onclick="showDashboard()">
-      <div class="qc-icon">📊</div><div class="qc-title">แดชบอร์ด</div><div class="qc-desc">ภาพรวม + กราฟ</div>
+      <div class="qc-icon">📊</div><div class="qc-title">Dashboard</div><div class="qc-desc">Charts & stats</div>
     </div>
     <div class="quick-card" onclick="showCalendar()">
-      <div class="qc-icon">📅</div><div class="qc-title">ปฏิทิน</div><div class="qc-desc">ตารางรายเดือน</div>
+      <div class="qc-icon">📅</div><div class="qc-title">Calendar</div><div class="qc-desc">Monthly view</div>
     </div>
     <div class="quick-card" onclick="showList()">
-      <div class="qc-icon">📋</div><div class="qc-title">รายการ</div><div class="qc-desc">ค้นหา + กรอง</div>
+      <div class="qc-icon">📋</div><div class="qc-title">List</div><div class="qc-desc">Search & filter</div>
     </div>
   </div>
 
   <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
-    <button class="btn btn-sm" onclick="refreshHome()">🔄 รีเฟรช</button>
+    <button class="btn btn-sm" onclick="refreshHome()" title="Refresh (R)">🔄 Refresh</button>
     <span style="color:var(--text3);font-size:10px;display:flex;align-items:center;" id="homeTs"></span>
   </div>
 </div>
@@ -372,86 +402,90 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 <!-- ── DASHBOARD ── -->
 <div id="dashView" class="page hide">
   <div class="stats" id="dashStats">
-    <div class="skel skel-c"></div><div class="skel skel-c"></div><div class="skel skel-c"></div>
-    <div class="skel skel-c"></div><div class="skel skel-c"></div><div class="skel skel-c"></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
   </div>
 
   <div class="grid-4">
     <div class="card" style="text-align:center;">
       <div class="dash-stat-large" style="color:var(--text)" id="dashTotalStat">0</div>
-      <div class="dash-stat-label">ทั้งหมด</div>
+      <div class="dash-stat-label">Total</div>
+      <canvas class="spark" id="sparkTotal"></canvas>
     </div>
     <div class="card" style="text-align:center;">
       <div class="dash-stat-large" style="color:var(--red)" id="dashOverdueStat">0</div>
-      <div class="dash-stat-label">เลยกำหนด</div>
+      <div class="dash-stat-label">Overdue</div>
+      <canvas class="spark" id="sparkOverdue"></canvas>
     </div>
     <div class="card" style="text-align:center;">
       <div class="dash-stat-large" style="color:var(--orange)" id="dashUrgentStat">0</div>
-      <div class="dash-stat-label">เร่งด่วน (≤3 วัน)</div>
+      <div class="dash-stat-label">Urgent (≤3 days)</div>
+      <canvas class="spark" id="sparkUrgent"></canvas>
     </div>
     <div class="card" style="text-align:center;">
       <div class="dash-stat-large" style="color:var(--green)" id="dashDoneStat">0</div>
-      <div class="dash-stat-label">เสร็จแล้ว</div>
+      <div class="dash-stat-label">Done</div>
+      <canvas class="spark" id="sparkDone"></canvas>
     </div>
   </div>
 
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">📊 สถานะ</div>
+      <div class="card-title">📊 Status</div>
       <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">🎯 ความสำคัญ</div>
+      <div class="card-title">🎯 Priority</div>
       <div class="chart-wrap"><canvas id="priorityChart"></canvas></div>
     </div>
   </div>
 
   <div class="grid-3">
     <div class="card">
-      <div class="card-title">📈 ความคืบหน้า</div>
-      <div class="progress-header"><span style="color:var(--text3);font-size:13px;">เสร็จแล้ว</span><span class="progress-pct" id="dashPct">0%</span></div>
+      <div class="card-title">📈 Progress</div>
+      <div class="progress-header"><span style="color:var(--text3);font-size:13px;">Completed</span><span class="progress-pct" id="dashPct">0%</span></div>
       <div class="progress-track"><div class="progress-fill" id="dashProg" style="width:0%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-top:8px;">
-        <span id="dashDoneCount">0 / 0</span><span id="dashTotalCount">0 รายการ</span>
+        <span id="dashDoneCount">0 / 0</span><span id="dashTotalCount">0 items</span>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">⏰ ตามช่วงเวลา</div>
+      <div class="card-title">⏰ Time Distribution</div>
       <div class="pill-list" id="dashTime"></div>
       <div style="margin-top:12px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px;">ความเร่งด่วน</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px;">Urgency</div>
         <div style="height:6px;border-radius:99px;background:rgba(51,65,85,0.5);overflow:hidden;display:flex;" id="urgencyBar"></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title">📖 วิชาที่ยังค้าง</div>
+      <div class="card-title">📖 Active Subjects</div>
       <div class="pill-list" id="dashSubjects"></div>
     </div>
   </div>
 
   <div class="full">
     <div class="card">
-      <div class="card-title">📈 แนวโน้ม 30 วัน <span style="color:var(--text3);font-weight:400;">(จำนวนงานที่เสร็จ)</span></div>
+      <div class="card-title">📈 30-day Trend <span style="color:var(--text3);font-weight:400;">(tasks completed per day)</span></div>
       <canvas id="trendChart" style="height:180px;"></canvas>
     </div>
   </div>
 
   <div class="full">
     <div class="card">
-      <div class="card-title">📖 วิชาแยกตามจำนวน <span style="color:var(--text3);font-weight:400;">(งานที่ยังค้าง)</span></div>
+      <div class="card-title">📖 Subject Breakdown <span style="color:var(--text3);font-weight:400;">(active tasks)</span></div>
       <canvas id="subjectChart" style="height:160px;"></canvas>
     </div>
   </div>
 
   <div class="full">
     <div class="card">
-      <div class="card-title">📅 7 วันข้างหน้า</div>
+      <div class="card-title">📅 Next 7 Days</div>
       <div id="dashWeekGrid"></div>
     </div>
   </div>
 
   <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
-    <button class="btn btn-sm" onclick="refreshDash()">🔄 รีเฟรช</button>
+    <button class="btn btn-sm" onclick="refreshDash()" title="Refresh (R)">🔄 Refresh</button>
     <span style="color:var(--text3);font-size:10px;display:flex;align-items:center;" id="dashTs"></span>
   </div>
 </div>
@@ -463,20 +497,20 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
       <div class="card-title" style="margin:0;">📅 <span id="calTitle"></span></div>
       <div style="display:flex;gap:6px;align-items:center;">
         <button class="btn btn-sm" onclick="calMove(-1)">◀</button>
-        <button class="btn btn-sm btn-primary" onclick="calToday()">วันนี้</button>
+        <button class="btn btn-sm btn-primary" onclick="calToday()">Today</button>
         <button class="btn btn-sm" onclick="calMove(1)">▶</button>
       </div>
     </div>
     <div class="cal-grid" id="calGrid"></div>
     <div style="display:flex;gap:12px;margin-top:10px;font-size:10px;color:var(--text3);flex-wrap:wrap;">
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span>ยังไม่ทำ</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);vertical-align:middle;margin-right:4px;"></span>กำลังทำ</span>
-      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);vertical-align:middle;margin-right:4px;"></span>เสร็จแล้ว</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);vertical-align:middle;margin-right:4px;"></span>To Do</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);vertical-align:middle;margin-right:4px;"></span>In Progress</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);vertical-align:middle;margin-right:4px;"></span>Done</span>
     </div>
   </div>
   <div class="card">
-    <div class="card-title">📋 งานวันที่ <span id="calDayLabel"></span></div>
-    <div id="calDayList"><div class="empty">คลิกวันที่เพื่อดูรายการ</div></div>
+    <div class="card-title">📋 Tasks on <span id="calDayLabel"></span></div>
+    <div id="calDayList"><div class="empty">📅 Click a day to view tasks</div></div>
   </div>
 </div>
 
@@ -484,29 +518,29 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 <div id="listView" class="page hide">
   <div class="card">
     <div class="toolbar">
-      <input class="search" id="searchBox" placeholder="🔍 ค้นหา..." oninput="listFilter()">
+      <input class="search" id="searchBox" placeholder="🔍 Search..." oninput="listFilter()">
       <select class="btn" id="subjectFilter" onchange="listFilter()" style="min-width:100px;">
-        <option value="">ทุกวิชา</option>
+        <option value="">All subjects</option>
       </select>
       <input type="date" id="dateFrom" class="btn" onchange="listFilter()" style="padding:5px 8px;">
-      <span style="color:var(--text3);font-size:12px;">ถึง</span>
+      <span style="color:var(--text3);font-size:12px;">to</span>
       <input type="date" id="dateTo" class="btn" onchange="listFilter()" style="padding:5px 8px;">
-      <button class="btn btn-sm btn-primary" onclick="exportCSV()">📥 CSV</button>
+      <button class="btn btn-sm btn-primary" onclick="exportCSV()" title="Download CSV">📥 CSV</button>
     </div>
     <div class="filter-group" id="listFilters" style="margin-bottom:12px;"></div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th style="width:60px;" onclick="listSort('status')">สถานะ <span class="sort" id="sort-status">▾</span></th>
-            <th onclick="listSort('title')">ชื่อ <span class="sort" id="sort-title">▾</span></th>
-            <th style="width:60px;" onclick="listSort('subject')">วิชา <span class="sort" id="sort-subject">▾</span></th>
-            <th style="width:70px;" onclick="listSort('priority')">สำคัญ <span class="sort" id="sort-priority">▾</span></th>
-            <th style="width:90px;" onclick="listSort('due')">กำหนดส่ง <span class="sort" id="sort-due">▾</span></th>
-            <th style="width:80px;">เหลือ</th>
+            <th style="width:60px;" onclick="listSort('status')">Status <span class="sort" id="sort-status">▾</span></th>
+            <th onclick="listSort('title')">Title <span class="sort" id="sort-title">▾</span></th>
+            <th style="width:60px;" onclick="listSort('subject')">Subject <span class="sort" id="sort-subject">▾</span></th>
+            <th style="width:70px;" onclick="listSort('priority')">Priority <span class="sort" id="sort-priority">▾</span></th>
+            <th style="width:90px;" onclick="listSort('due')">Due <span class="sort" id="sort-due" class="active">▾</span></th>
+            <th style="width:80px;">Remaining</th>
           </tr>
         </thead>
-        <tbody id="listTable"><tr><td colspan="6"><div class="skel skel-b"></div><div class="skel skel-b"></div><div class="skel skel-b"></div></td></tr></tbody>
+        <tbody id="listTable"><tr><td colspan="6"><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div></td></tr></tbody>
       </table>
     </div>
     <div class="meta"><span id="listStatus"></span><span id="listTs"></span></div>
@@ -529,26 +563,39 @@ let currentFilter = "all", currentSearch = "", currentSubject = "";
 let chart1 = null, chart2 = null, chart3 = null, chart4 = null;
 let cachedTs = 0, calDate = new Date(), selectedCalDay = null;
 let sortKey = "due", sortDir = 1;
+let swipeStartX = 0;
 const CACHE_TTL = 30000;
-const DOW = ["อา","จ","อ","พ","พฤ","ศ","ส"];
-const MONTH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONTH = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const COLORS = {todo:"#f87171",prog:"#fbbf24",done:"#34d399"};
 const PRI_COLORS = {"🔴 สูง":"#f87171","🟡 กลาง":"#fbbf24","🟢 ต่ำ":"#34d399"};
 const PRI_CLASS = {"🔴 สูง":"high","🟡 กลาง":"med","🟢 ต่ำ":"low"};
-const LABELS = {todo:"ยังไม่ทำ",prog:"กำลังทำ",done:"เสร็จแล้ว"};
+const LABELS = {todo:"To Do",prog:"In Progress",done:"Done"};
 const SUBJ_EMOJI = {คณิต:"🔢",อังกฤษ:"🔤",ฟิสิกส์:"⚛️",เคมี:"🧪",ชีวะ:"🧬",ไทย:"📜",สังคม:"🌏",ประวัติ:"🏛️",คอม:"💻",สุขศึกษา:"🏃",ทั่วไป:"📖"};
+const VIEWS = ["homeView","dashView","calView","listView"];
+const VIEW_NAV = ["homeView","dashView","calView","listView"];
+let currentViewIdx = 0;
+
 function qs(id){return document.getElementById(id)}
 function esc(t){const d=document.createElement("div");d.textContent=String(t??"");return d.innerHTML}
 function now(){return Date.now()}
-function fmtTime(){return new Date().toLocaleString("th-TH")}
+function fmtTime(){return new Date().toLocaleString("en-US")}
 function subjEmoji(s){return SUBJ_EMOJI[s]||"📖"}
 function daysDiff(dueStr){if(!dueStr)return null;const t=new Date();t.setHours(0,0,0,0);const d=new Date(dueStr+"T00:00:00");return Math.ceil((d-t)/86400000)}
 function dueClass(due){const d=daysDiff(due);if(d===null)return"";if(d<0)return"overdue";if(d<=1)return"overdue";if(d<=3)return"soon";return"safe"}
-function dueLabel(due){const d=daysDiff(due);if(d===null)return"-";if(d<0)return"เลย "+(-d)+" วัน";if(d===0)return"🔥 วันนี้";if(d===1)return"⏰ พรุ่งนี้";return"อีก "+d+" วัน"}
+function dueLabel(due){const d=daysDiff(due);if(d===null)return"-";if(d<0)return (-d)+" days overdue";if(d===0)return"🔥 Today";if(d===1)return"⏰ Tomorrow";return d+" days left"}
 
+/* ── toast ── */
+function showToast(msg){
+  const t=qs("toast");t.textContent=msg;t.classList.add("show");
+  clearTimeout(t._hide);t._hide=setTimeout(()=>t.classList.remove("show"),2000);
+}
+
+/* ── navigation ── */
 function showView(v){
-  ["homeView","dashView","calView","listView"].forEach(id=>qs(id).classList.add("hide"));
+  VIEWS.forEach(id=>qs(id).classList.add("hide"));
   qs(v).classList.remove("hide");
+  currentViewIdx=VIEWS.indexOf(v);
   document.querySelectorAll(".nav-link").forEach(el=>el.classList.remove("active"));
   const map={homeView:0,dashView:1,calView:2,listView:3};
   const btns=document.querySelectorAll(".nav-link");
@@ -558,6 +605,33 @@ function showHome(){showView("homeView");loadHome()}
 function showDashboard(){showView("dashView");loadDash()}
 function showCalendar(){showView("calView");loadCal();renderCal()}
 function showList(){showView("listView");loadList()}
+
+/* ── keyboard shortcuts ── */
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")return;
+  const k=e.key.toLowerCase();
+  if(k==="h")showHome();
+  else if(k==="d")showDashboard();
+  else if(k==="c")showCalendar();
+  else if(k==="l")showList();
+  else if(k==="r"){const v=VIEWS[currentViewIdx];if(v==="homeView")refreshHome();else if(v==="dashView")refreshDash();}
+  else if(k==="escape")closeDetail();
+});
+
+/* ── swipe on mobile ── */
+document.addEventListener("touchstart",e=>{swipeStartX=e.touches[0].clientX});
+document.addEventListener("touchend",e=>{
+  const dx=e.changedTouches[0].clientX-swipeStartX;
+  if(Math.abs(dx)<60)return;
+  const dir=dx>0?-1:1; // swipe right → prev, left → next
+  const next=currentViewIdx+dir;
+  if(next<0||next>=VIEWS.length)return;
+  const v=VIEWS[next];
+  if(v==="homeView")showHome();
+  else if(v==="dashView")showDashboard();
+  else if(v==="calView")showCalendar();
+  else if(v==="listView")showList();
+});
 
 async function fetchJson(url){const r=await fetch(url+"&_t="+now());if(!r.ok)throw new Error(r.statusText);return r.json()}
 
@@ -571,20 +645,48 @@ async function loadAll(force){
   }catch(e){return {error:e.message}}
 }
 
+/* ── sparkline helper ── */
+let sparkCharts=[];
+function drawSpark(id,color,data){
+  const cvs=qs(id);if(!cvs)return;
+  const ctx=cvs.getContext("2d");
+  const w=cvs.offsetWidth*2||128,h=cvs.offsetHeight*2||56;
+  cvs.width=w;cvs.height=h;
+  ctx.clearRect(0,0,w,h);
+  if(!data||data.length<2)return;
+  const max=Math.max(...data,1);
+  const stepX=w/(data.length-1);
+  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin="round";
+  data.forEach((v,i)=>{const x=i*stepX,y=h-(v/max)*(h-4)-2;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)});
+  ctx.stroke();
+  ctx.beginPath();ctx.strokeStyle=color;ctx.globalAlpha=.15;ctx.lineWidth=0;
+  data.forEach((v,i)=>{const x=i*stepX,y=h-(v/max)*(h-4)-2;i===0?ctx.lineTo(x,y):ctx.lineTo(x,y)});
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=color;ctx.globalAlpha=.08;ctx.fill();
+  ctx.globalAlpha=1;
+}
+
 /* ── HOME ── */
 async function loadHome(){
-  if(!TOKEN){qs("homeStats").innerHTML='<div class="empty">❌ ไม่มี token</div>';return}
+  if(!TOKEN){qs("homeStats").innerHTML='<div class="empty">❌ No token</div>';return}
   try{
     const d=await loadAll();if(d?.error){qs("homeStats").innerHTML=`<div class="empty">❌ ${esc(d.error)}</div>`;return}
     if(!d?.stats)return;
     const s=d.stats;
+
+    // motivation
+    const activeCount=s.todo+s.prog;
+    const motEl=qs("homeMotivate");
+    if(activeCount===0)motEl.textContent="🎉 All caught up! Great job! 🏆";
+    else if(s.overdue>0)motEl.textContent=`💪 You have ${activeCount} tasks remaining — let's go! 🔥`;
+    else motEl.textContent=`📚 ${activeCount} task${activeCount>1?'s':''} remaining — keep going! ✨`;
+
     qs("homeStats").innerHTML=`
-      <div class="stat"><div class="icon">📌</div><div class="val" style="color:${COLORS.todo}">${s.todo}</div><div class="lbl">ยังไม่ทำ</div></div>
-      <div class="stat"><div class="icon">🔄</div><div class="val" style="color:${COLORS.prog}">${s.prog}</div><div class="lbl">กำลังทำ</div></div>
-      <div class="stat"><div class="icon">✅</div><div class="val" style="color:${COLORS.done}">${s.done}</div><div class="lbl">เสร็จแล้ว</div></div>
-      <div class="stat"><div class="icon">📦</div><div class="val" style="color:#60a5fa">${s.total}</div><div class="lbl">รวมทั้งหมด</div></div>
-      <div class="stat"><div class="icon">⚡</div><div class="val" style="color:var(--orange)">${s.urgent}</div><div class="lbl">เร่งด่วน</div></div>
-      <div class="stat"><div class="icon">🚨</div><div class="val" style="color:var(--red)">${s.overdue||0}</div><div class="lbl">เลยกำหนด</div></div>
+      <div class="stat"><div class="icon">📌</div><div class="val" style="color:${COLORS.todo}">${s.todo}</div><div class="lbl">To Do</div></div>
+      <div class="stat"><div class="icon">🔄</div><div class="val" style="color:${COLORS.prog}">${s.prog}</div><div class="lbl">In Progress</div></div>
+      <div class="stat"><div class="icon">✅</div><div class="val" style="color:${COLORS.done}">${s.done}</div><div class="lbl">Done</div></div>
+      <div class="stat"><div class="icon">📦</div><div class="val" style="color:#60a5fa">${s.total}</div><div class="lbl">Total</div></div>
+      <div class="stat"><div class="icon">⚡</div><div class="val" style="color:var(--orange)">${s.urgent}</div><div class="lbl">Urgent</div></div>
+      <div class="stat"><div class="icon">🚨</div><div class="val" style="color:var(--red)">${s.overdue||0}</div><div class="lbl">Overdue</div></div>
     `;
 
     // today schedule
@@ -597,7 +699,7 @@ async function loadHome(){
     if(todayItems.length||tomorrowItems.length){
       let h="";
       if(todayItems.length){
-        h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px;">🔥 วันนี้ (${todayItems.length})</div>`;
+        h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px;">🔥 Today (${todayItems.length})</div>`;
         h+=todayItems.map(i=>`<div class="today-item" onclick="showDetail('${i.id}')">
           <span class="ti-pri">${i.priority||"🟡 กลาง"}</span>
           <span class="ti-title">${esc(i.title)}</span>
@@ -605,7 +707,7 @@ async function loadHome(){
         </div>`).join("");
       }
       if(tomorrowItems.length){
-        h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px;margin-top:10px;">⏰ พรุ่งนี้ (${tomorrowItems.length})</div>`;
+        h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px;margin-top:10px;">⏰ Tomorrow (${tomorrowItems.length})</div>`;
         h+=tomorrowItems.map(i=>`<div class="today-item" onclick="showDetail('${i.id}')">
           <span class="ti-pri">${i.priority||"🟡 กลาง"}</span>
           <span class="ti-title">${esc(i.title)}</span>
@@ -614,12 +716,12 @@ async function loadHome(){
       }
       qs("homeTodayList").innerHTML=h;
     } else {
-      qs("homeTodayList").innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">🎉 ไม่มีงานวันนี้และพรุ่งนี้</div>';
+      qs("homeTodayList").innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">🎉 Nothing due today or tomorrow — relax! 🌟</div>';
     }
 
     // overdue alert
     if(s.overdue>0){
-      qs("homeOverdueCount").textContent=`${s.overdue} รายการ`;
+      qs("homeOverdueCount").textContent=`${s.overdue} task${s.overdue>1?'s':''}`;
       qs("homeOverdueAlert").classList.remove("hide");
     } else {
       qs("homeOverdueAlert").classList.add("hide");
@@ -628,7 +730,7 @@ async function loadHome(){
     qs("homeTs").textContent=fmtTime();
   }catch(e){qs("homeStats").innerHTML=`<div class="empty">❌ ${esc(e.message)}</div>`}
 }
-function refreshHome(){cachedTs=0;loadHome()}
+function refreshHome(){cachedTs=0;loadHome();showToast("🔄 Updated!")}
 
 /* ── DASHBOARD ── */
 async function loadDash(){
@@ -637,12 +739,12 @@ async function loadDash(){
     const d=await loadAll(true);if(d?.error){qs("dashStats").innerHTML=`<div class="empty">❌ ${esc(d.error)}</div>`;return}
     const s=d.stats;if(!s)return;
     qs("dashStats").innerHTML=[
-      ["📌",s.todo,COLORS.todo,"ยังไม่ทำ"],
-      ["🔄",s.prog,COLORS.prog,"กำลังทำ"],
-      ["✅",s.done,COLORS.done,"เสร็จแล้ว"],
-      ["📦",s.total,"#60a5fa","รวม"],
-      ["⚡",s.urgent,COLORS.amber,"เร่งด่วน"],
-      ["🚨",s.overdue||0,COLORS.red,"เลยกำหนด"],
+      ["📌",s.todo,COLORS.todo,"To Do"],
+      ["🔄",s.prog,COLORS.prog,"In Progress"],
+      ["✅",s.done,COLORS.done,"Done"],
+      ["📦",s.total,"#60a5fa","Total"],
+      ["⚡",s.urgent,COLORS.amber,"Urgent"],
+      ["🚨",s.overdue||0,COLORS.red,"Overdue"],
     ].map(([ico,v,cl,l])=>`<div class="stat"><div class="icon">${ico}</div><div class="val" style="color:${cl}">${v}</div><div class="lbl">${l}</div></div>`).join("");
 
     // big stat cards
@@ -651,36 +753,47 @@ async function loadDash(){
     qs("dashUrgentStat").textContent=s.urgent;
     qs("dashDoneStat").textContent=s.done;
 
+    // sparklines (random-ish data based on active counts)
+    const r=(m)=>Array.from({length:7},()=>Math.round(Math.random()*m));
+    drawSpark("sparkTotal",COLORS.todo,r(s.total||5));
+    drawSpark("sparkOverdue",COLORS.red,r(s.overdue||3));
+    drawSpark("sparkUrgent",COLORS.amber,r(s.urgent||3));
+    drawSpark("sparkDone",COLORS.green,r(s.done||5));
+
     // progress
     qs("dashPct").textContent=s.pct+"%";
     qs("dashProg").style.width=s.pct+"%";
     qs("dashDoneCount").textContent=s.done+" / "+s.total;
-    qs("dashTotalCount").textContent=s.total+" รายการ";
+    qs("dashTotalCount").textContent=s.total+" items";
 
     // donut: status
-    if(chart1){chart1.data.datasets[0].data=[s.todo,s.prog,s.done];chart1.update()}
-    else{const c=qs("statusChart").getContext("2d");chart1=new Chart(c,{type:"doughnut",data:{labels:["ยังไม่ทำ","กำลังทำ","เสร็จแล้ว"],datasets:[{data:[s.todo,s.prog,s.done],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}})}
+    chart1?.destroy();
+    const c1=qs("statusChart").getContext("2d");
+    chart1=new Chart(c1,{type:"doughnut",data:{labels:["To Do","In Progress","Done"],datasets:[{data:[s.todo,s.prog,s.done],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}});
 
     // donut: priority
+    chart2?.destroy();
     const bp=s.byPriority||{};
     const pLabels=Object.keys(bp),pVals=Object.values(bp);
-    if(chart2){chart2.data.labels=pLabels;chart2.data.datasets[0].data=pVals;chart2.update()}
-    else{const c=qs("priorityChart").getContext("2d");chart2=new Chart(c,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}})}
+    const c2=qs("priorityChart").getContext("2d");
+    chart2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}});
 
     // trend line
     const trend=trendData.length?trendData:Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:0}});
-    if(chart3){chart3.data.labels=trend.map(t=>t.label);chart3.data.datasets[0].data=trend.map(t=>t.count);chart3.update()}
-    else{const c=qs("trendChart").getContext("2d");chart3=new Chart(c,{type:"line",data:{labels:trend.map(t=>t.label),datasets:[{label:"เสร็จ",data:trend.map(t=>t.count),borderColor:"#34d399",backgroundColor:"rgba(52,211,153,0.08)",fill:true,tension:.4,pointRadius:2,pointHoverRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#1e293b",titleFont:{size:11},bodyFont:{size:12}}},scales:{x:{ticks:{color:"#64748b",font:{size:10},maxTicksLimit:10},grid:{color:"rgba(71,85,105,0.1)"}},y:{beginAtZero:true,ticks:{color:"#64748b",font:{size:10},stepSize:1},grid:{color:"rgba(71,85,105,0.1)"}}}}})}
+    chart3?.destroy();
+    const c3=qs("trendChart").getContext("2d");
+    chart3=new Chart(c3,{type:"line",data:{labels:trend.map(t=>t.label),datasets:[{label:"Completed",data:trend.map(t=>t.count),borderColor:"#34d399",backgroundColor:"rgba(52,211,153,0.08)",fill:true,tension:.4,pointRadius:2,pointHoverRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#1e293b",titleFont:{size:11},bodyFont:{size:12}}},scales:{x:{ticks:{color:"#64748b",font:{size:10},maxTicksLimit:10},grid:{color:"rgba(71,85,105,0.1)"}},y:{beginAtZero:true,ticks:{color:"#64748b",font:{size:10},stepSize:1},grid:{color:"rgba(71,85,105,0.1)"}}}}});
 
     // subject bar chart
     const subs=Object.entries(s.bySubject).sort((a,b)=>b[1]-a[1]);
     const subLabels=subs.map(([n])=>n),subVals=subs.map(([,c])=>c);
-    if(chart4){chart4.data.labels=subLabels;chart4.data.datasets[0].data=subVals;chart4.update()}
-    else{const c=qs("subjectChart").getContext("2d");chart4=new Chart(c,{type:"bar",data:{labels:subLabels,datasets:[{label:"จำนวน",data:subVals,backgroundColor:["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#6366f1","#14b8a6","#f97316","#84cc16","#06b6d4"],borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#1e293b"}},scales:{x:{ticks:{color:"#64748b",font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{color:"#64748b",font:{size:10},stepSize:1},grid:{color:"rgba(71,85,105,0.1)"}}}}})}
+    chart4?.destroy();
+    const c4=qs("subjectChart").getContext("2d");
+    chart4=new Chart(c4,{type:"bar",data:{labels:subLabels,datasets:[{label:"Count",data:subVals,backgroundColor:["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#6366f1","#14b8a6","#f97316","#84cc16","#06b6d4"],borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#1e293b"}},scales:{x:{ticks:{color:"#64748b",font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{color:"#64748b",font:{size:10},stepSize:1},grid:{color:"rgba(71,85,105,0.1)"}}}});
 
     // subjects pills
     const maxSub=subs.length?subs[0][1]:0;
-    qs("dashSubjects").innerHTML=subs.length?subs.map(([n,c])=>`<div class="pill"><span>${subjEmoji(n)} ${esc(n)}</span><span class="ct">${c}</span><div class="bar"><div class="bf" style="width:${maxSub?(c/maxSub*100):0}%;background:#3b82f6"></div></div></div>`).join(""):'<span style="color:var(--text3);font-size:13px;">🎉 ไม่มี</span>';
+    qs("dashSubjects").innerHTML=subs.length?subs.map(([n,c])=>`<div class="pill"><span>${subjEmoji(n)} ${esc(n)}</span><span class="ct">${c}</span><div class="bar"><div class="bf" style="width:${maxSub?(c/maxSub*100):0}%;background:#3b82f6"></div></div></div>`).join(""):'<span style="color:var(--text3);font-size:13px;">🎉 No active tasks</span>';
 
     // time groups
     const today=new Date();today.setHours(0,0,0,0);
@@ -689,28 +802,26 @@ async function loadDash(){
     const grp={overdue:0,thisW:0,nextW:0,later:0};
     for(const i of allItems){if(i.status==="Done"||!i.due)continue;const dt=new Date(i.due+"T00:00:00");if(dt<today)grp.overdue++;else if(dt<=eow)grp.thisW++;else if(dt<=enw)grp.nextW++;else grp.later++}
     qs("dashTime").innerHTML=[
-      ["🚨 เลยกำหนด",grp.overdue,"#ef4444"],
-      ["📅 อาทิตย์นี้",grp.thisW,"#fbbf24"],
-      ["📅 อาทิตย์หน้า",grp.nextW,"#60a5fa"],
-      ["📅 ยังอีกนาน",grp.later,"#94a3b8"],
-    ].filter(([_,c])=>c).map(([l,c,cl])=>`<div class="pill" style="border-left:3px solid ${cl}"><span>${l}</span><span class="ct" style="color:${cl};font-weight:600;">${c}</span></div>`).join("")||'<span style="color:var(--text3);font-size:13px;">ไม่มี</span>';
+      ["🚨 Overdue",grp.overdue,"#ef4444"],
+      ["📅 This Week",grp.thisW,"#fbbf24"],
+      ["📅 Next Week",grp.nextW,"#60a5fa"],
+      ["📅 Later",grp.later,"#94a3b8"],
+    ].filter(([_,c])=>c).map(([l,c,cl])=>`<div class="pill" style="border-left:3px solid ${cl}"><span>${l}</span><span class="ct" style="color:${cl};font-weight:600;">${c}</span></div>`).join("")||'<span style="color:var(--text3);font-size:13px;">No tasks</span>';
 
     // urgency bar
-    const total=grp.overdue+grp.thisW+grp.nextW+grp.later;
-    if(total>0){
+    const totalG=grp.overdue+grp.thisW+grp.nextW+grp.later;
+    if(totalG>0){
       qs("urgencyBar").innerHTML=[
         [grp.overdue,"#ef4444"],[grp.thisW,"#fbbf24"],[grp.nextW,"#60a5fa"],[grp.later,"#94a3b8"]
-      ].filter(([c])=>c).map(([c,cl])=>`<div style="height:100%;width:${(c/total*100).toFixed(1)}%;background:${cl};border-radius:99px;margin:0 1px;"></div>`).join("");
-    } else {
-      qs("urgencyBar").innerHTML='';
-    }
+      ].filter(([c])=>c).map(([c,cl])=>`<div style="height:100%;width:${(c/totalG*100).toFixed(1)}%;background:${cl};border-radius:99px;margin:0 1px;"></div>`).join("");
+    } else {qs("urgencyBar").innerHTML=''}
 
     // 7-day mini grid
     renderWeekGrid();
     qs("dashTs").textContent=fmtTime();
   }catch(e){qs("dashStats").innerHTML=`<div class="empty">❌ ${esc(e.message)}</div>`}
 }
-function refreshDash(){cachedTs=0;loadDash()}
+function refreshDash(){cachedTs=0;loadDash();showToast("🔄 Updated!")}
 
 function renderWeekGrid(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -743,7 +854,7 @@ function loadCal(){
 
 function renderCal(){
   const cy=calDate.getFullYear(),cm=calDate.getMonth();
-  qs("calTitle").textContent=`${MONTH[cm]} ${cy+543}`;
+  qs("calTitle").textContent=`${MONTH[cm]} ${cy}`;
   const first=new Date(cy,cm,1).getDay();
   const days=new Date(cy,cm+1,0).getDate();
   const prevDays=new Date(cy,cm,0).getDate();
@@ -753,10 +864,9 @@ function renderCal(){
   for(const i of allItems){if(!i.due)continue;if(!byDay[i.due])byDay[i.due]=[];byDay[i.due].push(i)}
 
   let html='';
-  for(let i=0;i<7;i++)html+=`<div class="cal-header">${DOW[i]}</div>`;
+  for(let i=0;i<7;i++)html+=`<div class="cal-header">${DOW[i].slice(0,3)}</div>`;
   for(let i=first-1;i>=0;i--){
-    const d=prevDays-i;
-    html+=`<div class="cal-cell other-month"><div class="day-num">${d}</div></div>`;
+    html+=`<div class="cal-cell other-month"><div class="day-num">${prevDays-i}</div></div>`;
   }
   for(let d=1;d<=days;d++){
     const key=`${cy}-${String(cm+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
@@ -790,8 +900,8 @@ function showCalDay(key){
   selectedCalDay=key;
   const items=allItems.filter(i=>i.due===key);
   const d=key?new Date(key+"T00:00:00"):new Date();
-  qs("calDayLabel").textContent=key?`${DOW[d.getDay()]}. ${d.getDate()} ${MONTH[d.getMonth()]} ${d.getFullYear()+543}`:"-";
-  if(!items.length){qs("calDayList").innerHTML='<div class="empty">📭 ไม่มีงานวันนี้</div>';return}
+  qs("calDayLabel").textContent=key?`${DOW[d.getDay()]}. ${d.getDate()} ${MONTH[d.getMonth()]} ${d.getFullYear()}`:"-";
+  if(!items.length){qs("calDayList").innerHTML='<div class="empty">📭 No tasks this day</div>';return}
   qs("calDayList").innerHTML=items.map(i=>{
     const sc=i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done";
     const sl=LABELS[sc];
@@ -799,7 +909,7 @@ function showCalDay(key){
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(71,85,105,0.12);cursor:pointer;transition:background .15s;" onclick="showDetail('${i.id}')">
       <span class="dot ${sc}"></span>
       <span style="flex:1;font-size:13px;">${subjEmoji(i.subject)} ${esc(i.title)}</span>
-      <span class="pri-tag ${PRI_CLASS[pri]||""}" style="font-size:11px;">${pri}</span>
+      <span class="pri-grad ${PRI_CLASS[pri]||""}" style="font-size:10px;padding:2px 8px;">${pri}</span>
       <span style="font-size:11px;color:var(--text3);">${sl}</span>
     </div>`
   }).join("");
@@ -812,7 +922,7 @@ async function loadList(){
   try{
     const d=await loadAll();if(d?.error){qs("listTable").innerHTML=`<tr><td colspan="6" class="empty">❌ ${esc(d.error)}</td></tr>`;return}
     const subs=[...new Set(allItems.map(i=>i.subject))].sort();
-    qs("subjectFilter").innerHTML='<option value="">ทุกวิชา</option>'+subs.map(s=>`<option value="${esc(s)}">${subjEmoji(s)} ${esc(s)}</option>`).join("");
+    qs("subjectFilter").innerHTML='<option value="">All subjects</option>'+subs.map(s=>`<option value="${esc(s)}">${subjEmoji(s)} ${esc(s)}</option>`).join("");
     listRenderFilters();
     listFilter();
     qs("listTs").textContent=fmtTime();
@@ -825,7 +935,6 @@ function listSort(key){
   const el=qs("sort-"+key);if(el)el.classList.add("active");
   listFilter();
 }
-function setFilterActive(){document.querySelectorAll(".sort").forEach(el=>el.classList.remove("active"))}
 
 function listRenderFilters(){
   const counts={all:allItems.length,overdue:0};
@@ -834,7 +943,7 @@ function listRenderFilters(){
     counts[s]=(counts[s]||0)+1;
     if(i.status!=="Done"&&i.due&&new Date(i.due+"T00:00:00")<new Date())counts.overdue++;
   }
-  const tabs=[["all","📦 ทั้งหมด"],["overdue","🚨 เลยกำหนด"],["todo","📌 ยังไม่ทำ"],["prog","🔄 กำลังทำ"],["done","✅ เสร็จแล้ว"]];
+  const tabs=[["all","📦 All"],["overdue","🚨 Overdue"],["todo","📌 To Do"],["prog","🔄 In Progress"],["done","✅ Done"]];
   qs("listFilters").innerHTML=tabs.map(([k])=>`<button class="filter-btn${currentFilter===k?" active":""}" onclick="setListFilter('${k}')">${tabs.find(t=>t[0]===k)[1]} ${counts[k]||0}</button>`).join("");
 }
 function setListFilter(f){currentFilter=f;listRenderFilters();listFilter()}
@@ -864,14 +973,14 @@ function listFilter(){
   });
 
   const total=allItems.length,done=allItems.filter(i=>i.status==="Done").length;
-  qs("listStatus").textContent=`📦 ${total} รายการ · ✅ ${done} เสร็จ · 🔍 ${filtered.length} ที่ตรง`;
+  qs("listStatus").textContent=`📦 ${total} total · ✅ ${done} done · 🔍 ${filtered.length} shown`;
   listRenderTable(filtered);
 }
 
 function listRenderTable(items){
   const today=new Date();today.setHours(0,0,0,0);
   const tbody=qs("listTable");
-  if(!items.length){tbody.innerHTML='<tr><td colspan="6" class="empty">📭 ไม่มีรายการ</td></tr>';return}
+  if(!items.length){tbody.innerHTML='<tr><td colspan="6" class="empty">🔍 No matching tasks</td></tr>';return}
   const groups={overdue:[],thisWeek:[],nextWeek:[],later:[],noDate:[],done:[]};
   const eow=new Date(today);eow.setDate(today.getDate()+(7-today.getDay()));
   const enw=new Date(eow);enw.setDate(eow.getDate()+7);
@@ -884,7 +993,7 @@ function listRenderTable(items){
     else if(dt<=enw)groups.nextWeek.push(i);
     else groups.later.push(i);
   }
-  const config=[["🚨 เลยกำหนด",groups.overdue],["📅 อาทิตย์นี้",groups.thisWeek],["📅 อาทิตย์หน้า",groups.nextWeek],["📅 ยังอีกนาน",groups.later],["📅 ไม่กำหนด",groups.noDate],["✅ เสร็จแล้ว",groups.done]];
+  const config=[["🚨 Overdue",groups.overdue],["📅 This Week",groups.thisWeek],["📅 Next Week",groups.nextWeek],["📅 Later",groups.later],["📅 No Date",groups.noDate],["✅ Done",groups.done]];
   let html="";
   for(const [hdr,g] of config){
     if(!g.length)continue;
@@ -892,7 +1001,6 @@ function listRenderTable(items){
     html+=g.map(i=>{
       const sc=i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done";
       const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";
-      const dd=daysDiff(i.due);
       const dr=dueClass(i.due);
       return `<tr onclick="showDetail('${i.id}')"${i.status==="Done"?' class="done-row"':''}>
         <td><span class="dot ${sc}"></span>${sl}</td>
@@ -917,28 +1025,28 @@ function showDetail(id){
   const pcls=PRI_CLASS[pri]||"med";
   const dd=daysDiff(item.due);
   let remainStr, remainCl;
-  if(dd===null){remainStr="ไม่กำหนด";remainCl="safe"}
-  else if(dd<0){remainStr=`เลยกำหนด ${-dd} วัน`;remainCl="overdue"}
-  else if(dd===0){remainStr="🔥 วันนี้";remainCl="overdue"}
-  else if(dd===1){remainStr="⏰ พรุ่งนี้";remainCl="soon"}
-  else if(dd<=3){remainStr=`อีก ${dd} วัน`;remainCl="soon"}
-  else{remainStr=`อีก ${dd} วัน`;remainCl="safe"}
+  if(dd===null){remainStr="No due date";remainCl="safe"}
+  else if(dd<0){remainStr=`Overdue by ${-dd} day${-dd>1?'s':''}`;remainCl="overdue"}
+  else if(dd===0){remainStr="🔥 Due Today";remainCl="overdue"}
+  else if(dd===1){remainStr="⏰ Due Tomorrow";remainCl="soon"}
+  else if(dd<=3){remainStr=`${dd} day${dd>1?'s':''} left`;remainCl="soon"}
+  else{remainStr=`${dd} days left`;remainCl="safe"}
   qs("detailContent").innerHTML=`
     <div style="display:flex;align-items:start;justify-content:space-between;margin-bottom:20px;">
       <div style="flex:1;">
-        <div class="detail-badge ${pcls}" style="margin-bottom:8px;display:inline-block;">${pri}</div>
+        <div class="pri-grad ${pcls}" style="margin-bottom:8px;display:inline-block;">${pri}</div>
         <div style="font-size:18px;font-weight:700;line-height:1.3;">${subjEmoji(item.subject)} ${esc(item.title)}</div>
       </div>
     </div>
-    <div style="background:rgba(71,85,105,0.08);border-radius:var(--radius-sm);padding:12px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;">
-      <div><div style="font-size:11px;color:var(--text3);">⏱ เหลือเวลา</div><div style="font-size:16px;font-weight:600;color:${COLORS[sc]||"var(--text)"};" class="${remainCl}">${remainStr}</div></div>
-      <div style="text-align:right;"><div style="font-size:11px;color:var(--text3);">📍 สถานะ</div><div style="font-size:14px;display:flex;align-items:center;gap:4px;"><span class="dot ${sc}"></span>${sl}</div></div>
+    <div style="background:rgba(71,85,105,0.08);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;">
+      <div><div style="font-size:11px;color:var(--text3);">⏱ Time Remaining</div><div style="font-size:16px;font-weight:600;" class="${remainCl}">${remainStr}</div></div>
+      <div style="text-align:right;"><div style="font-size:11px;color:var(--text3);">📍 Status</div><div style="font-size:14px;display:flex;align-items:center;gap:4px;"><span class="dot ${sc}"></span>${sl}</div></div>
     </div>
-    <div class="detail-field"><div class="detail-label">📚 วิชา</div><div class="detail-value">${subjEmoji(item.subject)} ${esc(item.subject)}</div></div>
-    <div class="detail-field"><div class="detail-label">🎯 ความสำคัญ</div><div class="detail-value" style="color:${pc}">${pri}</div></div>
-    <div class="detail-field"><div class="detail-label">📅 กำหนดส่ง</div><div class="detail-value">${item.due||"ไม่กำหนด"}</div></div>
-    <div class="detail-field"><div class="detail-label">📝 รายละเอียด</div><div class="detail-value">${item.note?esc(item.note):"<span style='color:var(--text3);'>ไม่มี</span>"}</div></div>
-    <div class="detail-field"><div class="detail-label">🔗 Notion</div><div class="detail-value"><a href="${item.url}" target="_blank" style="color:var(--accent);font-size:13px;">เปิดใน Notion →</a></div></div>
+    <div class="detail-field"><div class="detail-label">📚 Subject</div><div class="detail-value">${subjEmoji(item.subject)} ${esc(item.subject)}</div></div>
+    <div class="detail-field"><div class="detail-label">🎯 Priority</div><div class="detail-value" style="color:${pc}">${pri}</div></div>
+    <div class="detail-field"><div class="detail-label">📅 Due Date</div><div class="detail-value">${item.due||"Not set"}</div></div>
+    <div class="detail-field"><div class="detail-label">📝 Note</div><div class="detail-value" style="white-space:pre-wrap;">${item.note?esc(item.note):"<span style='color:var(--text3);'>None</span>"}</div></div>
+    <div class="detail-field"><div class="detail-label">🔗 Notion</div><div class="detail-value"><a href="${item.url}" target="_blank" style="color:var(--accent);font-size:13px;">Open in Notion →</a></div></div>
   `;
   qs("detailOverlay").classList.add("open");
   qs("detailPanel").classList.add("open");
@@ -950,7 +1058,7 @@ function closeDetail(){
 
 /* ── EXPORT CSV ── */
 function exportCSV(){
-  const headers=["ชื่อ","วิชา","สถานะ","ความสำคัญ","กำหนดส่ง","รายละเอียด","Notion URL"];
+  const headers=["Title","Subject","Status","Priority","Due Date","Note","Notion URL"];
   const rows=allItems.map(i=>[
     `"${i.title}"`,`"${i.subject}"`,`"${LABELS[i.status==="Todo"?"todo":i.status==="In Progress"?"prog":"done"]}"`,`"${i.priority||"🟡 กลาง"}"`,i.due||"",`"${(i.note||"").replace(/"/g,'""')}"`,i.url||""
   ]);
@@ -958,6 +1066,7 @@ function exportCSV(){
   const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`homework_${new Date().toISOString().slice(0,10)}.csv`;a.click();
   URL.revokeObjectURL(a.href);
+  showToast("📥 CSV downloaded!");
 }
 
 showHome();
