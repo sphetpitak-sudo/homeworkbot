@@ -463,12 +463,6 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
     </div>
   </div>
 
-  <div class="full">
-    <div class="card">
-      <div class="card-title">📈 30-day Trend <span style="color:var(--text3);font-weight:400;">(tasks completed per day)</span></div>
-      <canvas id="trendChart" style="height:180px;"></canvas>
-    </div>
-  </div>
 
   <div class="full">
     <div class="card">
@@ -558,16 +552,16 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get("token");
-let allItems = [], trendData = [];
+let allItems = [];
 let currentFilter = "all", currentSearch = "", currentSubject = "";
-let chart1 = null, chart2 = null, chart3 = null, chart4 = null;
+let chart1 = null, chart2 = null, chart4 = null;
 let cachedTs = 0, calDate = new Date(), selectedCalDay = null;
 let sortKey = "due", sortDir = 1;
 let swipeStartX = 0;
 const CACHE_TTL = 30000;
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTH = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const COLORS = {todo:"#f87171",prog:"#fbbf24",done:"#34d399"};
+const COLORS = {todo:"#f87171",prog:"#fbbf24",done:"#34d399",amber:"#fbbf24",red:"#f87171",green:"#34d399"};
 const PRI_COLORS = {"🔴 สูง":"#f87171","🟡 กลาง":"#fbbf24","🟢 ต่ำ":"#34d399"};
 const PRI_CLASS = {"🔴 สูง":"high","🟡 กลาง":"med","🟢 ต่ำ":"low"};
 const LABELS = {todo:"To Do",prog:"In Progress",done:"Done"};
@@ -637,10 +631,10 @@ async function fetchJson(url){const r=await fetch(url+"&_t="+now());if(!r.ok)thr
 
 async function loadAll(force){
   if(!TOKEN)return null;
-  if(!force&&allItems.length&&now()-cachedTs<CACHE_TTL)return {stats:null,homework:allItems,trend:trendData};
+  if(!force&&allItems.length&&now()-cachedTs<CACHE_TTL)return {stats:null,homework:allItems};
   try{
     const data=await fetchJson(`/api/all?token=${TOKEN}`);
-    allItems=data.homework||[];trendData=data.trend||[];cachedTs=now();
+    allItems=data.homework||[];cachedTs=now();
     return data;
   }catch(e){return {error:e.message}}
 }
@@ -778,11 +772,6 @@ async function loadDash(){
     const c2=qs("priorityChart").getContext("2d");
     chart2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#f87171","#fbbf24","#34d399"],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#94a3b8",padding:12,usePointStyle:true,font:{size:11}}}}}});
 
-    // trend line
-    const trend=trendData.length?trendData:Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:0}});
-    chart3?.destroy();
-    const c3=qs("trendChart").getContext("2d");
-    chart3=new Chart(c3,{type:"line",data:{labels:trend.map(t=>t.label),datasets:[{label:"Completed",data:trend.map(t=>t.count),borderColor:"#34d399",backgroundColor:"rgba(52,211,153,0.08)",fill:true,tension:.4,pointRadius:2,pointHoverRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:"#1e293b",titleFont:{size:11},bodyFont:{size:12}}},scales:{x:{ticks:{color:"#64748b",font:{size:10},maxTicksLimit:10},grid:{color:"rgba(71,85,105,0.1)"}},y:{beginAtZero:true,ticks:{color:"#64748b",font:{size:10},stepSize:1},grid:{color:"rgba(71,85,105,0.1)"}}}}});
 
     // subject bar chart
     const subs=Object.entries(s.bySubject).sort((a,b)=>b[1]-a[1]);
