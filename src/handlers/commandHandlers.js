@@ -16,6 +16,7 @@ import {
 } from "../utils/telegramFormat.js";
 
 const WEB_URL = process.env.WEB_URL || "";
+const TOKEN = process.env.TELEGRAM_TOKEN || "";
 
 export const mainMenu = Markup.inlineKeyboard([
     [
@@ -29,8 +30,8 @@ export const mainMenu = Markup.inlineKeyboard([
     [
         Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
     ],
-    ...(WEB_URL
-        ? [[Markup.button.url("🌐 Web Dashboard", WEB_URL)]]
+    ...(WEB_URL && TOKEN
+        ? [[Markup.button.url("🌐 Web Dashboard", `${WEB_URL}?token=${TOKEN}`)]]
         : []),
 ]);
 
