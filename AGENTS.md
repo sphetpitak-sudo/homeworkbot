@@ -16,23 +16,23 @@ git push https://m6R5Wb:n8C9TzNo23X@justrunmy.app/git/r_Je3z9NQ HEAD:deploy    #
 
 ## Architecture
 ```
-index.js                     ← entry (bot.launch, cron, state cleanup, auto-archive)
+index.js                     ← entry (bot.launch, cron, state cleanup, auto-archive, auto-update-priority)
 src/handlers/
-  commandHandlers.js         ← /start, /menu, /help, /ask, text router, confirm menu
+  commandHandlers.js         ← /start, /menu, /help, /ask, text router, confirm menu, photo OCR handler, media group debounce
   actionHandlers.js          ← all inline keyboard callbacks, priority, edit
 src/services/
-  aiService.js               ← Groq via OpenAI SDK, 3-model chain, TTL cache + .corrections.json
+  aiService.js               ← Typhoon via OpenAI SDK, 2-model chain, TTL cache + .corrections.json
   aiCache.js                 ← correction persistence, in-memory cache
-  qaService.js               ← AI Q&A (ask about homework)
+  ocrService.js              ← Typhoon OCR (typhoon-ocr model), image → text extraction
+  qaService.js               ← AI Q&A (ask about homework, Typhoon chat model)
   notionService.js           ← Notion SDK, TTL-cached, auto-invalidate on write
-  googleCalendarService.js   ← file, inline JSON, or base64 creds
   cache.js                   ← generic in-memory TTL Map
 src/web/
   server.js                  ← Express server: /api/all (stats+homework+trend)
   public/index.html          ← Web dashboard (Chart.js, calendar, detail panel, CSV)
 src/utils/
   dateParser.js              ← Thai date regex: parseThaiDate, formatDueDisplay
-  subjectDetector.js         ← Thai keyword matching + misspelling support
+  subjectDetector.js         ← Thai keyword matching + misspelling support, cleanTitle
   telegramFormat.js          ← Markdown escape: _ * ` [ ~ ( ) |
   constants.js               ← STATUS, PRIORITY, dashboard limits, NOTION_PAGE_SIZE
   logger.js                  ← console wrapper with Thai timestamps
@@ -42,11 +42,11 @@ src/utils/
 ## Features implemented
 | Feature | Description |
 |---------|-------------|
-| ✅ AI parse homework | Groq 3 models → title/subject/date/priority, regex fallback |
-| ✅ Priority | AI auto-detect (🔴สูง/🟡กลาง/🟢ต่ำ), edit button, sort by priority |
+| ✅ AI parse homework | Typhoon 2 models → title/subject/date/priority, regex fallback |
+| ✅ Priority | AI auto-detect (🔴สูง/🟡กลาง/🟢ต่ำ), default `🟢 ต่ำ` when no due date, edit button, sort by priority, auto-recalc on date edit |
+| ✅ Priority auto-update | cron 06:00 — recalc all active homework priorities based on remaining days |
 | ✅ AI Q&A | /ask command — ask about homework in natural language |
 | ✅ Web Dashboard | Express + Chart.js: donuts, trend line, calendar, detail panel, CSV export |
-| ✅ Google Calendar | Optional, create/delete events on save/archive |
 | ✅ Auto-archive | cron 02:00 — archive Done homework older than 7 days |
 | ✅ Reminder | cron 08:00 — upcoming homework for next 7 days |
 | ✅ Health check | HTTP server on PORT 8080 for container hosting |
@@ -55,14 +55,16 @@ src/utils/
 ## AI chain
 1. `.corrections.json` — user-edited values, zero API calls
 2. In-memory cache (1h TTL)
-3. Groq models in order: `llama-3.3-70b-versatile` → `mixtral-8x7b-32768` → `llama-3.1-8b-instant`
+3. Typhoon models in order: `typhoon-v2.5-30b-a3b-instruct` → `typhoon-v2.1-12b-instruct`
 4. On 429 → auto-switch to next model; on bad JSON → retry once with minimal prompt
 5. If all fail → regex fallback (`parseThaiDate` + `detectSubject`)
 
 ## Priority
 - Notion field: `Priority` (Select): `🔴 สูง`, `🟡 กลาง`, `🟢 ต่ำ`
-- AI detects from text: urgent words → สูง, far due → ต่ำ, else → กลาง
+- AI detects from text: urgent words → สูง, far due → ต่ำ, no due → ต่ำ, else → กลาง
 - Edit button `🎯 ความสำคัญ` in confirm menu → choose from inline keyboard
+- EDIT_DATE → `recalcPriority(due)` auto-updates priority
+- `autoUpdatePriority()` cron at 06:00 daily (runs before reminder 08:00)
 - LIST_ACTIVE sorts by priority (สูง→กลาง→ต่ำ) then by due
 
 ## Web Dashboard
@@ -75,7 +77,7 @@ src/utils/
 ## Auto-archive
 - cron `0 2 * * *` — runs daily at 02:00 Bangkok time
 - Fetches Done homework where Due < today - 7 days
-- Archives (sends to Notion Trash) + deletes Google Calendar event
+- Archives (sends to Notion Trash)
 
 ## Hosting (JustRunMy.app)
 - Git Push deployment
@@ -96,11 +98,6 @@ src/utils/
 | fetchDone | 30s | same (prefix `notion:`) |
 | fetchUpcoming | 60s | same |
 
-## Google Calendar auth (priority order)
-1. `GOOGLE_SERVICE_ACCOUNT_JSON` (inline JSON)
-2. `GOOGLE_SA_B64` (base64-encoded JSON)
-3. `GOOGLE_KEY_PATH` (default `./credentials.json`)
-
 ## User state
 - `userState` Map in `index.js`, keyed by Telegram user ID
 - 1h TTL (`_timestamp` on every set), stale cleanup every 30 min
@@ -113,9 +110,7 @@ src/utils/
 | TELEGRAM_TOKEN | ✅ | Telegram bot token |
 | NOTION_TOKEN | ✅ | Notion integration secret |
 | DATABASE_ID | ✅ | Notion database ID |
-| GROQ_API_KEY | ❌ | AI parsing (free, 30 req/min) |
-| GOOGLE_SA_B64 | ❌ | Calendar service account (base64) |
-| GOOGLE_CALENDAR_ID | ❌ | Calendar ID |
+| TYPHOON_API_KEY | ❌ | AI parsing (free tier: 5 req/s, 200 req/min) |
 | REMINDER_CHAT_ID | ❌ | Chat ID for 08:00 reminders |
 | WEB_URL | ❌ | Web dashboard URL → shows 🌐 button in menu |
 | TZ | ❌ | Set to `Asia/Bangkok` |
@@ -128,6 +123,8 @@ src/utils/
 
 ## Thai-specific
 - `parseThaiDate()`: วันนี้, พรุ่งนี้, มะรืน, อีก X วัน/สัปดาห์/อาทิตย์, วันNAME(หน้า), dd/mm/yy(yy), วันที่ X
-- `detectSubject()`: 50+ keywords including misspellings (คนิด→คณิต, อิ๊ง→อังกฤษ, ฟิสิก→ฟิสิกส์)
+- `detectSubject()`: 50+ keywords including misspellings (คนิด→คณิต, อิ๊ง→อังกฤษ, ฟิสิก→ฟิสิกส์, etc.) for ม.1-6 subjects
+- Order: ไทย → อังกฤษ → ฟิสิกส์ → เคมี → ชีวะ → คณิต → สังคม → ประวัติ → คอม → สุขศึกษา
+- `cleanTitle()` strips only the first-word subject prefix, preserves content words like กลอน in แต่งกลอน
 - Confirm menus and bot messages are in Thai
 - Cron timezone: `Asia/Bangkok`

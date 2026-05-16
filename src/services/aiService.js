@@ -5,26 +5,25 @@ import { detectSubject, cleanTitle } from "../utils/subjectDetector.js";
 import { getAICache, setAICache } from "./aiCache.js";
 
 const MODELS = [
-    "llama-3.3-70b-versatile",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant",
+    "typhoon-v2.5-30b-a3b-instruct",
+    "typhoon-v2.1-12b-instruct",
 ];
 
 let client = null;
 let currentModelIdx = 0;
 let lastRequestTime = 0;
-const MIN_INTERVAL_MS = 2100;
+const MIN_INTERVAL_MS = 500;
 
 export function initAI() {
-    const key = process.env.GROQ_API_KEY?.trim();
+    const key = process.env.TYPHOON_API_KEY?.trim();
     if (!key) {
-        logger.warn("GROQ_API_KEY not set — AI parsing disabled, using regex fallback");
+        logger.warn("TYPHOON_API_KEY not set — AI parsing disabled, using regex fallback");
         return;
     }
     try {
         client = new OpenAI({
             apiKey: key,
-            baseURL: "https://api.groq.com/openai/v1",
+            baseURL: "https://api.opentyphoon.ai/v1",
         });
         logger.info(`AI service ready ✅ (${MODELS.length} models, primary: ${MODELS[0]})`);
     } catch (e) {
@@ -111,14 +110,14 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         'Examples: "คนิด" → คณิต, "พุท" → พุธ or พรุ่งนี้, "อิ๊ง" → อังกฤษ',
         "",
         "Return ONLY JSON:",
-        '  {"title": "assignment name", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ"}',
+        '  {"title": "short descriptive title (max 50 chars, e.g. แบบฝึกหัดที่ 1, ใบงานเคมี, รายงานวิทย์)", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ"}',
         "",
         "subject: one of คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม, ทั่วไป",
         "",
         "priority rules:",
         '- "สูง" if due is urgent (≤3 days), or words like "ด่วน", "สำคัญ", "สอบ", "ส่งพรุ่งนี้"',
-        '- "ต่ำ" if due is far (>14 days) or words like "งานกลุ่ม", "รายงาน", "สอบปลายภาค"',
-        '- "กลาง" for everything else',
+        '- "ต่ำ" if due is far (>14 days) or if no due date is mentioned, or words like "งานกลุ่ม", "รายงาน", "สอบปลายภาค"',
+        '- "กลาง" for everything else (due 4-14 days)',
         "",
         "Calculate dueDate from the text relative to today's date:",
         `- "พรุ่งนี้" → ${tomorrow}`,
@@ -140,8 +139,9 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
     ].join("\n");
 }
 
-export async function parseHomework(text) {
-    if (!client || text.length >= 300) return null;
+export async function parseHomework(text, opts = {}) {
+    if (!client) return null;
+    if (!opts.skipLengthCheck && text.length >= 300) return null;
 
     const cached = getAICache(text);
     if (cached) {

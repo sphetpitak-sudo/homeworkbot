@@ -5,9 +5,9 @@ import {
     cleanTitle,
     subjectEmoji,
 } from "../utils/subjectDetector.js";
-import { isCalendarReady } from "../services/googleCalendarService.js";
 import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
+import { logger } from "../utils/logger.js";
 import {
     escapeMarkdown,
     safeBold,
@@ -88,10 +88,6 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     const aiBadge = aiUsed
         ? `\n🤖 ${safeItalic("วิเคราะห์โดย AI")}${model ? ` (${safeCode(model)})` : ""}`
         : "";
-    const calLine = isCalendarReady()
-        ? `\n🗓 ${safeItalic("จะเพิ่มลง Google Calendar อัตโนมัติ")}`
-        : `\n🗓 ${safeItalic("ยังไม่ได้เชื่อม Google Calendar")}`;
-
     return ctx.reply(
         `🔍 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
@@ -99,7 +95,6 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
             `📚 วิชา: ${safeBold(escapeMarkdown(subject))}\n` +
             `🎯 ความสำคัญ: ${priority}\n` +
             `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(due))}` +
-            calLine +
             aiBadge +
             `\n━━━━━━━━━━━━━━━━━━\n` +
             `${safeItalic("ถ้าทุกอย่างถูกต้อง กดบันทึกได้เลย")}`,
@@ -110,23 +105,56 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     );
 }
 
+function shortenTitle(title, subject = "") {
+    const firstLine = title.split("\n")[0].trim();
+    if (firstLine.length <= 80) return firstLine || title.slice(0, 77) + "...";
+
+    const prefixMatch = firstLine.match(
+        /^(แบบฝึกหัด[^\s\d]*\s*\d*|ใบงาน[^\s]*|ข้อสอบ[^\s]*|แบบทดสอบ[^\s]*|รายงาน[^\s]*|สอบ[^\s]*|โครงการ[^\s]*)/,
+    );
+    if (prefixMatch) {
+        const p = prefixMatch[1].trim();
+        return subject ? `${p} (${subject})` : p;
+    }
+
+    const truncated = firstLine.slice(0, 45) + "...";
+    return subject ? `${truncated} (${subject})` : truncated;
+}
+
+function recalcPriority(due) {
+    if (!due) return "🟢 ต่ำ";
+    const dueDate = typeof due === "string" && due.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? new Date(due + "T00:00:00")
+        : new Date(due);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueDate - today) / 86400000);
+    if (diffDays <= 3) return "🔴 สูง";
+    if (diffDays <= 14) return "🟡 กลาง";
+    return "🟢 ต่ำ";
+}
+
 async function parseText(text) {
-    const aiResult = text.length < 300 && isAIReady() ? await parseHomework(text) : null;
+    const aiResult = isAIReady() ? await parseHomework(text) : null;
     if (aiResult) {
+        const hasDue = !!aiResult.dueDate;
+        const subject = aiResult.subject || detectSubject(text);
         return {
             due: aiResult.dueDate,
-            subject: aiResult.subject || detectSubject(text),
-            title: aiResult.title || cleanTitle(text) || text,
-            priority: aiResult.priority || "🟡 กลาง",
+            subject,
+            title: shortenTitle(aiResult.title || cleanTitle(text) || text, subject),
+            priority: hasDue ? (aiResult.priority || "🟡 กลาง") : "🟢 ต่ำ",
             usedAI: true,
             model: aiResult.model || "",
         };
     }
+    const due = parseThaiDate(text);
+    const subject = detectSubject(text);
     return {
-        due: parseThaiDate(text),
-        subject: detectSubject(text),
-        title: cleanTitle(text) || text,
-        priority: "🟡 กลาง",
+        due,
+        subject,
+        title: shortenTitle(cleanTitle(text) || text, subject),
+        priority: due ? "🟡 กลาง" : "🟢 ต่ำ",
         usedAI: false,
         model: "",
     };
@@ -219,7 +247,10 @@ export function registerCommandHandlers(bot, userState) {
 
         if (state?.mode === "EDIT_DATE") {
             const due = parseThaiDate(text) || text;
-            const pending = { ...state.pending, due };
+            const pending = {
+                ...state.pending, due,
+                priority: recalcPriority(due),
+            };
             userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
             return showConfirm(ctx, pending);
         }
@@ -269,4 +300,5 @@ export function registerCommandHandlers(bot, userState) {
             ]),
         });
     });
+
 }

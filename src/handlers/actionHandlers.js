@@ -16,12 +16,7 @@ import {
     archivePage,
     getPageProps,
 } from "../services/notionService.js";
-import {
-    createCalendarEvent,
-    deleteCalendarEvent,
-    listUpcomingEvents,
-    isCalendarReady,
-} from "../services/googleCalendarService.js";
+
 import { mainMenu, cancelMenu, showConfirm } from "./commandHandlers.js";
 import {
     escapeMarkdown,
@@ -206,32 +201,6 @@ function buildDashboard(activePages, donePages) {
         }
     }
 
-    msg += `\n🗓 Google Calendar: ${
-        isCalendarReady() ? "เชื่อมต่อแล้ว ✅" : "ยังไม่ได้เชื่อมต่อ"
-    }`;
-
-    return msg;
-}
-
-/* ── calendar builder ── */
-function buildCalendarMessage(events) {
-    const grouped = {};
-    for (const event of events) {
-        const date =
-            event.start?.date || event.start?.dateTime?.split("T")[0] || "-";
-        if (!grouped[date]) grouped[date] = [];
-        grouped[date].push(event.summary || "(ไม่มีชื่อ)");
-    }
-
-    let msg = `🗓 ${safeBold("ปฏิทิน 7 วันข้างหน้า")}\n━━━━━━━━━━━━━━━━━━\n`;
-    for (const [date, titles] of Object.entries(grouped)) {
-        const dt = parseYMDToLocalDate(date);
-        const label = `${THAI_DAYS[dt.getDay()]}${dt.getDate()} ${THAI_MONTHS[dt.getMonth()]}`;
-        msg += `\n📅 ${safeBold(label)}\n`;
-        for (const title of titles) {
-            msg += `• ${escapeMarkdown(title)}\n`;
-        }
-    }
     return msg;
 }
 
@@ -288,8 +257,7 @@ export function registerActionHandlers(bot, userState) {
         });
 
         try {
-            const eventId = await createCalendarEvent(title, subject, due);
-            await createHomework({ title, subject, due, rawText, eventId, priority });
+            await createHomework({ title, subject, due, rawText, priority });
 
             if (state.originalText) {
                 setCorrection(state.originalText, { title, subject, due, priority });
@@ -309,7 +277,6 @@ export function registerActionHandlers(bot, userState) {
                     `📚 วิชา: ${safeBold(safeSubject)}\n` +
                     `🎯 ความสำคัญ: ${priText}\n` +
                     `📅 กำหนดส่ง: ${safeBold(dueText)}\n` +
-                    `${eventId ? "🗓 เพิ่มใน Google Calendar แล้ว ✅\n" : ""}` +
                     `━━━━━━━━━━━━━━━━━━\n` +
                     `พร้อมไปต่อแล้ว เลือกเมนูด้านล่างได้เลย`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
@@ -576,41 +543,6 @@ export function registerActionHandlers(bot, userState) {
         }
     });
 
-    /* CAL VIEW */
-    bot.action("CAL_VIEW", async (ctx) => {
-        await ctx.answerCbQuery().catch(() => {});
-
-        if (!isCalendarReady()) {
-            return ctx.reply(
-                `⚠️ ${safeBold("Google Calendar ยังไม่ได้เชื่อมต่อ")}\n` +
-                    `ตรวจสอบค่า ${safeItalic("GOOGLE_KEY_PATH")} และ ${safeItalic("GOOGLE_CALENDAR_ID")}`,
-                { parse_mode: "Markdown", ...dashboardMenu() },
-            );
-        }
-
-        try {
-            const events = await listUpcomingEvents(7);
-
-            if (!events || !events.length) {
-                return ctx.reply(
-                    `📭 ${safeBold("ไม่มีกิจกรรมใน 7 วันข้างหน้า")}`,
-                    { parse_mode: "Markdown", ...dashboardMenu() },
-                );
-            }
-
-            return ctx.reply(buildCalendarMessage(events), {
-                parse_mode: "Markdown",
-                ...dashboardMenu(),
-            });
-        } catch (err) {
-            logger.error("CAL_VIEW:", err);
-            return ctx.reply("❌ ดู Calendar ไม่ได้ กรุณาลองใหม่", {
-                parse_mode: "Markdown",
-                ...mainMenu,
-            });
-        }
-    });
-
     /* STATUS helpers */
     async function setStatus(ctx, pageId, status, message) {
         try {
@@ -662,12 +594,11 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
 
         try {
-            const eventId = await archivePage(ctx.match[1]);
-            if (eventId) await deleteCalendarEvent(eventId);
+            await archivePage(ctx.match[1]);
             await ctx.editMessageReplyMarkup(undefined);
 
             return ctx.reply(
-                `🗑️ ${safeBold("ลบแล้ว")}${eventId ? " และลบจาก Calendar ด้วย 🗓" : ""}`,
+                `🗑️ ${safeBold("ลบแล้ว")}`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
             );
         } catch (err) {

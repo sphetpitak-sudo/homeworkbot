@@ -6,3 +6,4 @@ homebot.json
 .corrections.json
 *.tmp
 .opencode/
+.DS_Store

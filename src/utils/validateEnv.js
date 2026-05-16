@@ -9,7 +9,7 @@ export function validateEnv() {
     process.exit(1);
   }
 
-  const optional = ["GOOGLE_KEY_PATH", "GOOGLE_CALENDAR_ID", "GROQ_API_KEY", "REMINDER_CHAT_ID"];
+  const optional = ["REMINDER_CHAT_ID"];
   const absent   = optional.filter((k) => !process.env[k]);
   if (absent.length) logger.warn("Optional env vars not set:", absent.join(", "));
 

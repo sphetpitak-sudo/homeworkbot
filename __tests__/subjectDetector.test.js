@@ -122,6 +122,20 @@ describe('detectSubject', () => {
         });
     });
 
+    describe('สุขศึกษา keyword variants', () => {
+        test.each([
+            ['สุขศึกษา', 'ใบงานสุขศึกษา'],
+            ['พลศึกษา', 'สอบพลศึกษา'],
+            ['พละ', 'พละวันนี้'],
+            ['กีฬา', 'กีฬาสี'],
+            ['อนามัย', 'อนามัยส่วนบุคคล'],
+            ['โภชนาการ', 'โภชนาการอาหาร'],
+            ['ออกกำลังกาย', 'ประโยชน์ของการออกกำลังกาย'],
+        ])('detects "%s" from "%s"', (_, input) => {
+            expect(detectSubject(input)).toBe('สุขศึกษา');
+        });
+    });
+
     describe('unknown input', () => {
         test.each([
             ['ทำรายงาน'],
@@ -130,7 +144,6 @@ describe('detectSubject', () => {
             ['ปรัชญา'],
             ['ศิลปะ'],
             ['ดนตรี'],
-            ['พลศึกษา'],
             ['การงานอาชีพ'],
             ['hello world'],
             [''],
@@ -151,6 +164,7 @@ describe('subjectEmoji', () => {
         ['สังคม', '🌏'],
         ['ประวัติ', '🏛️'],
         ['คอม', '💻'],
+        ['สุขศึกษา', '🏃'],
     ])('returns %s for subject "%s"', (subject, emoji) => {
         expect(subjectEmoji(subject)).toBe(emoji);
     });

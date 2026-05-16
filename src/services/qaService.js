@@ -3,9 +3,8 @@ import { fetchActive, getPageProps } from "./notionService.js";
 import { logger } from "../utils/logger.js";
 
 const MODELS = [
-    "llama-3.3-70b-versatile",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant",
+    "typhoon-v2.5-30b-a3b-instruct",
+    "typhoon-v2.1-12b-instruct",
 ];
 
 let client = null;
@@ -13,11 +12,11 @@ let modelIndex = 0;
 
 function getClient() {
     if (client) return client;
-    const key = process.env.GROQ_API_KEY?.trim();
+    const key = process.env.TYPHOON_API_KEY?.trim();
     if (!key) return null;
     client = new OpenAI({
         apiKey: key,
-        baseURL: "https://api.groq.com/openai/v1",
+        baseURL: "https://api.opentyphoon.ai/v1",
     });
     return client;
 }
