@@ -121,7 +121,7 @@ export function startWebServer(port = 8080) {
     app.use(express.static(path.join(__dirname, "public")));
 
     function requireAuth(req, res, next) {
-        const t = req.query.token || req.headers["x-token"];
+        const t = req.headers["authorization"]?.replace("Bearer ", "") || req.query.token || req.headers["x-token"];
         if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
         }
