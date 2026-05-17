@@ -649,8 +649,7 @@ const FAKE_DATA = {
     {id:"d7",title:"งานนำเสนอกลุ่มห้องเรียน",status:"Done",due:"2026-05-08",subject:"อังกฤษ",priority:"🟢 ต่ำ",note:"Present หน้าชั้น 5 นาที",url:"#"},
     {id:"d8",title:"แยกตัวประกอบพหุนาม",status:"Todo",due:null,subject:"คณิต",priority:"🟢 ต่ำ",note:"ส่งเมื่อไหร่ก็ได้",url:"#"},
     {id:"d9",title:"ความน่าจะเป็นเพิ่มเติม",status:"Done",due:"2026-05-12",subject:"คณิต",priority:"🟡 กลาง",note:"ตรวจคำตอบจากเฉลย",url:"#"}
-  ],
-  trend:Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:Math.round(Math.random()*2)}})
+  ]
 };
 let allItems = [], lastStats = null;
 let currentFilter = "all", currentSearch = "", currentSubject = "";

@@ -144,10 +144,7 @@ export async function updatePriority(pageId, priority) {
 }
 
 export async function archivePage(pageId) {
-    const page = await notion.pages.retrieve({ page_id: pageId });
-    const eventId = page.properties.EventId?.rich_text?.[0]?.plain_text || null;
     await notion.pages.update({ page_id: pageId, archived: true });
     cacheInvalidate("notion:");
     logger.info(`Archived: ${pageId}`);
-    return eventId;
 }

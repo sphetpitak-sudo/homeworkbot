@@ -5,6 +5,7 @@ import { validateEnv } from "./src/utils/validateEnv.js";
 import { logger }      from "./src/utils/logger.js";
 import { initAI }              from "./src/services/aiService.js";
 import { fetchActive, fetchUpcoming, fetchDone, archivePage, updatePriority } from "./src/services/notionService.js";
+import { cacheCleanup } from "./src/services/cache.js";
 import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
 import { recalcPriority } from "./src/utils/priority.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
@@ -149,7 +150,7 @@ cron.schedule("0 6 * * *", autoUpdatePriority, { timezone: "Asia/Bangkok" });
 cron.schedule("0 8 * * *", sendReminders, { timezone: "Asia/Bangkok" });
 cron.schedule("0 2 * * *", autoArchive, { timezone: "Asia/Bangkok" });
 
-/* ── clean stale user states every 30 min ── */
+/* ── clean stale user states + expired cache every 30 min ── */
 setInterval(() => {
     const TTL = 3_600_000;
     const now = Date.now();
@@ -160,6 +161,7 @@ setInterval(() => {
             cleaned++;
         }
     }
+    cacheCleanup();
     if (cleaned) logger.debug(`Cleaned ${cleaned} stale user states`);
 }, 30 * 60 * 1000);
 

@@ -69,9 +69,9 @@ export function parseThaiDate(text) {
     if (m) {
         const day = +m[1];
         if (day >= 1 && day <= 31) {
-            now.setDate(day);
-            if (now.getDate() < day) now.setMonth(now.getMonth() + 1);
-            return formatDate(now);
+            const target = new Date(now.getFullYear(), now.getMonth(), day);
+            if (target.getMonth() !== now.getMonth()) target.setMonth(target.getMonth() + 1);
+            return formatDate(target);
         }
     }
 
@@ -98,8 +98,10 @@ export function parseThaiDate(text) {
     m = t.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
     if (m) {
         let [, d, mo, y] = m;
+        d = +d; mo = +mo;
         if (y.length === 2) y = "20" + y;
-        return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+        if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+        return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     }
 
     return null;

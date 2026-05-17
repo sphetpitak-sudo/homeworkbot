@@ -23,3 +23,10 @@ export function cacheInvalidate(pattern) {
         if (key.startsWith(pattern)) store.delete(key);
     }
 }
+
+export function cacheCleanup() {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+        if (now > entry.expires) store.delete(key);
+    }
+}

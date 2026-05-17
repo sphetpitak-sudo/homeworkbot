@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { fetchActive, getPageProps } from "./notionService.js";
+import { STATUS } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 
 const MODELS = [
@@ -82,5 +83,5 @@ export async function askAI(question) {
 }
 
 function statusLabel(status) {
-    return status === "Done" ? "เสร็จแล้ว" : status === "In Progress" ? "กำลังทำ" : "ยังไม่ทำ";
+    return status === STATUS.DONE ? "เสร็จแล้ว" : status === STATUS.IN_PROGRESS ? "กำลังทำ" : "ยังไม่ทำ";
 }
