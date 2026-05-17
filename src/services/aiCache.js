@@ -5,8 +5,11 @@ import { logger } from "../utils/logger.js";
 const CORRECTIONS_FILE = ".corrections.json";
 const AI_CACHE_TTL = 3600_000;
 const MAX_CORRECTIONS = 500;
+const DEBOUNCE_MS = 5000;
 
 let corrections = {};
+let debounceTimer = null;
+let pendingWrite = false;
 
 function loadCorrections() {
     try {
@@ -20,14 +23,20 @@ function loadCorrections() {
     }
 }
 
-function saveCorrections() {
-    try {
-        const tmp = CORRECTIONS_FILE + ".tmp";
-        fs.writeFileSync(tmp, JSON.stringify(corrections, null, 2));
-        fs.renameSync(tmp, CORRECTIONS_FILE);
-    } catch (e) {
-        logger.warn("Failed to save corrections:", e.message);
-    }
+function debouncedSave() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    if (pendingWrite) return;
+    pendingWrite = true;
+    debounceTimer = setTimeout(async () => {
+        pendingWrite = false;
+        try {
+            const tmp = CORRECTIONS_FILE + ".tmp";
+            await fs.promises.writeFile(tmp, JSON.stringify(corrections, null, 2));
+            await fs.promises.rename(tmp, CORRECTIONS_FILE);
+        } catch (e) {
+            logger.warn("Failed to save corrections:", e.message);
+        }
+    }, DEBOUNCE_MS);
 }
 
 export function getCorrection(text) {
@@ -49,7 +58,7 @@ export function setCorrection(text, pending) {
     if (entries.length > MAX_CORRECTIONS) {
         corrections = Object.fromEntries(entries.slice(-MAX_CORRECTIONS));
     }
-    saveCorrections();
+    debouncedSave();
     cacheSet(`ai:${key}`, corrections[key], AI_CACHE_TTL);
 }
 
@@ -67,7 +76,7 @@ export function setAICache(text, result) {
     cacheSet(`ai:${key}`, {
         title: result.title || null,
         subject: result.subject || null,
-        dueDate: result.due || result.dueDate || null,
+        dueDate: result.dueDate || null,
         priority: result.priority || null,
     }, AI_CACHE_TTL);
 }

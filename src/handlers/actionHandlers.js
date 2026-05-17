@@ -163,6 +163,12 @@ function buildDashboard(activePages, donePages) {
         return dt >= today && dt <= urgentLimit;
     });
 
+    const overdue = activePages.filter((p) => {
+        const due = p.properties.Due?.date?.start;
+        if (!due) return false;
+        return parseYMDToLocalDate(due) < today;
+    });
+
     const bySubject = {};
     for (const p of activePages) {
         const subject =
@@ -174,6 +180,7 @@ function buildDashboard(activePages, donePages) {
     msg += `🟥 ยังไม่ทำ: ${safeBold(String(todo))}  `;
     msg += `🟨 กำลังทำ: ${safeBold(String(prog))}  `;
     msg += `🟩 เสร็จ: ${safeBold(String(done))}\n`;
+    if (overdue.length) msg += `🚨 เกินกำหนด: ${safeBold(String(overdue.length))}\n`;
     msg += `ความคืบหน้า: [${bar}] ${safeBold(`${pct}%`)}  (${total} รายการ)\n`;
 
     msg += `\n${sectionHeader("⚡", "ใกล้ครบกำหนด", `≤ ${URGENT_DAYS} วัน`)}\n`;
@@ -478,7 +485,7 @@ export function registerActionHandlers(bot, userState) {
                     await sendPageCard(ctx, page, "active");
             }
 
-            return ctx.reply("─────────────────", listFooterMenu());
+            return ctx.reply("📋 รายการทั้งหมด", listFooterMenu());
         } catch (err) {
             logger.error("LIST_ACTIVE:", err);
             return ctx.reply("❌ ดึงข้อมูลไม่ได้ กรุณาลองใหม่", {
@@ -511,7 +518,7 @@ export function registerActionHandlers(bot, userState) {
 
             for (const page of pages) await sendPageCard(ctx, page, "done");
 
-            return ctx.reply("─────────────────", listFooterMenu());
+            return ctx.reply("✅ รายการที่เสร็จแล้ว", listFooterMenu());
         } catch (err) {
             logger.error("LIST_DONE:", err);
             return ctx.reply("❌ ดึงข้อมูลไม่ได้ กรุณาลองใหม่", {

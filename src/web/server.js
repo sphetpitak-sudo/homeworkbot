@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps } from "../services/notionService.js";
-import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT } from "../utils/constants.js";
+import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ function computeStats(activePages, donePages) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const urgentLimit = new Date(today);
-    urgentLimit.setDate(today.getDate() + 3);
+    urgentLimit.setDate(today.getDate() + URGENT_DAYS);
 
     const urgent = activePages.filter((p) => {
         const d = p.properties.Due?.date?.start;

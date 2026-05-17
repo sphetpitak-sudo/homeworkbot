@@ -7,6 +7,7 @@ import {
 } from "../utils/subjectDetector.js";
 import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
+import { recalcPriority } from "../utils/priority.js";
 import { logger } from "../utils/logger.js";
 import {
     escapeMarkdown,
@@ -122,19 +123,6 @@ function shortenTitle(title, subject = "") {
     return subject ? `${truncated} (${subject})` : truncated;
 }
 
-function recalcPriority(due) {
-    if (!due) return "🟢 ต่ำ";
-    const dueDate = typeof due === "string" && due.match(/^\d{4}-\d{2}-\d{2}$/)
-        ? new Date(due + "T00:00:00")
-        : new Date(due);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((dueDate - today) / 86400000);
-    if (diffDays <= 3) return "🔴 สูง";
-    if (diffDays <= 14) return "🟡 กลาง";
-    return "🟢 ต่ำ";
-}
-
 async function parseText(text) {
     const aiResult = isAIReady() ? await parseHomework(text) : null;
     if (aiResult) {
@@ -179,7 +167,7 @@ export function registerCommandHandlers(bot, userState) {
 
     bot.command("ask", async (ctx) => {
         if (!isQaReady()) {
-            return ctx.reply("⚠️ ยังไม่ได้ตั้งค่า GROQ_API_KEY", {
+            return ctx.reply("⚠️ ยังไม่ได้ตั้งค่า TYPHOON_API_KEY", {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -287,8 +275,6 @@ export function registerCommandHandlers(bot, userState) {
             `📅 กำหนดส่ง: ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `${safeItalic("กด ➕ เพิ่มการบ้าน แล้วส่งข้อความนี้อีกครั้งเพื่อบันทึก")}`;
-
-        userState.set(uid, { mode: "ADD_HELPER", preview: parsed, _timestamp: Date.now() });
 
         return ctx.reply(previewText, {
             parse_mode: "Markdown",

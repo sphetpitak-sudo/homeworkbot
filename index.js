@@ -6,6 +6,7 @@ import { logger }      from "./src/utils/logger.js";
 import { initAI }              from "./src/services/aiService.js";
 import { fetchActive, fetchUpcoming, fetchDone, archivePage, updatePriority } from "./src/services/notionService.js";
 import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
+import { recalcPriority } from "./src/utils/priority.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
@@ -34,10 +35,15 @@ bot.catch((err) => {
     logger.error(`Bot error: ${desc}`);
 });
 
+/* ── cron overlap guards ── */
+const cronRunning = { priority: false, archive: false, reminder: false };
+
 /* ── reminder ── */
 async function sendReminders() {
+    if (cronRunning.reminder) return;
+    cronRunning.reminder = true;
     const chatId = process.env.REMINDER_CHAT_ID;
-    if (!chatId) return;
+    if (!chatId) { cronRunning.reminder = false; return; }
 
     try {
         const today = new Date();
@@ -77,28 +83,23 @@ async function sendReminders() {
         logger.info(`Reminder sent to ${chatId} (${pages.length} items)`);
     } catch (err) {
         logger.error("Reminder:", err);
+    } finally {
+        cronRunning.reminder = false;
     }
 }
 
 /* ── auto-priority (adjust priority based on proximity) ── */
 async function autoUpdatePriority() {
+    if (cronRunning.priority) return;
+    cronRunning.priority = true;
     try {
         const pages = await fetchActive();
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         let updated = 0;
 
         for (const p of pages) {
             const current = p.properties.Priority?.select?.name || "🟡 กลาง";
             const dueStr = p.properties.Due?.date?.start;
-
-            let target = "🟢 ต่ำ";
-            if (dueStr) {
-                const due = new Date(dueStr + "T00:00:00");
-                const diffDays = Math.ceil((due - today) / 86400000);
-                if (diffDays <= 3) target = "🔴 สูง";
-                else if (diffDays <= 14) target = "🟡 กลาง";
-            }
+            const target = recalcPriority(dueStr);
 
             if (current !== target) {
                 await updatePriority(p.id, target);
@@ -109,11 +110,15 @@ async function autoUpdatePriority() {
         if (updated) logger.info(`Auto-priority updated ${updated} items`);
     } catch (err) {
         logger.error("autoUpdatePriority:", err);
+    } finally {
+        cronRunning.priority = false;
     }
 }
 
 /* ── auto-archive ── */
 async function autoArchive() {
+    if (cronRunning.archive) return;
+    cronRunning.archive = true;
     try {
         const pages = await fetchDone();
         const cutoff = new Date();
@@ -134,6 +139,8 @@ async function autoArchive() {
         if (archived) logger.info(`Auto-archived ${archived} items`);
     } catch (err) {
         logger.error("autoArchive:", err);
+    } finally {
+        cronRunning.archive = false;
     }
 }
 
