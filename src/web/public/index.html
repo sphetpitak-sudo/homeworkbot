@@ -320,6 +320,39 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 }
 .modal-panel textarea { resize: vertical; min-height: 48px; }
 
+/* ── custom checkbox ─ */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px;
+  border: 2px solid var(--border); border-radius: 5px; cursor: pointer;
+  position: relative; transition: all .2s; background: var(--surface);
+}
+input[type="checkbox"]:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 5px; top: 1px;
+  width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+input[type="checkbox"]:hover { border-color: var(--accent); }
+input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* ── bulk action bar ─ */
+.bulk-bar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  padding: 10px 14px; background: var(--accent-soft); border-radius: var(--radius-sm);
+  border: 1px solid rgba(232,133,74,0.15);
+}
+.bulk-bar .bulk-count { font-size: 12px; font-weight: 600; color: var(--accent); }
+.bulk-bar .bulk-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text2);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 11px;
+  font-family: inherit; font-weight: 500; transition: all .2s;
+}
+.bulk-bar .bulk-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bulk-bar .bulk-clear { margin-left: auto; color: var(--text3); }
+.bulk-bar .bulk-clear:hover { color: var(--coral); background: transparent; border-color: var(--coral); }
+
 /* ── status buttons ─ */
 .status-btns { display: flex; gap: 3px; }
 .status-btn {
@@ -471,12 +504,12 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
       <input type="date" id="dateTo" class="btn" onchange="listFilter()">
       <button class="btn btn-sm btn-primary" onclick="exportCSV()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button>
     </div>
-    <div id="bulkBar" class="hide" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--accent-soft);border-radius:8px;">
-      <span style="font-size:12px;font-weight:600;color:var(--accent);" id="bulkCount">0 selected</span>
-      <button class="btn btn-sm" onclick="bulkStatus('Todo')">To Do</button>
-      <button class="btn btn-sm" onclick="bulkStatus('In Progress')">In Progress</button>
-      <button class="btn btn-sm" onclick="bulkStatus('Done')">Done</button>
-      <button class="btn btn-sm" onclick="clearSelection()" style="margin-left:auto;">Clear</button>
+    <div id="bulkBar" class="bulk-bar hide">
+      <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button class="bulk-btn" onclick="bulkStatus('Todo')">To Do</button>
+      <button class="bulk-btn" onclick="bulkStatus('In Progress')">In Progress</button>
+      <button class="bulk-btn" onclick="bulkStatus('Done')">Done</button>
+      <button class="bulk-btn bulk-clear" onclick="clearSelection()">Clear</button>
     </div>
     <div class="filter-group" id="listFilters" style="margin-bottom:10px;"></div>
     <div class="table-wrap">
@@ -800,11 +833,9 @@ function updateBulkBar(){
   const sel=qs("selectAll");
   if(S.selected.size>0){
     bar.classList.remove("hide");
-    bar.style.display="flex";
     cnt.textContent=`${S.selected.size} selected`;
   }else{
     bar.classList.add("hide");
-    bar.style.display="none";
   }
   const all=getFilteredList();
   sel.checked=all.length>0&&S.selected.size===all.length;
