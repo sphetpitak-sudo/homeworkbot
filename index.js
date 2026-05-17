@@ -40,6 +40,112 @@ bot.catch((err) => {
 /* ── cron overlap guards ── */
 const cronRunning = { priority: false, archive: false, reminder: false, weekly: false };
 
+/* ── reminder ── */
+async function sendReminders() {
+    if (cronRunning.reminder) return;
+    cronRunning.reminder = true;
+    const chatId = process.env.REMINDER_CHAT_ID;
+    if (!chatId) { cronRunning.reminder = false; return; }
+
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+
+        const pages = await fetchUpcoming(
+            formatDate(today),
+            formatDate(nextWeek),
+        );
+        if (!pages.length) return;
+
+        let msg = "⏰ *แจ้งเตือนการบ้านใกล้ครบกำหนด\\!*\n━━━━━━━━━━━━━━━━━━\n";
+
+        for (const p of pages) {
+            const title =
+                p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ";
+            const due = p.properties.Due?.date?.start || null;
+            const status = p.properties.Status?.select?.name || "";
+            const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "-";
+
+            const sEmoji =
+                status === "Done"
+                    ? "✅"
+                    : status === "In Progress"
+                      ? "🔄"
+                      : "📌";
+
+            msg += `${sEmoji} *${escapeMarkdown(title)}* _${escapeMarkdown(sub)}_ — ${escapeMarkdown(formatDueDisplay(due))}\n`;
+        }
+
+        msg += "\n💪 สู้ๆ นะ\\!";
+
+        await bot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" });
+        logger.info(`Reminder sent to ${chatId} (${pages.length} items)`);
+    } catch (err) {
+        logger.error("Reminder:", err);
+    } finally {
+        cronRunning.reminder = false;
+    }
+}
+
+/* ── auto-priority (adjust priority based on proximity) ── */
+async function autoUpdatePriority() {
+    if (cronRunning.priority) return;
+    cronRunning.priority = true;
+    try {
+        const pages = await fetchActive();
+        let updated = 0;
+
+        for (const p of pages) {
+            const current = p.properties.Priority?.select?.name || "🟡 กลาง";
+            const dueStr = p.properties.Due?.date?.start;
+            const target = recalcPriority(dueStr);
+
+            if (current !== target) {
+                await updatePriority(p.id, target);
+                updated++;
+            }
+        }
+
+        if (updated) logger.info(`Auto-priority updated ${updated} items`);
+    } catch (err) {
+        logger.error("autoUpdatePriority:", err);
+    } finally {
+        cronRunning.priority = false;
+    }
+}
+
+/* ── auto-archive ── */
+async function autoArchive() {
+    if (cronRunning.archive) return;
+    cronRunning.archive = true;
+    try {
+        const pages = await fetchDone();
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 7);
+        cutoff.setHours(0, 0, 0, 0);
+        let archived = 0;
+
+        for (const p of pages) {
+            const due = p.properties.Due?.date?.start;
+            if (!due) continue;
+            const dt = new Date(due + "T00:00:00");
+            if (dt >= cutoff) continue;
+
+            await archivePage(p.id);
+            archived++;
+        }
+
+        if (archived) logger.info(`Auto-archived ${archived} items`);
+    } catch (err) {
+        logger.error("autoArchive:", err);
+    } finally {
+        cronRunning.archive = false;
+    }
+}
+
 /* ── weekly summary ── */
 async function sendWeeklySummary() {
     if (cronRunning.weekly) return;
