@@ -4,8 +4,20 @@ import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
+import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/* ── separate dashboard token (never expose TELEGRAM_TOKEN) ── */
+let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim();
+if (!DASHBOARD_TOKEN) {
+    DASHBOARD_TOKEN = crypto.randomBytes(24).toString("base64url");
+    logger.info(`Dashboard token auto-generated: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
+}
+
+export function getDashboardToken() {
+    return DASHBOARD_TOKEN;
+}
 
 function computeStats(activePages, donePages) {
     const todo = activePages.filter(
@@ -93,7 +105,7 @@ export function startWebServer(port = 8080) {
 
     function requireAuth(req, res, next) {
         const t = req.query.token || req.headers["x-token"];
-        if (t !== TOKEN) {
+        if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
         }
         next();

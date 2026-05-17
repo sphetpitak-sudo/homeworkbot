@@ -8,6 +8,7 @@ import {
 import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
 import { recalcPriority } from "../utils/priority.js";
+import { getDashboardToken } from "../web/server.js";
 import { logger } from "../utils/logger.js";
 import {
     escapeMarkdown,
@@ -17,7 +18,6 @@ import {
 } from "../utils/telegramFormat.js";
 
 const WEB_URL = process.env.WEB_URL || "";
-const TOKEN = process.env.TELEGRAM_TOKEN || "";
 
 export const mainMenu = Markup.inlineKeyboard([
     [
