@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchActive, fetchDone, getPageProps, createHomework } from "../services/notionService.js";
+import { fetchActive, fetchDone, getPageProps, createHomework, updateStatus } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
 import { recalcPriority } from "../utils/priority.js";
 import { logger } from "../utils/logger.js";
@@ -191,6 +191,34 @@ export function startWebServer(port = 8080) {
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/homework:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post("/api/status", requireAuth, async (req, res) => {
+        const { id, status } = req.body;
+        if (!id || !status) return res.status(400).json({ error: "id and status required" });
+        try {
+            await updateStatus(id, status);
+            res.json({ success: true });
+        } catch (err) {
+            logger.error("API POST /api/status:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post("/api/bulk-status", requireAuth, async (req, res) => {
+        const { ids, status } = req.body;
+        if (!ids?.length || !status) return res.status(400).json({ error: "ids and status required" });
+        try {
+            let updated = 0;
+            for (const id of ids) {
+                await updateStatus(id, status);
+                updated++;
+            }
+            res.json({ success: true, updated });
+        } catch (err) {
+            logger.error("API POST /api/bulk-status:", err);
             res.status(500).json({ error: err.message });
         }
     });

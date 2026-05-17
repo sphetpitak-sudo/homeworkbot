@@ -8,6 +8,7 @@ import { fetchActive, fetchUpcoming, fetchDone, archivePage, updatePriority } fr
 import { cacheCleanup } from "./src/services/cache.js";
 import { formatDate, formatDueDisplay } from "./src/utils/dateParser.js";
 import { recalcPriority } from "./src/utils/priority.js";
+import { STATUS } from "./src/utils/constants.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
@@ -37,111 +38,53 @@ bot.catch((err) => {
 });
 
 /* ── cron overlap guards ── */
-const cronRunning = { priority: false, archive: false, reminder: false };
+const cronRunning = { priority: false, archive: false, reminder: false, weekly: false };
 
-/* ── reminder ── */
-async function sendReminders() {
-    if (cronRunning.reminder) return;
-    cronRunning.reminder = true;
+/* ── weekly summary ── */
+async function sendWeeklySummary() {
+    if (cronRunning.weekly) return;
+    cronRunning.weekly = true;
     const chatId = process.env.REMINDER_CHAT_ID;
-    if (!chatId) { cronRunning.reminder = false; return; }
+    if (!chatId) { cronRunning.weekly = false; return; }
 
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const nextWeek = new Date(today);
-        nextWeek.setDate(today.getDate() + 7);
+        const [activePages, donePages] = await Promise.all([fetchActive(), fetchDone()]);
 
-        const pages = await fetchUpcoming(
-            formatDate(today),
-            formatDate(nextWeek),
-        );
-        if (!pages.length) return;
+        const todo = activePages.filter(p => p.properties.Status?.select?.name === STATUS.TODO).length;
+        const prog = activePages.filter(p => p.properties.Status?.select?.name === STATUS.IN_PROGRESS).length;
+        const done = donePages.length;
+        const total = todo + prog + done;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-        let msg = "⏰ *แจ้งเตือนการบ้านใกล้ครบกำหนด\\!*\n━━━━━━━━━━━━━━━━━━\n";
+        const overdue = activePages.filter(p => {
+            const d = p.properties.Due?.date?.start;
+            if (!d) return false;
+            return new Date(d + "T00:00:00") < today;
+        }).length;
 
-        for (const p of pages) {
-            const title =
-                p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ";
-            const due = p.properties.Due?.date?.start || null;
-            const status = p.properties.Status?.select?.name || "";
-            const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "-";
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay());
+        const weekDone = donePages.filter(p => {
+            const d = p.properties.Due?.date?.start;
+            if (!d) return false;
+            return new Date(d + "T00:00:00") >= weekStart;
+        }).length;
 
-            const sEmoji =
-                status === "Done"
-                    ? "✅"
-                    : status === "In Progress"
-                      ? "🔄"
-                      : "📌";
-
-            msg += `${sEmoji} *${escapeMarkdown(title)}* _${escapeMarkdown(sub)}_ — ${escapeMarkdown(formatDueDisplay(due))}\n`;
-        }
-
-        msg += "\n💪 สู้ๆ นะ\\!";
+        let msg = `📊 *สรุปประจำสัปดาห์*\n━━━━━━━━━━━━━━━━━━\n`;
+        msg += `✅ ทำเสร็จสัปดาห์นี้: *${weekDone}* อัน\n`;
+        msg += `📋 คงเหลือ: *${todo + prog}* อัน (${pct}% เสร็จแล้ว)\n`;
+        if (overdue > 0) msg += `⚠️ Overdue: *${overdue}* อัน\n`;
+        msg += `\n💪 สู้ๆ นะ!`;
 
         await bot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" });
-        logger.info(`Reminder sent to ${chatId} (${pages.length} items)`);
+        logger.info(`Weekly summary sent to ${chatId}`);
     } catch (err) {
-        logger.error("Reminder:", err);
+        logger.error("Weekly summary:", err);
     } finally {
-        cronRunning.reminder = false;
-    }
-}
-
-/* ── auto-priority (adjust priority based on proximity) ── */
-async function autoUpdatePriority() {
-    if (cronRunning.priority) return;
-    cronRunning.priority = true;
-    try {
-        const pages = await fetchActive();
-        let updated = 0;
-
-        for (const p of pages) {
-            const current = p.properties.Priority?.select?.name || "🟡 กลาง";
-            const dueStr = p.properties.Due?.date?.start;
-            const target = recalcPriority(dueStr);
-
-            if (current !== target) {
-                await updatePriority(p.id, target);
-                updated++;
-            }
-        }
-
-        if (updated) logger.info(`Auto-priority updated ${updated} items`);
-    } catch (err) {
-        logger.error("autoUpdatePriority:", err);
-    } finally {
-        cronRunning.priority = false;
-    }
-}
-
-/* ── auto-archive ── */
-async function autoArchive() {
-    if (cronRunning.archive) return;
-    cronRunning.archive = true;
-    try {
-        const pages = await fetchDone();
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 7);
-        cutoff.setHours(0, 0, 0, 0);
-        let archived = 0;
-
-        for (const p of pages) {
-            const due = p.properties.Due?.date?.start;
-            if (!due) continue;
-            const dt = new Date(due + "T00:00:00");
-            if (dt >= cutoff) continue;
-
-            await archivePage(p.id);
-            archived++;
-        }
-
-        if (archived) logger.info(`Auto-archived ${archived} items`);
-    } catch (err) {
-        logger.error("autoArchive:", err);
-    } finally {
-        cronRunning.archive = false;
+        cronRunning.weekly = false;
     }
 }
 
@@ -149,6 +92,7 @@ async function autoArchive() {
 cron.schedule("0 6 * * *", autoUpdatePriority, { timezone: "Asia/Bangkok" });
 cron.schedule("0 8 * * *", sendReminders, { timezone: "Asia/Bangkok" });
 cron.schedule("0 2 * * *", autoArchive, { timezone: "Asia/Bangkok" });
+cron.schedule("0 7 * * 1", sendWeeklySummary, { timezone: "Asia/Bangkok" });
 
 /* ── clean stale user states + expired cache every 30 min ── */
 setInterval(() => {
