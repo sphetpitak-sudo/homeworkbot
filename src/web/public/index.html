@@ -29,6 +29,23 @@
   --radius: 18px;
   --radius-sm: 12px;
 }
+.dark {
+  --bg: #0f0f14;
+  --surface: #1a1a24;
+  --surface2: #22222e;
+  --border: rgba(255,255,255,0.08);
+  --text: #e8e4df;
+  --text2: #9e9690;
+  --text3: #6b6560;
+  --accent: #e8854a;
+  --accent2: #d4733a;
+  --accent-soft: rgba(232,133,74,0.15);
+  --coral: #e85d5d;
+  --yellow: #e8c84a;
+  --green: #3db89e;
+  --dark-card: #12121c;
+  --warm-card: #1e1e28;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
 ::selection { background: rgba(232,133,74,.25); }
@@ -288,7 +305,10 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
     <button class="sidebar-btn" onclick="showCalendar()" aria-label="Calendar"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
     <button class="sidebar-btn" onclick="showList()" aria-label="List"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
   </nav>
-  <div class="sidebar-bottom"><div class="sidebar-avatar"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div></div>
+  <div class="sidebar-bottom">
+    <button class="sidebar-btn" onclick="toggleDark()" aria-label="Toggle dark mode" style="margin-bottom:8px;"><svg viewBox="0 0 24 24" id="darkIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+    <div class="sidebar-avatar"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+  </div>
 </aside>
 
 <div class="main" id="app">
@@ -350,7 +370,7 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
   <div class="grid-2">
     <div class="card">
       <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Priority</div>
-      <div style="max-width:160px;margin:0 auto;"><canvas id="priorityChart"></canvas></div>
+      <div style="max-width:160px;margin:0 auto;"><canvas id="priorityChart"></canvas><div id="priorityLegend" style="text-align:center;margin-top:8px;"></div></div>
     </div>
     <div class="card">
       <div class="card-title"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Subjects</div>
@@ -532,8 +552,10 @@ function renderDashCharts(s){
   const legendHTML1=[["To Do","#e85d5d"],["In Progress","#e8c84a"],["Done","#3db89e"]].map(([l,c])=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);margin:0 6px;"><span style="width:8px;height:8px;border-radius:50%;background:${c};display:inline-block;"></span>${l}</span>`).join("");
   qs("statusLegend").innerHTML=legendHTML1;
 
-  destroyChart("priorityChart");const bp=s.byPriority||{};const PRI_LABELS={"🔴 สูง":"High","🟡 กลาง":"Medium"," ต่ำ":"Low"};const pLabels=Object.keys(bp).map(k=>PRI_LABELS[k]||k),pVals=Object.values(bp);const pTotal=pVals.reduce((a,b)=>a+b,0);const c2=qs("priorityChart").getContext("2d");
-  const ch2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#e85d5d","#e8c84a","#3db89e"],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{position:"bottom",labels:{color:"#9e9690",padding:10,usePointStyle:true,pointStyleWidth:8,font:{size:10}}},tooltip:{backgroundColor:"#fff",titleColor:"#1a1a2e",bodyColor:"#1a1a2e",titleFont:{size:11,weight:"600"},bodyFont:{size:11},padding:8,cornerRadius:6,displayColors:false,callbacks:{label:function(ctx){const val=ctx.parsed||0;const pct=pTotal>0?Math.round(val/pTotal*100):0;return`${ctx.label}: ${val} (${pct}%)`}}}}}});saveChart("priorityChart",ch2);
+  destroyChart("priorityChart");const bp=s.byPriority||{};const PRI_LABELS={"🔴 สูง":"High"," กลาง":"Medium"," ต่ำ":"Low"};const pLabels=Object.keys(bp).map(k=>PRI_LABELS[k]||k),pVals=Object.values(bp);const pTotal=pVals.reduce((a,b)=>a+b,0);const c2=qs("priorityChart").getContext("2d");
+  const ch2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#e85d5d","#e8c84a","#3db89e"],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{display:false},tooltip:{backgroundColor:"#fff",titleColor:"#1a1a2e",bodyColor:"#1a1a2e",titleFont:{size:11,weight:"600"},bodyFont:{size:11},padding:8,cornerRadius:6,displayColors:false,callbacks:{label:function(ctx){const val=ctx.parsed||0;const pct=pTotal>0?Math.round(val/pTotal*100):0;return`${ctx.label}: ${val} (${pct}%)`}}}}}});saveChart("priorityChart",ch2);
+  const legendHTML2=pLabels.map((l,i)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);margin:0 6px;"><span style="width:8px;height:8px;border-radius:50%;background:${["#e85d5d","#e8c84a","#3db89e"][i]};display:inline-block;"></span>${l}</span>`).join("");
+  qs("priorityLegend").innerHTML=legendHTML2;
 
   destroyChart("weekChart");const wLabels=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];const wc=qs("weekChart").getContext("2d");
   const wGrd=wc.createLinearGradient(0,0,0,140);wGrd.addColorStop(0,"rgba(232,133,74,0.6)");wGrd.addColorStop(1,"rgba(232,133,74,0.1)");
@@ -573,7 +595,10 @@ function fmtDate(d){if(!d)return"";const dt=new Date(d+"T00:00:00");return dt.to
 function showDetail(id){const item=S.items.find(i=>i.id===id);if(!item)return;const sc=statusKey(item.status);const sl=LABELS[sc];const pri=item.priority||"🟡 กลาง";const pc=PRI_COLORS[pri]||"#9e9690";const pcls=PRI_CLASS[pri]||"med";const dd=daysDiff(item.due);let remainStr,remainCl,remainPct;if(dd===null){remainStr="No due date";remainCl="safe";remainPct=null}else if(dd<0){remainStr=`Overdue ${-dd}d`;remainCl="overdue";remainPct=0}else if(dd===0){remainStr="Due Today";remainCl="overdue";remainPct=100}else if(dd===1){remainStr="Due Tomorrow";remainCl="soon";remainPct=90}else if(dd<=3){remainStr=`${dd}d left`;remainCl="soon";remainPct=dd<=2?80:60}else{remainStr=`${dd}d left`;remainCl="safe";remainPct=Math.max(5,100-dd*3)}const statusIcon=sc==="todo"?"📌":sc==="prog"?"🔄":"✅";qs("detailContent").innerHTML=`<div style="margin-bottom:16px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><span class="pri-grad ${pcls}" style="color:${pc};">${pri}</span><span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:99px;">${subjEmoji(item.subject)} ${esc(item.subject)}</span></div><div style="font-size:18px;font-weight:700;line-height:1.3;">${esc(item.title)}</div></div><div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Time Remaining</div><div style="font-size:16px;font-weight:700;" class="${remainCl}">${remainStr}</div>${remainPct!==null?`<div style="margin-top:4px;width:80px;height:3px;background:var(--border);border-radius:99px;overflow:hidden;"><div style="height:100%;width:${remainPct}%;border-radius:99px;background:${remainPct<30?'var(--coral)':remainPct<70?'var(--accent)':'var(--green)'};"></div></div>`:''}</div><div style="text-align:right;"><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Status</div><div style="font-size:14px;display:flex;align-items:center;gap:4px;font-weight:600;"><span class="dot ${sc}"></span>${sl}</div></div></div><div class="detail-field"><div class="detail-label">Subject</div><div class="detail-value">${subjEmoji(item.subject)} ${esc(item.subject)}</div></div><div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value" style="color:${pc};font-weight:600;">${pri}</div></div><div class="detail-field"><div class="detail-label">Due Date</div><div class="detail-value">${item.due?fmtDate(item.due):"<span style='color:var(--text3);'>Not set</span>"}</div></div><div class="detail-field"><div class="detail-label">Note</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.5;font-size:12px;">${item.note?esc(item.note):"<span style='color:var(--text3);font-style:italic;'>No notes</span>"}</div></div><div class="detail-field"><div class="detail-label">Notion</div><div class="detail-value"><a href="${safeUrl(item.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:12px;font-weight:500;">Open in Notion →</a></div></div>`;qs("detailOverlay").classList.add("open");qs("detailPanel").classList.add("open")}
 function closeDetail(){qs("detailOverlay").classList.remove("open");qs("detailPanel").classList.remove("open")}
 
-function exportCSV(){const headers=["Title","Subject","Status","Priority","Due Date","Note","Notion URL"];const rows=S.items.map(i=>[`"${(i.title||"").replace(/"/g,'""')}"`,`"${(i.subject||"").replace(/"/g,'""')}"`,`"${(LABELS[statusKey(i.status)]||"").replace(/"/g,'""')}"`,`"${(i.priority||"🟡 กลาง").replace(/"/g,'""')}"`,i.due||"",`"${(i.note||"").replace(/"/g,'""')}"`,i.url||""]);const csv=[headers.join(","),...rows.map(r=>r.join(","))].join("\n");const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`homework_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);showToast("CSV downloaded!")}
+function exportCSV(){const headers=["Title","Subject","Status","Priority","Due Date","Note","Notion URL"];const rows=S.items.map(i=>[`"${(i.title||"").replace(/"/g,'""')}"`,`"${(i.subject||"").replace(/"/g,'""')}"`,`"${(LABELS[statusKey(i.status)]||"").replace(/"/g,'""')}"`,`"${(i.priority||" กลาง").replace(/"/g,'""')}"`,i.due||"",`"${(i.note||"").replace(/"/g,'""')}"`,i.url||""]);const csv=[headers.join(","),...rows.map(r=>r.join(","))].join("\n");const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`homework_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);showToast("CSV downloaded!")}
+
+function toggleDark(){document.body.classList.toggle("dark");const isDark=document.body.classList.contains("dark");localStorage.setItem("dark",isDark?"1":"0");const icon=qs("darkIcon");icon.innerHTML=isDark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'}
+if(localStorage.getItem("dark")==="1"){document.body.classList.add("dark");qs("darkIcon").innerHTML='<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'}
 
 showHome();
 </script>
