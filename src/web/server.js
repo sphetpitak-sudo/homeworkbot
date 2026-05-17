@@ -97,6 +97,23 @@ function computeTrend(donePages) {
     return Object.values(dayMap);
 }
 
+function computeWeeklyDone(donePages) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dow = today.getDay();
+    const mon = new Date(today);
+    mon.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    for (const p of donePages) {
+        const due = p.properties.Due?.date?.start;
+        if (!due) continue;
+        const dt = new Date(due + "T00:00:00");
+        const diff = Math.floor((dt - mon) / 86400000);
+        if (diff >= 0 && diff < 7) counts[diff]++;
+    }
+    return counts;
+}
+
 export function startWebServer(port = 8080) {
     const app = express();
     const TOKEN = process.env.TELEGRAM_TOKEN || "";
@@ -122,6 +139,7 @@ export function startWebServer(port = 8080) {
                 stats: computeStats(activePages, donePages),
                 homework: buildHomeworkList(activePages, donePages),
                 trend: computeTrend(donePages),
+                weeklyDone: computeWeeklyDone(donePages),
             });
         } catch (err) {
             logger.error("API /api/all:", err);
