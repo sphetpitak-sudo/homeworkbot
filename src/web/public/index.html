@@ -291,7 +291,30 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
   .stats { gap: 6px; }
   .stat .stat-icon { width: 28px; height: 28px; }
   .stat .val { font-size: 20px; }
+  .modal-panel { width: 95vw; padding: 16px; }
 }
+
+/* ── modal ─ */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 300; opacity: 0; pointer-events: none; transition: opacity .3s; }
+.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal-panel {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95);
+  width: 420px; max-width: 90vw; max-height: 85vh; overflow-y: auto;
+  background: var(--surface); border-radius: var(--radius); padding: 24px;
+  z-index: 301; opacity: 0; pointer-events: none; transition: all .3s cubic-bezier(.22,1,.36,1);
+}
+.modal-panel.open { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.modal-panel h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.modal-panel form { display: flex; flex-direction: column; gap: 12px; }
+.modal-panel label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--text2); }
+.modal-panel input, .modal-panel select, .modal-panel textarea {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; color: var(--text); font-family: inherit; outline: none;
+}
+.modal-panel input:focus, .modal-panel select:focus, .modal-panel textarea:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.modal-panel textarea { resize: vertical; min-height: 48px; }
 </style>
 </head>
 <body>
@@ -317,6 +340,10 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 <div id="homeView" class="page">
   <div class="header">
     <div class="greeting"><h1 id="homeGreeting">Hi there!</h1><p>Your homework overview</p></div>
+    <button class="btn btn-primary" onclick="openAddModal()" style="display:flex;align-items:center;gap:6px;">
+      <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add
+    </button>
   </div>
   <div id="homeMotivate" class="motivate"></div>
   <div class="stats" id="homeStats">
@@ -448,6 +475,26 @@ select.btn { appearance: none; background-image: url("data:image/svg+xml,%3Csvg 
 <div class="detail-panel" id="detailPanel">
   <button class="detail-close" onclick="closeDetail()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   <div id="detailContent"></div>
+</div>
+
+<div class="modal-overlay" id="addOverlay" onclick="closeAddModal()"></div>
+<div class="modal-panel" id="addPanel">
+  <button class="detail-close" onclick="closeAddModal()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Add Homework</h2>
+  <form onsubmit="submitHomework(event)">
+    <label>Title <input id="addTitle" required placeholder="e.g. แบบฝึกหัดเลข บทที่ 5"></label>
+    <label>Subject <select id="addSubject"></select></label>
+    <label>Due <input type="date" id="addDue"></label>
+    <label>Priority <span id="addPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
+      <select id="addPriority">
+        <option value="🔴 สูง"> สูง</option>
+        <option value="🟡 กลาง" selected>🟡 กลาง</option>
+        <option value="🟢 ต่ำ">🟢 ต่ำ</option>
+      </select>
+    </label>
+    <label>Note <textarea id="addNote" rows="2" placeholder="Optional note..."></textarea></label>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;">Save</button>
+  </form>
 </div>
 
 <script>
@@ -602,6 +649,73 @@ function exportCSV(){const headers=["Title","Subject","Status","Priority","Due D
 function applyTheme(isDark){document.body.classList.toggle("dark",isDark);localStorage.setItem("dark",isDark?"1":"0");const icon=qs("darkIcon");if(icon)icon.innerHTML=isDark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'}
 function toggleDark(){applyTheme(!document.body.classList.contains("dark"))}
 applyTheme(localStorage.getItem("dark")==="1"||(!localStorage.getItem("dark")&&window.matchMedia("(prefers-color-scheme:dark)").matches));
+
+/* ── Quick Add Modal ─ */
+function recalcPriority(dueStr){
+  if(!dueStr)return" ต่ำ";
+  const today=new Date();today.setHours(0,0,0,0);
+  const due=new Date(dueStr+"T00:00:00");
+  const diff=Math.ceil((due-today)/86400000);
+  if(diff<0)return" สูง";
+  if(diff<=3)return" สูง";
+  if(diff<=7)return" กลาง";
+  return" ต่ำ";
+}
+function buildSubjectOptions(){
+  const subs=Object.keys(SUBJ_EMOJI).sort();
+  return'<option value="">Select subject</option>'+subs.map(s=>`<option value="${s}">${SUBJ_EMOJI[s]} ${s}</option>`).join('');
+}
+function updatePriorityPreview(){
+  const due=qs("addDue").value||null;
+  const pri=recalcPriority(due);
+  const cls=pri===" สูง"?"overdue":pri===" กลาง"?"soon":"safe";
+  qs("addPriorityPreview").innerHTML=`<span class="${cls}">Auto: ${pri}</span>`;
+  qs("addPriority").value=pri;
+}
+function openAddModal(){
+  qs("addSubject").innerHTML=buildSubjectOptions();
+  qs("addTitle").value="";
+  qs("addDue").value="";
+  qs("addNote").value="";
+  updatePriorityPreview();
+  qs("addOverlay").classList.add("open");
+  qs("addPanel").classList.add("open");
+  setTimeout(()=>qs("addTitle").focus(),100);
+}
+function closeAddModal(){
+  qs("addOverlay").classList.remove("open");
+  qs("addPanel").classList.remove("open");
+}
+async function submitHomework(e){
+  e.preventDefault();
+  const data={
+    title:qs("addTitle").value.trim(),
+    subject:qs("addSubject").value||"ทั่วไป",
+    due:qs("addDue").value||null,
+    note:qs("addNote").value.trim(),
+  };
+  if(!data.title)return;
+  try{
+    if(TOKEN===FAKE_TOKEN){
+      showToast("Added! (demo mode)");
+      closeAddModal();
+      return;
+    }
+    const res=await fetch("/api/homework",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      body:JSON.stringify(data),
+    });
+    if(!res.ok)throw new Error(await res.text());
+    showToast("Added!");
+    closeAddModal();
+    S.ts=0;
+    loadHome();
+  }catch(err){
+    showToast("Error: "+err.message);
+  }
+}
+qs("addDue")?.addEventListener("change",updatePriorityPreview);
 
 showHome();
 </script>

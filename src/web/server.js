@@ -1,8 +1,9 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchActive, fetchDone, getPageProps } from "../services/notionService.js";
+import { fetchActive, fetchDone, getPageProps, createHomework } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
+import { recalcPriority } from "../utils/priority.js";
 import { logger } from "../utils/logger.js";
 import crypto from "crypto";
 
@@ -119,6 +120,7 @@ export function startWebServer(port = 8080) {
     const TOKEN = process.env.TELEGRAM_TOKEN || "";
 
     app.use(express.static(path.join(__dirname, "public")));
+    app.use(express.json());
 
     function requireAuth(req, res, next) {
         const t = req.headers["authorization"]?.replace("Bearer ", "") || req.query.token || req.headers["x-token"];
@@ -170,6 +172,25 @@ export function startWebServer(port = 8080) {
             res.json(buildHomeworkList(activePages, donePages));
         } catch (err) {
             logger.error("API /api/homework:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post("/api/homework", requireAuth, async (req, res) => {
+        const { title, subject, due, note } = req.body;
+        if (!title?.trim()) return res.status(400).json({ error: "Title required" });
+        try {
+            const priority = recalcPriority(due || null);
+            await createHomework({
+                title: title.trim(),
+                subject: subject || "ทั่วไป",
+                due: due || null,
+                priority,
+                note: note?.trim() || "",
+            });
+            res.json({ success: true });
+        } catch (err) {
+            logger.error("API POST /api/homework:", err);
             res.status(500).json({ error: err.message });
         }
     });
