@@ -31,8 +31,8 @@ export const mainMenu = Markup.inlineKeyboard([
     [
         Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
     ],
-    ...(WEB_URL && TOKEN
-        ? [[Markup.button.url("🌐 Web Dashboard", `${WEB_URL}?token=${TOKEN}`)]]
+    ...(WEB_URL
+        ? [[Markup.button.url("🌐 Web Dashboard", `${WEB_URL}?token=${getDashboardToken()}`)]]
         : []),
 ]);
 
