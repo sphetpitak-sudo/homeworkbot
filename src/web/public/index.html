@@ -537,7 +537,7 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
 </div>
 
 <div class="modal-overlay" id="addOverlay" onclick="closeAddModal()"></div>
-<div class="modal-panel" id="addPanel">
+<div class="modal-panel" id="addPanel" onclick="event.stopPropagation()">
   <button class="detail-close" onclick="closeAddModal()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Add Homework</h2>
   <form onsubmit="submitHomework(event)">
@@ -584,7 +584,8 @@ const FAKE_DATA = {
     {id:"d7",title:"งานนำเสนอกลุ่มห้องเรียน",status:"Done",due:"2026-05-08",subject:"อังกฤษ",priority:"🟢 ต่ำ",note:"Present หน้าชั้น 5 นาที",url:"#"},
     {id:"d8",title:"แยกตัวประกอบพหุนาม",status:"Todo",due:null,subject:"คณิต",priority:"🟢 ต่ำ",note:"ส่งเมื่อไหร่ก็ได้",url:"#"},
     {id:"d9",title:"ความน่าจะเป็นเพิ่มเติม",status:"Done",due:"2026-05-12",subject:"คณิต",priority:"🟡 กลาง",note:"ตรวจคำตอบจากเฉลย",url:"#"}
-  ]
+  ],
+  trend: Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:Math.floor(Math.random()*3)}})
 };
 
 const S = { items: [], stats: null, ts: 0, filter: "all", search: "", subject: "", charts: new Map(), calDate: new Date(), calSel: null, sortKey: "due", sortDir: 1, viewIdx: 0, trend: [], weeklyDone: [0,0,0,0,0,0,0], selected: new Set() };
@@ -613,7 +614,7 @@ function showList(){showView("listView");loadList()}
 
 async function fetchJson(url,retries=2){const sep=url.includes('?')?'&':'?';const timeoutMs=8000;for(let attempt=0;attempt<=retries;attempt++){const ctrl=new AbortController();const tid=setTimeout(()=>ctrl.abort(),timeoutMs);try{const r=await fetch(url+sep+"_t="+now(),{signal:ctrl.signal,headers:{"Authorization":`Bearer ${TOKEN}`}});clearTimeout(tid);if(!r.ok){let msg=r.statusText;try{const b=await r.text();if(b)msg=b.slice(0,200)}catch{}throw new Error(msg)}return r.json()}catch(e){clearTimeout(tid);if(e.name==="AbortError")throw new Error("Timeout");if(attempt===retries)throw e;await new Promise(r=>setTimeout(r,500*(attempt+1)))}}}
 
-async function loadAll(force){if(!TOKEN)return null;if(TOKEN===FAKE_TOKEN){S.items=FAKE_DATA.homework;S.stats=FAKE_DATA.stats;S.ts=now();S.trend=FAKE_DATA.homework.map((_,i)=>i+1);S.weeklyDone=[3,5,2,6,4,1,3];return FAKE_DATA}if(!force&&S.items.length&&now()-S.ts<CACHE_TTL)return {stats:S.stats,homework:S.items};try{const data=await fetchJson(`/api/all`);S.items=data.homework||[];S.stats=data.stats||null;S.ts=now();S.trend=data.trend||[];computeWeeklyDone();return data}catch(e){return {error:e.message}}}
+async function loadAll(force){if(!TOKEN)return null;if(TOKEN===FAKE_TOKEN){S.items=FAKE_DATA.homework;S.stats=FAKE_DATA.stats;S.ts=now();S.trend=FAKE_DATA.trend;S.weeklyDone=[3,5,2,6,4,1,3];return FAKE_DATA}if(!force&&S.items.length&&now()-S.ts<CACHE_TTL)return {stats:S.stats,homework:S.items};try{const data=await fetchJson(`/api/all`);S.items=data.homework||[];S.stats=data.stats||null;S.ts=now();S.trend=data.trend||[];computeWeeklyDone();return data}catch(e){return {error:e.message}}}
 
 function computeWeeklyDone(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -696,7 +697,33 @@ async function loadList(){if(!TOKEN)return;try{const d=await loadAll();if(d?.err
 function listSort(key){if(S.sortKey===key)S.sortDir*=-1;else{S.sortKey=key;S.sortDir=1}document.querySelectorAll(".sort").forEach(el=>el.classList.remove("active"));const el=qs("sort-"+key);if(el)el.classList.add("active");listFilter()}
 function listRenderFilters(){const counts={all:S.items.length,overdue:0};const today=new Date();today.setHours(0,0,0,0);for(const i of S.items){const sk=statusKey(i.status);counts[sk]=(counts[sk]||0)+1;if(i.status!==STATUS.DONE&&i.due&&new Date(i.due+"T00:00:00")<today)counts.overdue++}const tabs=[["all","All"],["overdue","Overdue"],["todo","To Do"],["prog","In Progress"],["done","Done"]];qs("listFilters").innerHTML=tabs.map(([k])=>`<button class="filter-btn${S.filter===k?" active":""}" onclick="setListFilter('${k}')">${tabs.find(t=>t[0]===k)[1]} ${counts[k]||0}</button>`).join("")}
 function setListFilter(f){S.filter=f;listRenderFilters();listFilter()}
-function listFilter(){S.search=qs("searchBox").value.toLowerCase().trim();S.subject=qs("subjectFilter").value;const fromDate=qs("dateFrom").value,toDate=qs("dateTo").value;let filtered=S.items;const today=new Date();today.setHours(0,0,0,0);if(S.filter==="overdue")filtered=filtered.filter(i=>i.status!==STATUS.DONE&&i.due&&new Date(i.due+"T00:00:00")<today);else if(S.filter==="todo")filtered=filtered.filter(i=>i.status===STATUS.TODO);else if(S.filter==="prog")filtered=filtered.filter(i=>i.status===STATUS.PROG);else if(S.filter==="done")filtered=filtered.filter(i=>i.status===STATUS.DONE);if(S.search)filtered=filtered.filter(i=>i.title.toLowerCase().includes(S.search)||i.subject.toLowerCase().includes(S.search)||(i.note||"").toLowerCase().includes(S.search));if(S.subject)filtered=filtered.filter(i=>i.subject===S.subject);if(fromDate)filtered=filtered.filter(i=>!i.due||i.due>=fromDate);if(toDate)filtered=filtered.filter(i=>!i.due||i.due<=toDate);filtered.sort((a,b)=>{let va=a[S.sortKey],vb=b[S.sortKey];if(S.sortKey==="priority"){va=PRI_ORDER.indexOf(va);vb=PRI_ORDER.indexOf(vb)}else if(S.sortKey==="status"){va=[STATUS.TODO,STATUS.PROG,STATUS.DONE].indexOf(a.status);vb=[STATUS.TODO,STATUS.PROG,STATUS.DONE].indexOf(b.status)}else if(S.sortKey==="due"){if(!va)return 1;if(!vb)return -1}else{va=String(va).toLowerCase();vb=String(vb).toLowerCase()}if(va<vb)return -1*S.sortDir;if(va>vb)return 1*S.sortDir;return 0});const total=S.items.length,done=S.items.filter(i=>i.status===STATUS.DONE).length;qs("listStatus").textContent=`${total} total · ${done} done · ${filtered.length} shown`;listRenderTable(filtered)}
+function getFilteredList(){
+  const today=new Date();today.setHours(0,0,0,0);
+  let filtered=S.items;
+  if(S.filter==="overdue")filtered=filtered.filter(i=>i.status!==STATUS.DONE&&i.due&&new Date(i.due+"T00:00:00")<today);
+  else if(S.filter==="todo")filtered=filtered.filter(i=>i.status===STATUS.TODO);
+  else if(S.filter==="prog")filtered=filtered.filter(i=>i.status===STATUS.PROG);
+  else if(S.filter==="done")filtered=filtered.filter(i=>i.status===STATUS.DONE);
+  if(S.search)filtered=filtered.filter(i=>i.title.toLowerCase().includes(S.search)||i.subject.toLowerCase().includes(S.search)||(i.note||"").toLowerCase().includes(S.search));
+  if(S.subject)filtered=filtered.filter(i=>i.subject===S.subject);
+  const fromDate=qs("dateFrom")?.value,toDate=qs("dateTo")?.value;
+  if(fromDate)filtered=filtered.filter(i=>!i.due||i.due>=fromDate);
+  if(toDate)filtered=filtered.filter(i=>!i.due||i.due<=toDate);
+  return filtered;
+}
+function applyListFilters(){
+  let filtered=getFilteredList();
+  filtered.sort((a,b)=>{let va=a[S.sortKey],vb=b[S.sortKey];if(S.sortKey==="priority"){va=PRI_ORDER.indexOf(va);vb=PRI_ORDER.indexOf(vb)}else if(S.sortKey==="status"){va=[STATUS.TODO,STATUS.PROG,STATUS.DONE].indexOf(a.status);vb=[STATUS.TODO,STATUS.PROG,STATUS.DONE].indexOf(b.status)}else if(S.sortKey==="due"){if(!va)return 1;if(!vb)return -1}else{va=String(va).toLowerCase();vb=String(vb).toLowerCase()}if(va<vb)return -1*S.sortDir;if(va>vb)return 1*S.sortDir;return 0});
+  return filtered;
+}
+function listFilter(){
+  S.search=qs("searchBox").value.toLowerCase().trim();
+  S.subject=qs("subjectFilter").value;
+  const filtered=applyListFilters();
+  const total=S.items.length,done=S.items.filter(i=>i.status===STATUS.DONE).length;
+  qs("listStatus").textContent=`${total} total · ${done} done · ${filtered.length} shown`;
+  listRenderTable(filtered);
+}
 function listRenderTable(items){const today=new Date();today.setHours(0,0,0,0);const tbody=qs("listTable");if(!items.length){tbody.innerHTML='<tr><td colspan="7" class="empty"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>No matching tasks<br><span style="font-size:11px;">Try adjusting your search or filters</span></td></tr>';return}const groups={overdue:[],thisWeek:[],nextWeek:[],later:[],noDate:[],done:[]};const eow=new Date(today);eow.setDate(today.getDate()+(7-today.getDay()));const enw=new Date(eow);enw.setDate(eow.getDate()+7);for(const i of items){if(i.status===STATUS.DONE){groups.done.push(i);continue}if(!i.due){groups.noDate.push(i);continue}const dt=new Date(i.due+"T00:00:00");if(dt<today)groups.overdue.push(i);else if(dt<=eow)groups.thisWeek.push(i);else if(dt<=enw)groups.nextWeek.push(i);else groups.later.push(i)}const config=[["Overdue",groups.overdue],["This Week",groups.thisWeek],["Next Week",groups.nextWeek],["Later",groups.later],["No Date",groups.noDate],["Done",groups.done]];let html="";for(const [hdr,g] of config){if(!g.length)continue;html+=`<tr class="grp"><td colspan="7">${hdr} (${g.length})</td></tr>`;html+=g.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";const pc=priColor(pri);const pcls=priCls(pri);const dr=dueClass(i.due);const checked=S.selected?.has(i.id)?"checked":"";const statusBtns=`<div class="status-btns"><button class="status-btn s-todo${i.status===STATUS.TODO?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.TODO}')" title="To Do"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></button><button class="status-btn s-prog${i.status===STATUS.PROG?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.PROG}')" title="In Progress"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="status-btn s-done${i.status===STATUS.DONE?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.DONE}')" title="Done"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button></div>`;return`<tr onclick="showDetail('${i.id}')"${i.status===STATUS.DONE?' class="done-row"':''}><td><input type="checkbox" ${checked} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="cursor:pointer;"></td><td>${statusBtns}</td><td>${subjEmoji(i.subject)} ${esc(i.title)}</td><td><span class="tag">${esc(i.subject)}</span></td><td style="color:${pc};font-weight:600;" class="pri-${pcls}">${pri}</td><td class="${dr}">${i.due||"-"}</td><td class="${dr}">${i.due?dueLabel(i.due):"-"}</td></tr>`}).join("")}tbody.innerHTML=html}
 
 function fmtDate(d){if(!d)return"";const dt=new Date(d+"T00:00:00");return dt.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}
@@ -710,18 +737,18 @@ function toggleDark(){applyTheme(!document.body.classList.contains("dark"))}
 applyTheme(localStorage.getItem("dark")==="1"||(!localStorage.getItem("dark")&&window.matchMedia("(prefers-color-scheme:dark)").matches));
 
 /* ── PWA Service Worker ─ */
-if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{})}
+if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js").then(()=>console.log("SW registered")).catch(e=>console.warn("SW registration failed:",e))}
 
 /* ── Quick Add Modal ─ */
 function recalcPriority(dueStr){
-  if(!dueStr)return" ต่ำ";
+  if(!dueStr)return"🟢 ต่ำ";
   const today=new Date();today.setHours(0,0,0,0);
   const due=new Date(dueStr+"T00:00:00");
   const diff=Math.ceil((due-today)/86400000);
-  if(diff<0)return" สูง";
-  if(diff<=3)return" สูง";
-  if(diff<=7)return" กลาง";
-  return" ต่ำ";
+  if(diff<0)return"🔴 สูง";
+  if(diff<=3)return"🔴 สูง";
+  if(diff<=7)return"🟡 กลาง";
+  return"🟢 ต่ำ";
 }
 function buildSubjectOptions(){
   const subs=Object.keys(SUBJ_EMOJI).sort();
@@ -730,7 +757,7 @@ function buildSubjectOptions(){
 function updatePriorityPreview(){
   const due=qs("addDue").value||null;
   const pri=recalcPriority(due);
-  const cls=pri===" สูง"?"overdue":pri===" กลาง"?"soon":"safe";
+  const cls=pri==="🔴 สูง"?"overdue":pri==="🟡 กลาง"?"soon":"safe";
   qs("addPriorityPreview").innerHTML=`<span class="${cls}">Auto: ${pri}</span>`;
   qs("addPriority").value=pri;
 }
@@ -840,17 +867,6 @@ function updateBulkBar(){
   const all=getFilteredList();
   sel.checked=all.length>0&&S.selected.size===all.length;
 }
-function getFilteredList(){
-  const today=new Date();today.setHours(0,0,0,0);
-  let filtered=S.items;
-  if(S.filter==="overdue")filtered=filtered.filter(i=>i.status!==STATUS.DONE&&i.due&&new Date(i.due+"T00:00:00")<today);
-  else if(S.filter==="todo")filtered=filtered.filter(i=>i.status===STATUS.TODO);
-  else if(S.filter==="prog")filtered=filtered.filter(i=>i.status===STATUS.PROG);
-  else if(S.filter==="done")filtered=filtered.filter(i=>i.status===STATUS.DONE);
-  if(S.search)filtered=filtered.filter(i=>i.title.toLowerCase().includes(S.search)||i.subject.toLowerCase().includes(S.search)||(i.note||"").toLowerCase().includes(S.search));
-  if(S.subject)filtered=filtered.filter(i=>i.subject===S.subject);
-  return filtered;
-}
 async function bulkStatus(status){
   if(!S.selected.size)return;
   const ids=[...S.selected];
@@ -860,7 +876,8 @@ async function bulkStatus(status){
       showToast(`Updated ${ids.length} items! (demo)`);
       S.selected.clear();
       updateBulkBar();
-      listRenderTable(getFilteredList());
+      listRenderFilters();
+      listFilter();
       return;
     }
     const res=await fetch("/api/bulk-status",{
@@ -874,7 +891,8 @@ async function bulkStatus(status){
     S.selected.clear();
     updateBulkBar();
     S.ts=0;
-    listRenderTable(getFilteredList());
+    listRenderFilters();
+    listFilter();
   }catch(err){
     showToast("Error: "+err.message);
   }
