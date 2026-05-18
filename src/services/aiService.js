@@ -55,7 +55,7 @@ async function completeWithRetry(systemMsg, userMsg) {
                     { role: "user", content: userMsg },
                 ],
                 temperature: 0.1,
-                max_tokens: 150,
+                max_tokens: 200,
             });
             return { resp, model };
         } catch (err) {
@@ -106,7 +106,7 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         'Examples: "คนิด" → คณิต, "พุท" → พุธ or พรุ่งนี้, "อิ๊ง" → อังกฤษ',
         "",
         "Return ONLY JSON:",
-        '  {"title": "short descriptive title (max 50 chars, e.g. แบบฝึกหัดที่ 1, ใบงานเคมี, รายงานวิทย์)", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ"}',
+        '  {"title": "short descriptive title (max 50 chars, e.g. แบบฝึกหัดที่ 1, ใบงานเคมี, รายงานวิทย์)", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ", "tags": ["tag1", "tag2"] or []}',
         "",
         "subject: one of คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม, ทั่วไป",
         "",
@@ -114,6 +114,16 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         '- "สูง" if due is urgent (≤3 days), or words like "ด่วน", "สำคัญ", "สอบ", "ส่งพรุ่งนี้"',
         '- "ต่ำ" if due is far (>14 days) or if no due date is mentioned, or words like "งานกลุ่ม", "รายงาน", "สอบปลายภาค"',
         '- "กลาง" for everything else (due 4-14 days)',
+        "",
+        "tags: choose from these predefined tags based on text content:",
+        '- "สอบ" for exam/test preparation (e.g. สอบ, ข้อสอบ, ทบทวน, สอบปลายภาค, สอบกลางภาค)',
+        '- "โครงการ" for long-term projects (e.g. โครงการ, โปรเจกต์, โปรเจค)',
+        '- "กลุ่ม" for group work (e.g. กลุ่ม, งานกลุ่ม, งานเดี่ยว, นำเสนอ)',
+        '- "ด่วน" for urgent/important (e.g. ด่วน, เร็ว, ด่วนที่สุด, ส่งวันนี้)',
+        '- "อ่าน" for reading assignments (e.g. อ่าน, ท่อง, อาขยาน, อ่านหนังสือ, บทอ่าน)',
+        '- "ใบงาน" for worksheets (e.g. ใบงาน, แบบฝึกหัด, ใบงาน, ใบกิจกรรม, ใบความรู้)',
+        "- Return empty array [] if no tag matches, or multiple tags if text matches multiple categories.",
+        "- Do NOT invent tags outside this list.",
         "",
         "Calculate dueDate from the text relative to today's date:",
         `- "พรุ่งนี้" → ${tomorrow}`,
@@ -123,13 +133,15 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         "",
         "Examples:",
         `Input: "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้"`,
-        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"คณิต","dueDate":"${tomorrow}","priority":"สูง"}`,
+        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"คณิต","dueDate":"${tomorrow}","priority":"สูง","tags":["ใบงาน"]}`,
         `Input: "สอบคนิด พุทหน้า"`,
-        `Output: {"title":"สอบคณิต","subject":"คณิต","dueDate":"${nextWed}","priority":"สูง"}`,
+        `Output: {"title":"สอบคณิต","subject":"คณิต","dueDate":"${nextWed}","priority":"สูง","tags":["สอบ","ด่วน"]}`,
         `Input: "รายงานอังกฤษส่งอาทิตย์หน้า วันศุกร์"`,
-        `Output: {"title":"รายงานอังกฤษ","subject":"อังกฤษ","dueDate":"${nextFri}","priority":"กลาง"}`,
+        `Output: {"title":"รายงานอังกฤษ","subject":"อังกฤษ","dueDate":"${nextFri}","priority":"กลาง","tags":["โครงการ","กลุ่ม"]}`,
         `Input: "งานกลุ่มสังคม อีก 2 อาทิตย์"`,
-        `Output: {"title":"งานกลุ่มสังคม","subject":"สังคม","dueDate":"...","priority":"ต่ำ"}`,
+        `Output: {"title":"งานกลุ่มสังคม","subject":"สังคม","dueDate":"...","priority":"ต่ำ","tags":["กลุ่ม","โครงการ"]}`,
+        `Input: "ท่องอาขยานบทที่ 5"`,
+        `Output: {"title":"ท่องอาขยานบทที่ 5","subject":"ไทย","dueDate":null,"priority":"ต่ำ","tags":["อ่าน"]}`,
         "",
         "IMPORTANT: Always output a subject if text relates to homework/exam.",
     ].join("\n");
@@ -191,13 +203,16 @@ export async function parseHomework(text, opts = {}) {
         const PRIORITY_MAP = { สูง: "🔴 สูง", กลาง: "🟡 กลาง", ต่ำ: "🟢 ต่ำ" };
         const priority = PRIORITY_MAP[parsed.priority] || "🟡 กลาง";
 
+        const aiTags = Array.isArray(parsed.tags) ? parsed.tags.filter(t => t) : [];
+        const mergedTags = [...new Set([...aiTags, ...hashtags])];
+
         const result = {
             title: parsed.title || cleanTitle(text) || text,
             subject: parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text),
             dueDate: parsed.dueDate || parseThaiDate(text),
             priority,
             model,
-            tags: hashtags.length ? hashtags : undefined,
+            tags: mergedTags.length ? mergedTags : undefined,
         };
 
         setAICache(text, result);
