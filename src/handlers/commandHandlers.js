@@ -51,6 +51,9 @@ export const confirmMenu = Markup.inlineKeyboard([
     ],
     [
         Markup.button.callback("🎯 ความสำคัญ", "EDIT_PRIORITY"),
+        Markup.button.callback("🏷️ Tags", "EDIT_TAGS"),
+    ],
+    [
         Markup.button.callback("❌ ยกเลิก", "CANCEL"),
     ],
 ]);
@@ -82,11 +85,20 @@ function buildMenuMessage() {
     );
 }
 
+function parseTags(text) {
+    const matches = text.match(/#(\S+)/g);
+    if (!matches) return [];
+    return matches
+        .map(t => t.slice(1).replace(/[^a-zA-Zก-๙0-9_\-]/g, ""))
+        .filter(Boolean);
+}
+
 export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     const title = pending?.title || "ไม่มีชื่อ";
     const subject = pending?.subject || "ทั่วไป";
     const due = pending?.due ? formatDueDisplay(pending.due) : "ไม่กำหนดวัน";
     const priority = pending?.priority || "🟡 กลาง";
+    const tags = pending?.tags?.length ? pending.tags.join(", ") : null;
     const aiBadge = aiUsed
         ? `\n🤖 ${safeItalic("วิเคราะห์โดย AI")}${model ? ` (${safeCode(model)})` : ""}`
         : "";
@@ -96,7 +108,8 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
             `${subjectEmoji(subject)} ${safeBold(escapeMarkdown(title))}\n` +
             `📚 วิชา: ${safeBold(escapeMarkdown(subject))}\n` +
             `🎯 ความสำคัญ: ${priority}\n` +
-            `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(due))}` +
+            `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(due))}\n` +
+            (tags ? `🏷️ แท็ก: ${safeBold(escapeMarkdown(tags))}\n` : "") +
             aiBadge +
             `\n━━━━━━━━━━━━━━━━━━\n` +
             `${safeItalic("ถ้าทุกอย่างถูกต้อง กดบันทึกได้เลย")}`,
@@ -125,10 +138,12 @@ function shortenTitle(title, subject = "") {
 }
 
 async function parseText(text) {
+    const hashtags = parseTags(text);
     const aiResult = isAIReady() ? await parseHomework(text) : null;
     if (aiResult) {
         const hasDue = !!aiResult.dueDate;
         const subject = aiResult.subject || detectSubject(text);
+        const tags = aiResult.tags?.length ? aiResult.tags : hashtags;
         return {
             due: aiResult.dueDate,
             subject,
@@ -136,6 +151,7 @@ async function parseText(text) {
             priority: hasDue ? (aiResult.priority || "🟡 กลาง") : "🟢 ต่ำ",
             usedAI: true,
             model: aiResult.model || "",
+            tags: tags.length ? tags : undefined,
         };
     }
     const due = parseThaiDate(text);
@@ -147,6 +163,7 @@ async function parseText(text) {
         priority: due ? "🟡 กลาง" : "🟢 ต่ำ",
         usedAI: false,
         model: "",
+        tags: hashtags.length ? hashtags : undefined,
     };
 }
 
@@ -272,10 +289,25 @@ export function registerCommandHandlers(bot, userState) {
             return showConfirm(ctx, pending);
         }
 
+        if (state?.mode === "EDIT_TAGS") {
+            const raw = text.trim();
+            let tags = [];
+            if (raw !== "-") {
+                tags = raw
+                    .replace(/#/g, "")
+                    .split(/[\s,]+/)
+                    .map(t => t.trim())
+                    .filter(Boolean);
+            }
+            const pending = { ...state.pending, tags: tags.length ? tags : undefined };
+            userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
+            return showConfirm(ctx, pending);
+        }
+
         if (state?.mode === "ADD") {
             userState.delete(uid);
             const parsed = await parseText(text);
-            const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text };
+            const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
             return showConfirm(ctx, pending, parsed.usedAI, parsed.model);
         }

@@ -135,9 +135,19 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
     ].join("\n");
 }
 
+function parseTags(text) {
+    const matches = text.match(/#(\S+)/g);
+    if (!matches) return [];
+    return matches
+        .map(t => t.slice(1).replace(/[^a-zA-Zก-๙0-9_\-]/g, ""))
+        .filter(Boolean);
+}
+
 export async function parseHomework(text, opts = {}) {
     if (!client) return null;
     if (!opts.skipLengthCheck && text.length >= 300) return null;
+
+    const hashtags = parseTags(text);
 
     const cached = getAICache(text);
     if (cached) {
@@ -148,6 +158,7 @@ export async function parseHomework(text, opts = {}) {
             dueDate: cached.dueDate || parseThaiDate(text),
             priority: cached.priority,
             model: cached.source,
+            tags: cached.tags?.length ? cached.tags : hashtags,
         };
     }
 
@@ -186,6 +197,7 @@ export async function parseHomework(text, opts = {}) {
             dueDate: parsed.dueDate || parseThaiDate(text),
             priority,
             model,
+            tags: hashtags.length ? hashtags : undefined,
         };
 
         setAICache(text, result);

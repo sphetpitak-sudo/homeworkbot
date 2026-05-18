@@ -34,6 +34,8 @@ export function getPageProps(page) {
             page.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป",
         eventId: page.properties.EventId?.rich_text?.[0]?.plain_text || null,
         priority: page.properties.Priority?.select?.name || PRIORITY_DEFAULT,
+        completed: page.properties.Completed?.date?.start || null,
+        tags: page.properties.Tags?.multi_select?.map(t => t.name) || [],
     };
 }
 
@@ -104,6 +106,7 @@ export async function createHomework({
     note: noteProp,
     eventId,
     priority,
+    tags,
 }) {
     const props = {
         Name: { title: [{ text: { content: title } }] },
@@ -117,22 +120,45 @@ export async function createHomework({
         props.EventId = { rich_text: [{ text: { content: eventId } }] };
     if (priority)
         props.Priority = { select: { name: priority } };
+    if (tags?.length)
+        props.Tags = { multi_select: tags.map(name => ({ name })) };
 
     await notion.pages.create({
         parent: { database_id: DB },
         properties: props,
     });
     cacheInvalidate("notion:");
-    logger.info(`Created: "${title}" [${subject}] due=${due || "none"} priority=${priority || "none"}`);
+    logger.info(`Created: "${title}" [${subject}] due=${due || "none"} priority=${priority || "none"}${tags?.length ? ` tags=${tags.join(",")}` : ""}`);
 }
 
 export async function updateStatus(pageId, status) {
+    const props = { Status: { select: { name: status } } };
+    if (status === STATUS.DONE) {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, "0");
+        const d = String(today.getDate()).padStart(2, "0");
+        props.Completed = { date: { start: `${y}-${m}-${d}` } };
+    }
     await notion.pages.update({
         page_id: pageId,
-        properties: { Status: { select: { name: status } } },
+        properties: props,
     });
     cacheInvalidate("notion:");
     logger.info(`Status updated: ${pageId} → ${status}`);
+}
+
+export async function updateHomework(pageId, { title, subject, due, priority, note, tags }) {
+    const props = {};
+    if (title !== undefined) props.Name = { title: [{ text: [{ content: title }] }] };
+    if (subject !== undefined) props.Subject = { rich_text: [{ text: [{ content: subject }] }] };
+    if (due !== undefined) props.Due = due ? { date: { start: due } } : null;
+    if (priority !== undefined) props.Priority = { select: { name: priority } };
+    if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };
+    if (tags !== undefined) props.Tags = { multi_select: tags.map(name => ({ name })) };
+    await notion.pages.update({ page_id: pageId, properties: props });
+    cacheInvalidate("notion:");
+    logger.info(`Homework updated: ${pageId}`);
 }
 
 export async function updatePriority(pageId, priority) {

@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchActive, fetchDone, getPageProps, createHomework, updateStatus } from "../services/notionService.js";
+import { fetchActive, fetchDone, getPageProps, createHomework, updateStatus, updateHomework, archivePage } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
 import { recalcPriority } from "../utils/priority.js";
 import { formatDate } from "../utils/dateParser.js";
@@ -45,6 +45,14 @@ function computeStats(activePages, donePages) {
         byPriority[pri] = (byPriority[pri] || 0) + 1;
     }
 
+    const byTags = {};
+    for (const p of activePages) {
+        const tags = p.properties.Tags?.multi_select?.map(t => t.name) || [];
+        for (const tag of tags) {
+            byTags[tag] = (byTags[tag] || 0) + 1;
+        }
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const urgentLimit = new Date(today);
@@ -64,7 +72,7 @@ function computeStats(activePages, donePages) {
         return dt < today;
     }).length;
 
-    return { todo, prog, done, total, pct, bySubject, byPriority, urgent, overdue };
+    return { todo, prog, done, total, pct, bySubject, byPriority, byTags, urgent, overdue };
 }
 
 function buildHomeworkList(activePages, donePages) {
@@ -93,9 +101,9 @@ function computeTrend(donePages) {
         dayMap[key] = { date: key, label: `${d.getDate()}/${d.getMonth() + 1}`, count: 0 };
     }
     for (const p of donePages) {
-        const due = p.properties.Due?.date?.start;
-        if (!due) continue;
-        if (dayMap[due]) dayMap[due].count++;
+        const completed = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
+        if (!completed) continue;
+        if (dayMap[completed]) dayMap[completed].count++;
     }
     return Object.values(dayMap);
 }
@@ -108,9 +116,9 @@ function computeWeeklyDone(donePages) {
     mon.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
     const counts = [0, 0, 0, 0, 0, 0, 0];
     for (const p of donePages) {
-        const due = p.properties.Due?.date?.start;
-        if (!due) continue;
-        const dt = new Date(due + "T00:00:00");
+        const completed = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
+        if (!completed) continue;
+        const dt = new Date(completed + "T00:00:00");
         const diff = Math.floor((dt - mon) / 86400000);
         if (diff >= 0 && diff < 7) counts[diff]++;
     }
@@ -188,7 +196,7 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/homework", requireAuth, async (req, res) => {
-        const { title, subject, due, note } = req.body;
+        const { title, subject, due, note, tags } = req.body;
         if (!title?.trim()) return res.status(400).json({ error: "Title required" });
         try {
             const priority = recalcPriority(due || null);
@@ -198,6 +206,7 @@ export function startWebServer(port = 8080) {
                 due: due || null,
                 priority,
                 note: note?.trim() || "",
+                tags: Array.isArray(tags) ? tags : undefined,
             });
             res.json({ success: true });
         } catch (err) {
@@ -214,6 +223,37 @@ export function startWebServer(port = 8080) {
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/status:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post("/api/homework/update", requireAuth, async (req, res) => {
+        const { id, title, subject, due, priority, note, tags } = req.body;
+        if (!id) return res.status(400).json({ error: "id required" });
+        try {
+            await updateHomework(id, {
+                title,
+                subject,
+                due,
+                priority,
+                note,
+                tags: tags !== undefined ? (Array.isArray(tags) ? tags : []) : undefined,
+            });
+            res.json({ success: true });
+        } catch (err) {
+            logger.error("API POST /api/homework/update:", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post("/api/homework/delete", requireAuth, async (req, res) => {
+        const { id } = req.body;
+        if (!id) return res.status(400).json({ error: "id required" });
+        try {
+            await archivePage(id);
+            res.json({ success: true });
+        } catch (err) {
+            logger.error("API POST /api/homework/delete:", err);
             res.status(500).json({ error: err.message });
         }
     });

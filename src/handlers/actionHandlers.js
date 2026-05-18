@@ -122,9 +122,10 @@ function actionButtons(pageId, mode = "active") {
 
 /* ── card builder ── */
 function buildHomeworkCard(page, mode = "active") {
-    const { title, status, due, subject, priority } = getPageProps(page);
+    const { title, status, due, subject, priority, tags } = getPageProps(page);
     const safeTitle = escapeMarkdown(title);
     const safeSubject = escapeMarkdown(subject);
+    const tagsStr = tags?.length ? tags.join(", ") : null;
 
     return {
         text:
@@ -132,7 +133,8 @@ function buildHomeworkCard(page, mode = "active") {
             `${subjectEmoji(subject)} วิชา: ${safeBold(safeSubject)}\n` +
             `${priority} ความสำคัญ: ${safeBold(priority)}\n` +
             `📍 สถานะ: ${safeBold(statusLabel(status))}\n` +
-            `📅 ส่ง: ${formatDueDisplay(due)}`,
+            `📅 ส่ง: ${formatDueDisplay(due)}` +
+            (tagsStr ? `\n🏷️ แท็ก: ${safeBold(escapeMarkdown(tagsStr))}` : ""),
         extra: {
             parse_mode: "Markdown",
             ...actionButtons(page.id, mode),
@@ -256,12 +258,12 @@ export function registerActionHandlers(bot, userState) {
                 .catch(() => {});
         }
 
-        const { title, subject, due, rawText, priority } = state.pending;
+        const { title, subject, due, rawText, priority, tags } = state.pending;
 
         await ctx.answerCbQuery().catch(() => {});
 
         try {
-            const created = await createHomework({ title, subject, due, rawText, priority });
+            const created = await createHomework({ title, subject, due, rawText, priority, tags });
 
             if (state.originalText) {
                 setCorrection(state.originalText, { title, subject, due, priority });
@@ -390,6 +392,27 @@ export function registerActionHandlers(bot, userState) {
                     [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
                 ]),
             },
+        );
+    });
+
+    /* EDIT TAGS */
+    bot.action("EDIT_TAGS", async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+
+        if (!state?.pending) {
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+        }
+
+        userState.set(uid, { ...state, mode: "EDIT_TAGS", _timestamp: Date.now() });
+        await ctx.answerCbQuery().catch(() => {});
+        return ctx.reply(
+            `🏷️ ${safeBold("แก้แท็ก")}\n` +
+                `พิมพ์แท็กที่ต้องการ คั่นด้วยช่องว่างหรือคอมม่า\n` +
+                `${safeItalic("ตัวอย่าง")}: สอบ ด่วน อ่าน\n` +
+                `${safeItalic("หรือใส่ #หน้าแท็กก็ได้")}: #สอบ #ด่วน\n\n` +
+                `หรือพิมพ์ \`-\` เพื่อล้างแท็กทั้งหมด`,
+            { parse_mode: "Markdown", ...cancelMenu },
         );
     });
 
