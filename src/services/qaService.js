@@ -9,7 +9,6 @@ const MODELS = [
 ];
 
 let client = null;
-let modelIndex = 0;
 
 function getClient() {
     if (client) return client;
@@ -46,7 +45,7 @@ export async function askAI(question) {
         let lastErr = null;
 
         for (let attempt = 0; attempt < MODELS.length; attempt++) {
-            const model = MODELS[(modelIndex + attempt) % MODELS.length];
+            const model = MODELS[attempt];
             try {
                 const res = await c.chat.completions.create({
                     model,
@@ -65,7 +64,6 @@ export async function askAI(question) {
                     max_tokens: 300,
                 });
 
-                modelIndex = (modelIndex + attempt) % MODELS.length;
                 const answer = res.choices?.[0]?.message?.content?.trim();
                 if (answer) return answer;
             } catch (err) {
@@ -74,7 +72,7 @@ export async function askAI(question) {
             }
         }
 
-        logger.error("askAI failed:", lastErr?.message || lastErr);
+        if (lastErr) logger.error("askAI failed:", lastErr?.message || lastErr);
         return null;
     } catch (err) {
         logger.error("askAI:", err);

@@ -108,6 +108,7 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
 }
 
 function shortenTitle(title, subject = "") {
+    if (!title) return "";
     const firstLine = title.split("\n")[0].trim();
     if (firstLine.length <= 80) return firstLine || title.slice(0, 77) + "...";
 
@@ -215,9 +216,29 @@ export function registerCommandHandlers(bot, userState) {
         }
     });
 
+    const MAX_TEXT_LENGTH = 500;
+
     bot.on("text", async (ctx) => {
         const text = ctx.message.text.trim();
-        if (!text || text.startsWith("/")) return;
+        if (!text) return;
+
+        // Unknown command → show help
+        if (text.startsWith("/")) {
+            return ctx.reply(
+                `🤖 ${safeBold("Commands ที่ใช้ได้")}\n` +
+                `/start — เริ่มต้น\n` +
+                `/menu — เมนูหลัก\n` +
+                `/ask — ถามเกี่ยวกับการบ้าน\n` +
+                `/help — วิธีใช้งาน`,
+                { parse_mode: "Markdown", ...mainMenu },
+            );
+        }
+        if (text.length > MAX_TEXT_LENGTH) {
+            return ctx.reply(`⚠️ ข้อความยาวเกินไป (สูงสุด ${MAX_TEXT_LENGTH} ตัวอักษร)`, {
+                parse_mode: "Markdown",
+                ...mainMenu,
+            });
+        }
 
         const uid = ctx.from.id;
         const state = userState.get(uid);
@@ -235,7 +256,14 @@ export function registerCommandHandlers(bot, userState) {
         }
 
         if (state?.mode === "EDIT_DATE") {
-            const due = parseThaiDate(text) || text;
+            const due = parseThaiDate(text);
+            if (!due) {
+                return ctx.reply(
+                    `❌ ${safeBold("รูปแบบวันที่ไม่ถูกต้อง")}\n` +
+                        `กรุณาพิมพ์วันที่ที่ต้องการ เช่น "พรุ่งนี้", "15/06/2026", "อีก 3 วัน", "พุธหน้า"`,
+                    { parse_mode: "Markdown", ...cancelMenu },
+                );
+            }
             const pending = {
                 ...state.pending, due,
                 priority: recalcPriority(due),

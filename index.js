@@ -132,6 +132,7 @@ async function autoArchive() {
             const due = p.properties.Due?.date?.start;
             if (!due) continue;
             const dt = new Date(due + "T00:00:00");
+            if (isNaN(dt.getTime())) continue;
             if (dt >= cutoff) continue;
 
             await archivePage(p.id);
@@ -234,7 +235,10 @@ async function launchBot(retries = 5, delay = 3000) {
         }
     }
 }
-launchBot();
+launchBot().catch((err) => {
+    logger.error(`Failed to launch bot after all retries: ${err?.message || err}`);
+    process.exit(1);
+});
 
 /* ── graceful shutdown ── */
 const shutdown = (sig) => { logger.info(`Received ${sig}, stopping...`); bot.stop(sig); };

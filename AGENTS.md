@@ -18,12 +18,11 @@ git push https://a8F4Kq:d7HQj63KtLz5e8F4@justrunmy.app/git/r_Lf94S HEAD:deploy  
 ```
 index.js                     ← entry (bot.launch, 4 crons, state cleanup, cache cleanup)
 src/handlers/
-  commandHandlers.js         ← /start, /menu, /help, /ask, text router, confirm menu, photo OCR handler, media group debounce
+  commandHandlers.js         ← /start, /menu, /help, /ask, text router, confirm menu, media group debounce
   actionHandlers.js          ← all inline keyboard callbacks, priority, edit, status change
 src/services/
   aiService.js               ← Typhoon via OpenAI SDK, 2-model chain, TTL cache + .corrections.json
   aiCache.js                 ← correction persistence, in-memory cache, debounced atomic write
-  ocrService.js              ← Typhoon OCR (typhoon-ocr model), image → text extraction
   qaService.js               ← AI Q&A (ask about homework, Typhoon chat model)
   notionService.js           ← Notion SDK, TTL-cached, auto-invalidate on write, createHomework, updateStatus, updatePriority, archivePage
   cache.js                   ← generic in-memory TTL Map, cacheCleanup()

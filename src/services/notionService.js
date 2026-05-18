@@ -101,6 +101,7 @@ export async function createHomework({
     subject,
     due,
     rawText,
+    note: noteProp,
     eventId,
     priority,
 }) {
@@ -108,7 +109,7 @@ export async function createHomework({
         Name: { title: [{ text: { content: title } }] },
         Subject: { rich_text: [{ text: { content: subject } }] },
         Status: { select: { name: STATUS.TODO } },
-        Note: { rich_text: [{ text: { content: rawText } }] },
+        Note: { rich_text: [{ text: { content: rawText || noteProp || "" } }] },
     };
 
     if (due) props.Due = { date: { start: due } };

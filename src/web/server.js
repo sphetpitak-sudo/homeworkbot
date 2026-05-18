@@ -1,9 +1,11 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps, createHomework, updateStatus } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
 import { recalcPriority } from "../utils/priority.js";
+import { formatDate } from "../utils/dateParser.js";
 import { logger } from "../utils/logger.js";
 import crypto from "crypto";
 
@@ -87,7 +89,7 @@ function computeTrend(donePages) {
     for (let i = 29; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
+        const key = formatDate(d);
         dayMap[key] = { date: key, label: `${d.getDate()}/${d.getMonth() + 1}`, count: 0 };
     }
     for (const p of donePages) {
@@ -117,13 +119,22 @@ function computeWeeklyDone(donePages) {
 
 export function startWebServer(port = 8080) {
     const app = express();
-    const TOKEN = process.env.TELEGRAM_TOKEN || "";
+
+    const apiLimiter = rateLimit({
+        windowMs: 60_000,
+        max: 60,
+        standardHeaders: true,
+        message: { error: "Too many requests, slow down" },
+    });
 
     app.use(express.static(path.join(__dirname, "public")));
-    app.use(express.json());
+    app.use(express.json({ limit: "1mb" }));
+    app.use("/api", apiLimiter);
+
+    app.get("/health", (req, res) => res.json({ status: "ok" }));
 
     function requireAuth(req, res, next) {
-        const t = req.headers["authorization"]?.replace("Bearer ", "") || req.query.token || req.headers["x-token"];
+        const t = req.headers["authorization"]?.replace("Bearer ", "");
         if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
         }
@@ -211,17 +222,16 @@ export function startWebServer(port = 8080) {
         const { ids, status } = req.body;
         if (!ids?.length || !status) return res.status(400).json({ error: "ids and status required" });
         try {
-            let updated = 0;
-            for (const id of ids) {
-                await updateStatus(id, status);
-                updated++;
-            }
-            res.json({ success: true, updated });
+            const results = await Promise.allSettled(ids.map((id) => updateStatus(id, status)));
+            const succeeded = results.filter(r => r.status === "fulfilled").length;
+            const failed = results.filter(r => r.status === "rejected").length;
+            res.json({ success: failed === 0, updated: succeeded, failed });
         } catch (err) {
             logger.error("API POST /api/bulk-status:", err);
             res.status(500).json({ error: err.message });
         }
     });
 
-    app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`));
+    app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`))
+        .on("error", (err) => logger.error(`Web server failed to listen on ${port}:`, err.message));
 }

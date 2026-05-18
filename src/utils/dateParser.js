@@ -70,7 +70,10 @@ export function parseThaiDate(text) {
         const day = +m[1];
         if (day >= 1 && day <= 31) {
             const target = new Date(now.getFullYear(), now.getMonth(), day);
-            if (target.getMonth() !== now.getMonth()) target.setMonth(target.getMonth() + 1);
+            if (target.getDate() !== day) {
+                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, day);
+                return formatDate(nextMonth);
+            }
             return formatDate(target);
         }
     }
@@ -88,7 +91,7 @@ export function parseThaiDate(text) {
         if (t.includes(name)) {
             const target = new Date();
             let diff = (num - target.getDay() + 7) % 7;
-            if (t.includes("หน้า")) diff += 7;
+            if (t.includes("หน้า") && !t.includes("หน้าต่าง") && !t.includes("หน้าหนังสือ")) diff += 7;
             if (diff === 0) diff = 7;
             target.setDate(target.getDate() + diff);
             return formatDate(target);
@@ -113,6 +116,7 @@ export function formatDueDisplay(due) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const dueDate = parseYMDToLocalDate(due);
+    if (isNaN(dueDate.getTime())) return due;
     const diff = Math.floor((dueDate - today) / 86_400_000);
     const label = `${THAI_DAYS[dueDate.getDay()]}${dueDate.getDate()} ${THAI_MONTHS[dueDate.getMonth()]}`;
 

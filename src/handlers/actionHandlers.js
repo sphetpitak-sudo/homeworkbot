@@ -259,12 +259,9 @@ export function registerActionHandlers(bot, userState) {
         const { title, subject, due, rawText, priority } = state.pending;
 
         await ctx.answerCbQuery().catch(() => {});
-        await ctx.editMessageText("⏳ *กำลังบันทึก...*", {
-            parse_mode: "Markdown",
-        });
 
         try {
-            await createHomework({ title, subject, due, rawText, priority });
+            const created = await createHomework({ title, subject, due, rawText, priority });
 
             if (state.originalText) {
                 setCorrection(state.originalText, { title, subject, due, priority });
@@ -287,25 +284,26 @@ export function registerActionHandlers(bot, userState) {
                     `━━━━━━━━━━━━━━━━━━\n` +
                     `พร้อมไปต่อแล้ว เลือกเมนูด้านล่างได้เลย`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
-            );
+            ).catch(() => {});
         } catch (err) {
             logger.error("CONFIRM_SAVE:", err);
-            // state ยังอยู่ → ผู้ใช้กด "ลองใหม่" ได้
-            await ctx.editMessageText(
-                `❌ ${safeBold("บันทึกไม่สำเร็จ")}\nกรุณาลองใหม่อีกครั้ง`,
-                {
-                    parse_mode: "Markdown",
-                    ...Markup.inlineKeyboard([
-                        [
-                            Markup.button.callback(
-                                "🔁 ลองใหม่",
-                                "CONFIRM_SAVE",
-                            ),
-                            Markup.button.callback("❌ ยกเลิก", "CANCEL"),
-                        ],
-                    ]),
-                },
-            );
+            if (err.message?.includes("create") || err.response?.data) {
+                await ctx.editMessageText(
+                    `❌ ${safeBold("บันทึกไม่สำเร็จ")}\nกรุณาลองใหม่อีกครั้ง`,
+                    {
+                        parse_mode: "Markdown",
+                        ...Markup.inlineKeyboard([
+                            [
+                                Markup.button.callback(
+                                    "🔁 ลองใหม่",
+                                    "CONFIRM_SAVE",
+                                ),
+                                Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+                            ],
+                        ]),
+                    },
+                ).catch(() => {});
+            }
         }
     });
 
@@ -405,6 +403,10 @@ export function registerActionHandlers(bot, userState) {
             return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
         }
 
+        if (!PRIORITY_ORDER.includes(priority)) {
+            return ctx.answerCbQuery("❌ ค่าความสำคัญไม่ถูกต้อง").catch(() => {});
+        }
+
         const pending = { ...state.pending, priority };
         userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
         await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch(() => {});
@@ -469,20 +471,28 @@ export function registerActionHandlers(bot, userState) {
                 { parse_mode: "Markdown", ...listFooterMenu() },
             );
 
+            const MAX_DISPLAY = 15;
+
             if (prog.length) {
                 await ctx.reply(sectionHeader("🔄", "กำลังทำอยู่"), {
                     parse_mode: "Markdown",
                 });
-                for (const page of prog)
+                const display = prog.slice(0, MAX_DISPLAY);
+                for (const page of display)
                     await sendPageCard(ctx, page, "active");
+                if (prog.length > MAX_DISPLAY)
+                    await ctx.reply(`...และอีก ${prog.length - MAX_DISPLAY} รายการ`, { parse_mode: "Markdown" });
             }
 
             if (todo.length) {
                 await ctx.reply(sectionHeader("📌", "ยังไม่ได้เริ่ม"), {
                     parse_mode: "Markdown",
                 });
-                for (const page of todo)
+                const display = todo.slice(0, MAX_DISPLAY);
+                for (const page of display)
                     await sendPageCard(ctx, page, "active");
+                if (todo.length > MAX_DISPLAY)
+                    await ctx.reply(`...และอีก ${todo.length - MAX_DISPLAY} รายการ`, { parse_mode: "Markdown" });
             }
 
             return ctx.reply("📋 รายการทั้งหมด", listFooterMenu());
@@ -516,7 +526,10 @@ export function registerActionHandlers(bot, userState) {
                 { parse_mode: "Markdown", ...listFooterMenu() },
             );
 
-            for (const page of pages) await sendPageCard(ctx, page, "done");
+            const display = pages.slice(0, 20);
+            for (const page of display) await sendPageCard(ctx, page, "done");
+            if (pages.length > 20)
+                await ctx.reply(`...และอีก ${pages.length - 20} รายการ`, { parse_mode: "Markdown" });
 
             return ctx.reply("✅ รายการที่เสร็จแล้ว", listFooterMenu());
         } catch (err) {
@@ -555,7 +568,7 @@ export function registerActionHandlers(bot, userState) {
         try {
             await updateStatus(pageId, status);
             await ctx.answerCbQuery().catch(() => {});
-            await ctx.editMessageReplyMarkup(undefined);
+            await ctx.editMessageReplyMarkup(undefined).catch(() => {});
             return ctx.reply(message, {
                 parse_mode: "Markdown",
                 ...dashboardMenu(),
@@ -602,8 +615,7 @@ export function registerActionHandlers(bot, userState) {
 
         try {
             await archivePage(ctx.match[1]);
-            await ctx.editMessageReplyMarkup(undefined);
-
+            await ctx.editMessageReplyMarkup(undefined).catch(() => {});
             return ctx.reply(
                 `🗑️ ${safeBold("ลบแล้ว")}`,
                 { parse_mode: "Markdown", ...dashboardMenu() },

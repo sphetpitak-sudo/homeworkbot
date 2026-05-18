@@ -7,3 +7,4 @@ homebot.json
 *.tmp
 .opencode/
 .DS_Store
+.aider*

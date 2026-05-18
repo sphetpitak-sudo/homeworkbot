@@ -13,5 +13,5 @@ export function safeItalic(value) {
 }
 
 export function safeCode(value) {
-  return `\`${String(value ?? "").replace(/`/g, "\\`")}\``;
+  return `\`${String(value ?? "").replace(/`/g, "'")}\``;
 }

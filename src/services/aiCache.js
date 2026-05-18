@@ -9,7 +9,6 @@ const DEBOUNCE_MS = 5000;
 
 let corrections = {};
 let debounceTimer = null;
-let pendingWrite = false;
 
 function loadCorrections() {
     try {
@@ -25,10 +24,7 @@ function loadCorrections() {
 
 function debouncedSave() {
     if (debounceTimer) clearTimeout(debounceTimer);
-    if (pendingWrite) return;
-    pendingWrite = true;
     debounceTimer = setTimeout(async () => {
-        pendingWrite = false;
         try {
             const tmp = CORRECTIONS_FILE + ".tmp";
             await fs.promises.writeFile(tmp, JSON.stringify(corrections, null, 2));
@@ -39,8 +35,7 @@ function debouncedSave() {
     }, DEBOUNCE_MS);
 }
 
-export function getCorrection(text) {
-    const key = text.trim().toLowerCase();
+export function getCorrection(key) {
     const match = corrections[key];
     if (match) return { ...match, source: "correction" };
     return null;

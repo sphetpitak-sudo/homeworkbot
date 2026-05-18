@@ -10,7 +10,6 @@ const MODELS = [
 ];
 
 let client = null;
-let currentModelIdx = 0;
 let lastRequestTime = 0;
 const MIN_INTERVAL_MS = 500;
 
@@ -40,10 +39,8 @@ function sleep(ms) {
 }
 
 async function completeWithRetry(systemMsg, userMsg) {
-    const startIdx = currentModelIdx;
     for (let attempt = 0; attempt < MODELS.length; attempt++) {
-        const idx = (startIdx + attempt) % MODELS.length;
-        const model = MODELS[idx];
+        const model = MODELS[attempt];
 
         const now = Date.now();
         const wait = Math.max(0, MIN_INTERVAL_MS - (now - lastRequestTime));
@@ -60,12 +57,11 @@ async function completeWithRetry(systemMsg, userMsg) {
                 temperature: 0.1,
                 max_tokens: 150,
             });
-            currentModelIdx = idx;
             return { resp, model };
         } catch (err) {
-            const isQuota = String(err.status || err.message).includes("429");
+            const isQuota = err.status === 429 || (err.message && /^429\b/.test(String(err.message)));
             if (isQuota && attempt < MODELS.length - 1) {
-                logger.warn(`${model} quota hit, switching to ${MODELS[(idx + 1) % MODELS.length]}...`);
+                logger.warn(`${model} quota hit, switching to ${MODELS[attempt + 1]}...`);
                 continue;
             }
             if (isQuota) {

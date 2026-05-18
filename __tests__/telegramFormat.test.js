@@ -153,9 +153,9 @@ describe('safeCode', () => {
 
     describe('escapes backticks inside', () => {
         test.each([
-            ['`code`', '`\\`code\\``'],
-            ['a`b', '`a\\`b`'],
-            ['```', '`\\`\\`\\``'],
+            ['`code`', "`'code'`"],
+            ['a`b', "`a'b`"],
+            ['```', "`'''`"],
         ])('code "%s" -> "%s"', (input, expected) => {
             expect(safeCode(input)).toBe(expected);
         });

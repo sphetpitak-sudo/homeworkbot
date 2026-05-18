@@ -1,5 +1,5 @@
 const CACHE_NAME = "homework-bot-v1";
-const STATIC_ASSETS = ["/", "/index.html"];
+const STATIC_ASSETS = ["/", "/index.html", "/manifest.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)));
