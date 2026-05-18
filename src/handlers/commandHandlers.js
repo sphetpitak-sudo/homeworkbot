@@ -8,6 +8,7 @@ import {
 import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
 import { recalcPriority } from "../utils/priority.js";
+import { inferAndParseTags } from "../utils/tagDetector.js";
 import { getDashboardToken } from "../web/server.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -85,14 +86,6 @@ function buildMenuMessage() {
     );
 }
 
-function parseTags(text) {
-    const matches = text.match(/#(\S+)/g);
-    if (!matches) return [];
-    return matches
-        .map(t => t.slice(1).replace(/[^a-zA-Zก-๙0-9_\-]/g, ""))
-        .filter(Boolean);
-}
-
 export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     const title = pending?.title || "ไม่มีชื่อ";
     const subject = pending?.subject || "ทั่วไป";
@@ -138,12 +131,10 @@ function shortenTitle(title, subject = "") {
 }
 
 async function parseText(text) {
-    const hashtags = parseTags(text);
     const aiResult = isAIReady() ? await parseHomework(text) : null;
     if (aiResult) {
         const hasDue = !!aiResult.dueDate;
         const subject = aiResult.subject || detectSubject(text);
-        const tags = aiResult.tags?.length ? aiResult.tags : hashtags;
         return {
             due: aiResult.dueDate,
             subject,
@@ -151,19 +142,20 @@ async function parseText(text) {
             priority: hasDue ? (aiResult.priority || "🟡 กลาง") : "🟢 ต่ำ",
             usedAI: true,
             model: aiResult.model || "",
-            tags: tags.length ? tags : undefined,
+            tags: aiResult.tags,
         };
     }
     const due = parseThaiDate(text);
     const subject = detectSubject(text);
+    const priority = due ? "🟡 กลาง" : "🟢 ต่ำ";
     return {
         due,
         subject,
         title: shortenTitle(cleanTitle(text) || text, subject),
-        priority: due ? "🟡 กลาง" : "🟢 ต่ำ",
+        priority,
         usedAI: false,
         model: "",
-        tags: hashtags.length ? hashtags : undefined,
+        tags: inferAndParseTags(text, { priority }),
     };
 }
 
