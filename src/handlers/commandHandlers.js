@@ -20,14 +20,16 @@ import {
 
 const WEB_URL = process.env.WEB_URL || "";
 
+const SEP = "─".repeat(20);
+
 export const mainMenu = Markup.inlineKeyboard([
     [
         Markup.button.callback("➕ เพิ่มการบ้าน", "ADD"),
-        Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+        Markup.button.callback("📋 งานค้าง", "LIST_ACTIVE"),
     ],
     [
-        Markup.button.callback("📋 งานค้าง", "LIST_ACTIVE"),
         Markup.button.callback("✅ งานเสร็จ", "LIST_DONE"),
+        Markup.button.callback("📊 Dashboard", "DASHBOARD"),
     ],
     [
         Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
@@ -44,45 +46,46 @@ export const cancelMenu = Markup.inlineKeyboard([
 export const confirmMenu = Markup.inlineKeyboard([
     [
         Markup.button.callback("✅ บันทึก", "CONFIRM_SAVE"),
-        Markup.button.callback("✏️ ชื่อ", "CONFIRM_EDIT"),
+        Markup.button.callback("✏️ แก้ไขชื่อ", "CONFIRM_EDIT"),
     ],
     [
         Markup.button.callback("📚 วิชา", "EDIT_SUBJECT"),
         Markup.button.callback("📅 วันที่", "EDIT_DATE"),
+        Markup.button.callback("🎯 สำคัญ", "EDIT_PRIORITY"),
     ],
     [
-        Markup.button.callback("🎯 ความสำคัญ", "EDIT_PRIORITY"),
         Markup.button.callback("🏷️ Tags", "EDIT_TAGS"),
-    ],
-    [
         Markup.button.callback("❌ ยกเลิก", "CANCEL"),
     ],
 ]);
 
 function buildWelcomeMessage(name) {
     return (
-        `👋 สวัสดี ${safeBold(name)}\n` +
-        `ผมคือ ${safeBold("Homework Bot")} ผู้ช่วยจัดการการบ้านของคุณ\n\n` +
-        `ใช้งานง่าย ๆ 3 ขั้นตอน\n` +
-        `1. กด ${safeBold("➕ เพิ่มการบ้าน")}\n` +
-        `2. พิมพ์ข้อความแบบธรรมชาติ\n` +
-        `3. ตรวจสอบแล้วกดบันทึก\n\n` +
-        `${safeItalic("ตัวอย่างที่พิมพ์ได้ทันที")}\n` +
+        `${safeItalic("━".repeat(20))}\n` +
+        `👋 ${safeBold("สวัสดี " + name + "!")}\n` +
+        `🤖 ผมคือ ${safeBold("Homework Bot")} ผู้ช่วยการบ้าน\n\n` +
+        `✨ ${safeBold("ใช้งานง่าย ๆ แค่ 3 ขั้นตอน")}\n` +
+        `๑. กด ➕ ${safeBold("เพิ่มการบ้าน")}\n` +
+        `๒. พิมพ์งานที่ได้รับมอบหมาย\n` +
+        `๓. ตรวจสอบ ➔ กดบันทึก!\n\n` +
+        `${safeItalic("ตัวอย่าง:")}\n` +
         `${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n` +
         `${safeCode("รายงานอังกฤษ วันศุกร์")}\n` +
-        `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}`
+        `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}\n` +
+        `${safeItalic("━".repeat(20))}`
     );
 }
 
 function buildMenuMessage() {
     return (
         `🏠 ${safeBold("เมนูหลัก")}\n` +
-        `เลือกสิ่งที่อยากทำได้เลย\n\n` +
-        `➕ เพิ่มการบ้านใหม่\n` +
-        `📋 ดูงานที่ยังค้าง\n` +
-        `✅ ดูงานที่ทำเสร็จแล้ว\n` +
-        `📊 ดูภาพรวมทั้งหมด\n` +
-        `🗓 ดูกิจกรรม 7 วันข้างหน้า`
+        `${safeItalic("━".repeat(18))}\n` +
+        `▸ ${safeBold("➕ เพิ่มการบ้าน")} — เพิ่มงานใหม่\n` +
+        `▸ ${safeBold("📋 งานค้าง")} — ดูงานที่ยังไม่เสร็จ\n` +
+        `▸ ${safeBold("✅ งานเสร็จ")} — ดูงานที่ทำแล้ว\n` +
+        `▸ ${safeBold("📊 Dashboard")} — สถิติภาพรวม\n` +
+        `▸ ${safeBold("🤖 ถาม AI")} — ถามเกี่ยวกับงาน\n` +
+        `${safeItalic("━".repeat(18))}`
     );
 }
 
@@ -91,21 +94,21 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     const subject = pending?.subject || "ทั่วไป";
     const due = pending?.due ? formatDueDisplay(pending.due) : "ไม่กำหนดวัน";
     const priority = pending?.priority || "🟡 กลาง";
-    const tags = pending?.tags?.length ? pending.tags.join(", ") : null;
+    const tags = pending?.tags?.length ? pending.tags.map(t => `#${t}`).join(" ") : null;
     const aiBadge = aiUsed
         ? `\n🤖 ${safeItalic("วิเคราะห์โดย AI")}${model ? ` (${safeCode(model)})` : ""}`
         : "";
     return ctx.reply(
-        `🔍 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            `${subjectEmoji(subject)} ${safeBold(escapeMarkdown(title))}\n` +
-            `📚 วิชา: ${safeBold(escapeMarkdown(subject))}\n` +
-            `🎯 ความสำคัญ: ${priority}\n` +
-            `📅 กำหนดส่ง: ${safeBold(escapeMarkdown(due))}\n` +
-            (tags ? `🏷️ แท็ก: ${safeBold(escapeMarkdown(tags))}\n` : "") +
-            aiBadge +
-            `\n━━━━━━━━━━━━━━━━━━\n` +
-            `${safeItalic("ถ้าทุกอย่างถูกต้อง กดบันทึกได้เลย")}`,
+        `📝 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
+            `${safeItalic("━".repeat(20))}\n` +
+            `${subjectEmoji(subject)}  ${safeBold(escapeMarkdown(title))}\n\n` +
+            `📚 วิชา      ${escapeMarkdown(subject)}\n` +
+            `🎯 สำคัญ    ${priority}\n` +
+            `📅 กำหนดส่ง  ${escapeMarkdown(due)}\n` +
+            (tags ? `🏷️ แท็ก     ${tags}\n` : "") +
+            (aiBadge ? `${aiBadge}\n` : "") +
+            `\n${safeItalic("━".repeat(20))}\n` +
+            `✅ กดบันทึก หรือ ✏️ แก้ไขส่วนที่ต้องการ`,
         {
             parse_mode: "Markdown",
             ...confirmMenu,
@@ -184,12 +187,14 @@ export function registerCommandHandlers(bot, userState) {
         }
         userState.set(ctx.from.id, { mode: "ASK_AI", _timestamp: Date.now() });
         return ctx.reply(
-            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
+            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n` +
+                `${safeItalic("━".repeat(16))}\n` +
                 `${safeItalic("พิมพ์คำถามที่อยากรู้ เช่น")}\n` +
-                `• \`งานคณิตส่งวันไหนบ้าง\`\n` +
-                `• \`มีงานอะไรที่ยังไม่ทำ\`\n` +
-                `• \`อาทิตย์นี้มีงานกี่ชิ้น\`\n\n` +
-                `พิมพ์คำถามได้เลย หรือกดยกเลิก`,
+                `• "งานคณิตส่งวันไหนบ้าง"\n` +
+                `• "มีงานอะไรที่ยังไม่ทำ"\n` +
+                `• "อาทิตย์นี้มีงานกี่ชิ้น"\n\n` +
+                `${safeItalic("พิมพ์คำถามเลย หรือกดยกเลิก")}\n` +
+                `${safeItalic("━".repeat(16))}`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -197,11 +202,15 @@ export function registerCommandHandlers(bot, userState) {
     bot.command("help", (ctx) =>
         ctx.reply(
             `🆘 ${safeBold("วิธีใช้งาน")}\n` +
-                `• กด ${safeBold("➕ เพิ่มการบ้าน")} เพื่อเริ่มเพิ่มงาน\n` +
-                `• พิมพ์ชื่อวิชา เนื้องาน และวันส่งในข้อความเดียว\n` +
-                `• ใช้ ${safeCode("/menu")} เพื่อกลับเมนูหลักได้เสมอ\n\n` +
-                `${safeItalic("ตัวอย่าง")}\n` +
-                `${safeCode("ฟิสิกส์ ทำโจทย์ข้อ 1-10 พรุ่งนี้")}`,
+                `${safeItalic("━".repeat(16))}\n` +
+                `๑. กด ➕ เพิ่มการบ้าน\n` +
+                `๒. พิมพ์ชื่องาน + วิชา + วันที่\n` +
+                `๓. ตรวจสอบ ➔ กดบันทึก\n\n` +
+                `${safeItalic("ตัวอย่าง:")}\n` +
+                `${safeCode("ฟิสิกส์ ทำโจทย์ข้อ 1-10 พรุ่งนี้")}\n` +
+                `${safeCode("คณิต หน้า 45 เสร็จวันศุกร์")}\n` +
+                `${safeItalic("━".repeat(16))}\n` +
+                `${safeItalic("พิมพ์ /menu เพื่อกลับเมนูหลัก")}`,
             {
                 parse_mode: "Markdown",
                 ...mainMenu,
@@ -234,16 +243,18 @@ export function registerCommandHandlers(bot, userState) {
         // Unknown command → show help
         if (text.startsWith("/")) {
             return ctx.reply(
-                `🤖 ${safeBold("Commands ที่ใช้ได้")}\n` +
+                `🤖 ${safeBold("คำสั่งที่ใช้ได้")}\n` +
+                `${safeItalic("━".repeat(16))}\n` +
                 `/start — เริ่มต้น\n` +
                 `/menu — เมนูหลัก\n` +
                 `/ask — ถามเกี่ยวกับการบ้าน\n` +
-                `/help — วิธีใช้งาน`,
+                `/help — วิธีใช้งาน\n` +
+                `${safeItalic("━".repeat(16))}`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         }
         if (text.length > MAX_TEXT_LENGTH) {
-            return ctx.reply(`⚠️ ข้อความยาวเกินไป (สูงสุด ${MAX_TEXT_LENGTH} ตัวอักษร)`, {
+            return ctx.reply(`⚠️ ${safeBold("ข้อความยาวเกินไป")}\n\nสูงสุด ${MAX_TEXT_LENGTH} ตัวอักษร`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -319,14 +330,14 @@ export function registerCommandHandlers(bot, userState) {
         // Not in any mode — smart preview with AI or regex
         const parsed = await parseText(text);
         const previewText =
-            `⚡ ${safeBold("ตรวจพบข้อความการบ้าน")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            `${subjectEmoji(parsed.subject)} ${safeBold(escapeMarkdown(parsed.title))}\n` +
-            `📚 วิชา: ${safeBold(escapeMarkdown(parsed.subject))}\n` +
-            `🎯 ความสำคัญ: ${parsed.priority || "🟡 กลาง"}\n` +
-            `📅 กำหนดส่ง: ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            `${safeItalic("กด ➕ เพิ่มการบ้าน แล้วส่งข้อความนี้อีกครั้งเพื่อบันทึก")}`;
+            `⚡ ${safeBold("เจองานแล้ว!")}\n` +
+            `${safeItalic("━".repeat(18))}\n` +
+            `${subjectEmoji(parsed.subject)}  ${safeBold(escapeMarkdown(parsed.title))}\n` +
+            `📚 ${escapeMarkdown(parsed.subject)}\n` +
+            `🎯 ${parsed.priority || "🟡 กลาง"}\n` +
+            `📅 ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +
+            `${safeItalic("━".repeat(18))}\n` +
+            `${safeItalic("กดปุ่มด้านล่างเพื่อเพิ่มเข้าสู่ระบบ")}`;
 
         return ctx.reply(previewText, {
             parse_mode: "Markdown",
