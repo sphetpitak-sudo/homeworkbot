@@ -35,55 +35,36 @@ export function getDashboardToken() {
 }
 
 function computeStats(activePages, donePages) {
-    const todo = activePages.filter(
-        (p) => p.properties.Status?.select?.name === STATUS.TODO,
-    ).length;
-    const prog = activePages.filter(
-        (p) => p.properties.Status?.select?.name === STATUS.IN_PROGRESS,
-    ).length;
-    const done = donePages.length;
-    const total = todo + prog + done;
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    let todo = 0, prog = 0, urgent = 0, overdue = 0;
+    const bySubject = {}, byPriority = {}, byTags = {};
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const urgentLimit = new Date(today); urgentLimit.setDate(today.getDate() + URGENT_DAYS);
 
-    const bySubject = {};
     for (const p of activePages) {
+        const status = p.properties.Status?.select?.name;
+        if (status === STATUS.TODO) todo++;
+        else if (status === STATUS.IN_PROGRESS) prog++;
+
         const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
         bySubject[sub] = (bySubject[sub] || 0) + 1;
-    }
 
-    const byPriority = {};
-    for (const p of activePages) {
         const pri = p.properties.Priority?.select?.name || PRIORITY_DEFAULT;
         byPriority[pri] = (byPriority[pri] || 0) + 1;
-    }
 
-    const byTags = {};
-    for (const p of activePages) {
-        const tags = p.properties.Tags?.multi_select?.map(t => t.name) || [];
-        for (const tag of tags) {
-            byTags[tag] = (byTags[tag] || 0) + 1;
+        const tags = p.properties.Tags?.multi_select;
+        if (tags) for (const t of tags) byTags[t.name] = (byTags[t.name] || 0) + 1;
+
+        const d = p.properties.Due?.date?.start;
+        if (d) {
+            const dt = new Date(d + "T00:00:00");
+            if (dt >= today && dt <= urgentLimit) urgent++;
+            if (dt < today) overdue++;
         }
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const urgentLimit = new Date(today);
-    urgentLimit.setDate(today.getDate() + URGENT_DAYS);
-
-    const urgent = activePages.filter((p) => {
-        const d = p.properties.Due?.date?.start;
-        if (!d) return false;
-        const dt = new Date(d + "T00:00:00");
-        return dt >= today && dt <= urgentLimit;
-    }).length;
-
-    const overdue = activePages.filter((p) => {
-        const d = p.properties.Due?.date?.start;
-        if (!d) return false;
-        const dt = new Date(d + "T00:00:00");
-        return dt < today;
-    }).length;
-
+    const done = donePages.length;
+    const total = todo + prog + done;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { todo, prog, done, total, pct, bySubject, byPriority, byTags, urgent, overdue };
 }
 

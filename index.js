@@ -14,6 +14,7 @@ import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
 import { startWebServer }      from "./src/web/server.js";
+import { flushCorrections }    from "./src/services/aiCache.js";
 
 /* ── validate env ── */
 validateEnv();
@@ -100,20 +101,19 @@ async function autoUpdatePriority() {
     cronRunning.priority = true;
     try {
         const pages = await fetchActive();
-        let updated = 0;
-
+        const needsUpdate = [];
         for (const p of pages) {
             const current = p.properties.Priority?.select?.name || "🟡 กลาง";
             const dueStr = p.properties.Due?.date?.start;
             const target = recalcPriority(dueStr);
-
-            if (current !== target) {
-                await updatePriority(p.id, target);
-                updated++;
-            }
+            if (current !== target) needsUpdate.push({ id: p.id, target });
         }
-
-        if (updated) logger.info(`Auto-priority updated ${updated} items`);
+        if (!needsUpdate.length) return;
+        const CONCURRENCY = 5;
+        for (let i = 0; i < needsUpdate.length; i += CONCURRENCY) {
+            await Promise.all(needsUpdate.slice(i, i + CONCURRENCY).map(p => updatePriority(p.id, p.target)));
+        }
+        logger.info(`Auto-priority updated ${needsUpdate.length} items`);
     } catch (err) {
         logger.error("autoUpdatePriority:", err);
     } finally {
@@ -130,7 +130,7 @@ async function autoArchive() {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 7);
         cutoff.setHours(0, 0, 0, 0);
-        let archived = 0;
+        const toArchive = [];
 
         for (const p of pages) {
             const completed = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
@@ -138,12 +138,15 @@ async function autoArchive() {
             const dt = new Date(completed + "T00:00:00");
             if (isNaN(dt.getTime())) continue;
             if (dt >= cutoff) continue;
-
-            await archivePage(p.id);
-            archived++;
+            toArchive.push(p.id);
         }
 
-        if (archived) logger.info(`Auto-archived ${archived} items`);
+        if (!toArchive.length) return;
+        const CONCURRENCY = 5;
+        for (let i = 0; i < toArchive.length; i += CONCURRENCY) {
+            await Promise.all(toArchive.slice(i, i + CONCURRENCY).map(id => archivePage(id)));
+        }
+        logger.info(`Auto-archived ${toArchive.length} items`);
     } catch (err) {
         logger.error("autoArchive:", err);
     } finally {
@@ -245,10 +248,11 @@ launchBot().catch((err) => {
 });
 
 /* ── graceful shutdown ── */
-const shutdown = (sig) => {
-    logger.info(`Received ${sig}, stopping...`);
+const shutdown = async (sig) => {
+    logger.info(`Received ${sig}, shutting down gracefully...`);
     bot.stop(sig);
-    process.exit(0);
+    await flushCorrections();
+    setTimeout(() => process.exit(0), 2000).unref();
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));

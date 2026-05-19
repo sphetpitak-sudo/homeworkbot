@@ -9,6 +9,23 @@ const DEBOUNCE_MS = 5000;
 
 let corrections = {};
 let debounceTimer = null;
+let saveResolve = null;  // for flushing
+
+/* ── concurrency guard: serializes writeFile calls ── */
+let writeInProgress = false;
+let pendingWrite = false;
+
+function doWrite() {
+    if (writeInProgress) { pendingWrite = true; return; }
+    writeInProgress = true;
+    pendingWrite = false;
+    const tmp = CORRECTIONS_FILE + ".tmp";
+    const data = JSON.stringify(corrections, null, 2);
+    fs.promises.writeFile(tmp, data)
+        .then(() => fs.promises.rename(tmp, CORRECTIONS_FILE))
+        .then(() => { writeInProgress = false; if (saveResolve) { saveResolve(); saveResolve = null; } if (pendingWrite) doWrite(); })
+        .catch((e) => { writeInProgress = false; logger.warn("Failed to save corrections:", e.message); if (saveResolve) { saveResolve(); saveResolve = null; } });
+}
 
 function loadCorrections() {
     try {
@@ -24,15 +41,16 @@ function loadCorrections() {
 
 function debouncedSave() {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(async () => {
-        try {
-            const tmp = CORRECTIONS_FILE + ".tmp";
-            await fs.promises.writeFile(tmp, JSON.stringify(corrections, null, 2));
-            await fs.promises.rename(tmp, CORRECTIONS_FILE);
-        } catch (e) {
-            logger.warn("Failed to save corrections:", e.message);
-        }
-    }, DEBOUNCE_MS);
+    debounceTimer = setTimeout(() => { debounceTimer = null; doWrite(); }, DEBOUNCE_MS);
+}
+
+export function flushCorrections() {
+    return new Promise((resolve) => {
+        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+        if (!writeInProgress && !pendingWrite) { resolve(); return; }
+        saveResolve = resolve;
+        if (!writeInProgress) doWrite();
+    });
 }
 
 export function getCorrection(key) {
@@ -49,9 +67,10 @@ export function setCorrection(text, pending) {
         dueDate: pending.due || null,
         priority: pending.priority || null,
     };
-    const entries = Object.entries(corrections);
-    if (entries.length > MAX_CORRECTIONS) {
-        corrections = Object.fromEntries(entries.slice(-MAX_CORRECTIONS));
+    const keys = Object.keys(corrections);
+    if (keys.length > MAX_CORRECTIONS) {
+        const toDelete = keys.slice(0, keys.length - MAX_CORRECTIONS);
+        for (const k of toDelete) delete corrections[k];
     }
     debouncedSave();
     cacheSet(`ai:${key}`, corrections[key], AI_CACHE_TTL);

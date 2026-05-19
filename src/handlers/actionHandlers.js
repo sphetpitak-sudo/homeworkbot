@@ -55,17 +55,6 @@ function statusLabel(status) {
           : "ยังไม่ทำ";
 }
 
-function summarizeCounts(activePages, donePages) {
-    const todo = activePages.filter(
-        (p) => p.properties.Status?.select?.name === STATUS.TODO,
-    ).length;
-    const prog = activePages.filter(
-        (p) => p.properties.Status?.select?.name === STATUS.IN_PROGRESS,
-    ).length;
-    const done = donePages.length;
-    return { todo, prog, done, total: todo + prog + done };
-}
-
 function progressBar(percent) {
     const filled = Math.max(
         0,
@@ -152,34 +141,33 @@ async function sendPageCard(ctx, page, mode = "active") {
 
 /* ── dashboard builder ── */
 function buildDashboard(activePages, donePages) {
-    const { todo, prog, done, total } = summarizeCounts(activePages, donePages);
+    let todo = 0, prog = 0;
+    const bySubject = {};
+    const urgent = [];
+    const overduePages = [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const urgentLimit = new Date(today); urgentLimit.setDate(today.getDate() + URGENT_DAYS);
+
+    for (const p of activePages) {
+        const status = p.properties.Status?.select?.name;
+        if (status === STATUS.TODO) todo++;
+        else if (status === STATUS.IN_PROGRESS) prog++;
+
+        const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
+        bySubject[sub] = (bySubject[sub] || 0) + 1;
+
+        const due = p.properties.Due?.date?.start;
+        if (due) {
+            const dt = parseYMDToLocalDate(due);
+            if (dt >= today && dt <= urgentLimit) urgent.push(p);
+            if (dt < today) overduePages.push(p);
+        }
+    }
+
+    const done = donePages.length;
+    const total = todo + prog + done;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const bar = progressBar(pct);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const urgentLimit = new Date(today);
-    urgentLimit.setDate(today.getDate() + URGENT_DAYS);
-
-    const urgent = activePages.filter((p) => {
-        const due = p.properties.Due?.date?.start;
-        if (!due) return false;
-        const dt = parseYMDToLocalDate(due);
-        return dt >= today && dt <= urgentLimit;
-    });
-
-    const overdue = activePages.filter((p) => {
-        const due = p.properties.Due?.date?.start;
-        if (!due) return false;
-        return parseYMDToLocalDate(due) < today;
-    });
-
-    const bySubject = {};
-    for (const p of activePages) {
-        const subject =
-            p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
-        bySubject[subject] = (bySubject[subject] || 0) + 1;
-    }
 
     let msg = `${safeItalic("━".repeat(20))}\n`;
     msg += `📊 ${safeBold("ภาพรวมการบ้าน")}\n`;
@@ -187,7 +175,7 @@ function buildDashboard(activePages, donePages) {
     msg += `📌 ยังไม่ทำ    ${safeBold(String(todo))}\n`;
     msg += `🔄 กำลังทำ     ${safeBold(String(prog))}\n`;
     msg += `✅ เสร็จ       ${safeBold(String(done))}\n`;
-    if (overdue.length) msg += `🚨 เลยกำหนด   ${safeBold(String(overdue.length))}\n`;
+    if (overduePages.length) msg += `🚨 เลยกำหนด   ${safeBold(String(overduePages.length))}\n`;
     msg += `${safeItalic("━".repeat(20))}\n`;
     msg += `${safeBold("ความคืบหน้า")} [${bar}] ${pct}%\n`;
     msg += `${safeItalic(`(ทั้งหมด ${total} รายการ)`)}\n`;
