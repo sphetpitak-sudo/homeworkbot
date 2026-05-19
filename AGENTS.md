@@ -18,25 +18,26 @@ git push https://a8F4Kq:d7HQj63KtLz5e8F4@justrunmy.app/git/r_Lf94S HEAD:deploy  
 ```
 index.js                     ← entry (bot.launch, 4 crons, state cleanup, cache cleanup)
 src/handlers/
-  commandHandlers.js         ← /start, /menu, /help, /ask, text router, confirm menu, media group debounce
-  actionHandlers.js          ← all inline keyboard callbacks, priority, edit, status change
+  commandHandlers.js         ← /start, /menu, /help, /ask, /undo, text router, preview, confirm screen, errorWithRetry, buildHomeworkPreview
+  actionHandlers.js          ← all inline keyboard callbacks: ADD, CANCEL, save, edit title/subject/date/priority/tags, status change, delete with recovery, paginated lists, dashboard, ask AI, hints
 src/services/
-  aiService.js               ← Typhoon via OpenAI SDK, 2-model chain, TTL cache + .corrections.json
-  aiCache.js                 ← correction persistence, in-memory cache, debounced atomic write
-  qaService.js               ← AI Q&A (ask about homework, Typhoon chat model)
-  notionService.js           ← Notion SDK, TTL-cached, auto-invalidate on write, createHomework, updateStatus, updatePriority, archivePage
-  cache.js                   ← generic in-memory TTL Map, cacheCleanup()
+  aiService.js               ← Typhoon via OpenAI SDK, 2-model chain, fallback chain, in-memory cache
+  aiCache.js                 ← correction persistence in .corrections.json, in-memory AI cache, debounced atomic write
+  qaService.js               ← AI Q&A (ask about homework, Typhoon chat model with homework context)
+  notionService.js           ← Notion SDK, TTL-cached, auto-invalidate on write, createHomework, updateStatus, updatePriority, updateHomework, archivePage, restorePage, getPageProps, getPageStatus, getPageTitle
+  cache.js                   ← generic in-memory TTL Map, cacheCleanup(), cacheInvalidate()
 src/web/
-  server.js                  ← Express server: GET /api/all, /api/stats, /api/homework; POST /api/homework, /api/status, /api/bulk-status
+  server.js                  ← Express server: GET /api/all, GET /api/stats, GET /api/homework; POST /api/homework, POST /api/status, POST /api/bulk-status, POST /api/homework/update, POST /api/homework/delete; rate-limited, Bearer auth
   public/
     index.html               ← Web dashboard (Chart.js, calendar, detail panel, CSV, dark mode, PWA, quick add, bulk actions)
     manifest.json            ← PWA manifest (name, theme color, icons)
     sw.js                    ← Service worker (cache-first strategy)
 src/utils/
-  dateParser.js              ← Thai date regex: parseThaiDate, formatDueDisplay, parseYMDToLocalDate
-  subjectDetector.js         ← Thai keyword matching + misspelling support, cleanTitle, subjectEmoji
-  telegramFormat.js          ← Markdown escape: _ * ` [ ~ ( ) |
-  constants.js               ← STATUS, PRIORITY, priorityWeight, dashboard limits, NOTION_PAGE_SIZE
+  dateParser.js              ← Thai date regex: parseThaiDate, formatDueDisplay, formatDateLabel, parseYMDToLocalDate, formatDate
+  subjectDetector.js         ← Thai keyword matching + misspelling support (50+ keywords, 10 subjects), cleanTitle, subjectEmoji
+  tagDetector.js             ← Tag inference (สอบ/โครงการ/กลุ่ม/ด่วน/อ่าน/ใบงาน), hashtag parsing, inferAndParseTags, VALID_TAGS
+  telegramFormat.js          ← Markdown escape: _ * ` [, safeBold, safeItalic, safeCode
+  constants.js               ← STATUS, PRIORITY, priorityWeight, PRIORITY_ORDER, dashboard limits, AI_CONFIDENCE_THRESHOLD, NOTION_PAGE_SIZE
   logger.js                  ← console wrapper with Thai timestamps
   validateEnv.js             ← validates TELEGRAM_TOKEN, NOTION_TOKEN, DATABASE_ID
   priority.js                ← recalcPriority(dueStr) → shared priority calculation
@@ -45,10 +46,11 @@ src/utils/
 ## Features implemented
 | Feature | Description |
 |---------|-------------|
-| ✅ AI parse homework | Typhoon 2 models → title/subject/date/priority, regex fallback |
-| ✅ Priority | AI auto-detect (🔴สูง/🟡กลาง/🟢ต่ำ), default `🟢 ต่ำ` when no due date, edit button, sort by priority, auto-recalc on date edit |
+| ✅ AI parse homework | Typhoon 2 models → title/subject/date/priority/tags, regex fallback |
+| ✅ Priority | AI auto-detect (🔴สูง/🟡กลาง/🟢ต่ำ), default `🟢 ต่ำ` when no due date, edit button, sort by priority, auto-recalc on date edit, manual override |
 | ✅ Priority auto-update | cron 06:00 — recalc all active homework priorities based on remaining days |
-| ✅ AI Q&A | /ask command — ask about homework in natural language |
+| ✅ Tags | Auto-inferred from text (สอบ/โครงการ/กลุ่ม/ด่วน/อ่าน/ใบงาน), displayed without `#` prefix, stored as Notion multi_select, editable via confirm menu |
+| ✅ AI Q&A | /ask command — ask about homework in natural language, AI responds with context |
 | ✅ Web Dashboard | Express + Chart.js: donuts, trend line, calendar, detail panel, CSV export, dark mode, PWA |
 | ✅ Quick Add from Web | Modal form with subject dropdown, auto-priority preview, POST `/api/homework` |
 | ✅ Status Change from Web | Clickable status buttons (To Do / In Progress / Done) in list rows |
@@ -60,23 +62,39 @@ src/utils/
 | ✅ PWA Support | `manifest.json` + `sw.js` service worker — installable on mobile |
 | ✅ Health check | HTTP server on PORT 8080 for container hosting |
 | ✅ 409 retry | bot.launch retries on 409 Conflict (exponential backoff) |
+| ✅ Paginated lists | 10 items per page, prev/next navigation, state tracked per user for 5 min |
+| ✅ Delete recovery | 10-second window to restore archived item via inline keyboard button |
+| ✅ /undo command | Revert last status change within 30 seconds |
+| ✅ Error retry buttons | Consistent `errorWithRetry()` pattern — inline retry + home button |
+| ✅ Hint system | One-time contextual tips (post-save, status change, priority legend) |
+| ✅ AI confident skip | `isUnambiguous()` checks AI+regex agreement → skips intermediate preview, goes straight to confirm |
+| ✅ Edit saved items | Web API supports update + delete; partial field updates via POST `/api/homework/update` |
+| ✅ restorePage | Un-archive Notion pages (used by delete recovery) |
 
 ## AI chain
 1. `.corrections.json` — user-edited values, zero API calls
 2. In-memory cache (1h TTL)
 3. Typhoon models in order: `typhoon-v2.5-30b-a3b-instruct` → `typhoon-v2.1-12b-instruct`
 4. On 429 → auto-switch to next model; on bad JSON → retry once with minimal prompt
-5. If all fail → regex fallback (`parseThaiDate` + `detectSubject`)
+5. If all fail → regex fallback (`parseThaiDate` + `detectSubject` + `inferAndParseTags`)
 
 ## Priority
 - Notion field: `Priority` (Select): `🔴 สูง`, `🟡 กลาง`, `🟢 ต่ำ`
 - AI detects from text: urgent words → สูง, far due → ต่ำ, no due → ต่ำ, else → กลาง
 - Edit button `🎯 ความสำคัญ` in confirm menu → choose from inline keyboard
-- EDIT_DATE → `recalcPriority(due)` auto-updates priority
+- EDIT_DATE → `recalcPriority(due)` auto-updates priority (unless overridden by `_manualPriority`)
 - `recalcPriority()` in `src/utils/priority.js`: ≤3 days → สูง, ≤14 days → กลาง, >14 days → ต่ำ, no due → ต่ำ
 - `autoUpdatePriority()` cron at 06:00 daily (runs before reminder 08:00)
 - LIST_ACTIVE sorts by priority (สูง→กลาง→ต่ำ) then by due
 - Web dashboard auto-priority preview updates live when due date changes
+
+## Tags
+- Inferred from text keywords via `tagDetector.js`: สอบ, โครงการ, กลุ่ม, ด่วน, อ่าน, ใบงาน
+- Also parsed from `#hashtags` in input text
+- Displayed without `#` prefix in card preview and lists
+- Stored as Notion `multi_select` field `Tags`
+- Editable via `EDIT_TAGS` in confirm menu (type tags, or `-` to clear)
+- `VALID_TAGS` exported for validation in edit flow
 
 ## Web Dashboard
 - URL: `https://homework.k.jrnm.app/?token=<DASHBOARD_TOKEN>`
@@ -124,28 +142,35 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 | GET | `/api/all` | Bearer token | Returns stats + homework + trend + weeklyDone |
 | GET | `/api/stats` | Bearer token | Returns stats only (backward compat) |
 | GET | `/api/homework` | Bearer token | Returns homework list only (backward compat) |
-| POST | `/api/homework` | Bearer token | Create homework (body: title, subject, due, note) — auto-calculates priority |
+| POST | `/api/homework` | Bearer token | Create homework (body: title, subject, due, note, tags) — auto-calculates priority |
 | POST | `/api/status` | Bearer token | Update single item status (body: id, status) |
 | POST | `/api/bulk-status` | Bearer token | Update multiple items status (body: ids[], status) |
+| POST | `/api/homework/update` | Bearer token | Partial update homework fields (body: id, title?, subject?, due?, priority?, note?, tags?) |
+| POST | `/api/homework/delete` | Bearer token | Archive homework by id (body: id) |
 
 ## Corrections
 - Users edit title/subject/date/priority via confirm screen → `setCorrection(rawText, {...})` → `.corrections.json`
 - Same raw text in future → uses correction directly, skips AI
 - Max 500 entries, atomic write (tmp + rename), gitignored
-- Debounced async I/O in `aiCache.js`
+- Debounced async I/O in `aiCache.js` (5s debounce, concurrency-guarded)
+- `flushCorrections()` called on graceful shutdown for safe persist
 
 ## Notion caching
 | Query | TTL | Invalidation trigger |
 |-------|-----|---------------------|
-| fetchActive | 15s | create / status update / archive |
+| fetchActive | 15s | create / status update / archive / restore |
 | fetchDone | 30s | same (prefix `notion:`) |
 | fetchUpcoming | 60s | same |
 
 ## User state
 - `userState` Map in `index.js`, keyed by Telegram user ID
 - 1h TTL (`_timestamp` on every set), stale cleanup every 30 min
+- Modes: `ADD`, `CONFIRM`, `PENDING_PARSE`, `EDIT_TITLE`, `EDIT_SUBJECT`, `EDIT_DATE`, `EDIT_PRIORITY`, `EDIT_TAGS`, `ASK_AI`, `LIST_VIEW`
+- `PENDING_PARSE` — holds parsed data before user presses "ADD" (1 min TTL)
+- `LIST_VIEW` — holds paginated list items + page number (5 min TTL)
 - `originalText` stored on ADD → CONFIRM flow, used to save corrections on save
-- Priority stored in pending and passed to createHomework
+- `_lastAction` stored for /undo (status change revert, 30s window)
+- Priority stored in pending and passed to createHomework; `_manualPriority` flag prevents auto-overwrite on date edit
 
 ## Environment variables
 | Var | Required | Description |
@@ -161,8 +186,9 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 
 ## Security
 - `DASHBOARD_TOKEN` separate from `TELEGRAM_TOKEN` — never expose bot token in URLs
-- Token auto-generated on startup if not set via env var
+- Token auto-generated on startup if not set via env var (persisted to `.dashboard_token`)
 - Auth via `Authorization: Bearer <token>` header (query param fallback for backward compat)
+- Web API rate-limited (60 req/min)
 - `.env` gitignored
 
 ## Testing quirks
@@ -170,7 +196,7 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 - `.mjs` test files are standalone (`node __tests__/dateParser.test.mjs`)
 - Cache tests call `beforeEach(() => cacheInvalidate())` for isolation
 - TTL tests use real `setTimeout` (timing-sensitive)
-- 509 tests total across 4 test suites
+- 539 tests total across 5 test suites
 
 ## Thai-specific
 - `parseThaiDate()`: วันนี้, พรุ่งนี้, มะรืน, อีก X วัน/สัปดาห์/อาทิตย์, วันNAME(หน้า), dd/mm/yy(yy), วันที่ X
