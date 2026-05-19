@@ -6,6 +6,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY . .
+RUN chown -R node:node /app
 
 ENV PORT=8080
 EXPOSE 8080

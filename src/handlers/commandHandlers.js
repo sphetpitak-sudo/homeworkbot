@@ -18,7 +18,7 @@ import {
     safeItalic,
     safeCode,
 } from "../utils/telegramFormat.js";
-import { AI_CONFIDENCE_THRESHOLD } from "../utils/constants.js";
+
 
 const WEB_URL = process.env.WEB_URL || "";
 

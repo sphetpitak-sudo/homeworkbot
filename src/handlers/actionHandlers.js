@@ -1,10 +1,7 @@
 import { Markup } from "telegraf";
 import {
-    formatDueDisplay, formatCompletedDisplay, formatDateLabel,
+    formatDueDisplay, formatDateLabel,
     parseYMDToLocalDate,
-    parseThaiDate,
-    THAI_DAYS,
-    THAI_MONTHS,
 } from "../utils/dateParser.js";
 import { subjectEmoji } from "../utils/subjectDetector.js";
 import { VALID_TAGS } from "../utils/tagDetector.js";
@@ -42,25 +39,37 @@ import {
 import { logger } from "../utils/logger.js";
 import { setCorrection } from "../services/aiCache.js";
 
-const hintsShown = new Map();
+const hintsShown = new Map();  // uid -> { keys: Set, ts: number }
 const deletedItems = new Map();
+const HINT_TTL = 3_600_000; // 1 hour
 
-/* ── session-scoped hint tracking (cleared on /start) ── */
-const sessionHints = new Map();
+/* ── session-scoped hint tracking ── */
+const sessionHints = new Map(); // uid -> { keys: Set, ts: number }
+
+function pruneHints(map) {
+    const now = Date.now();
+    for (const [uid, entry] of map) {
+        if (now - entry.ts > HINT_TTL) map.delete(uid);
+    }
+}
 
 function showOncePerSession(uid, key) {
-    const hints = sessionHints.get(uid);
-    if (hints?.has(key)) return false;
-    if (!hints) sessionHints.set(uid, new Set());
-    sessionHints.get(uid).add(key);
+    pruneHints(sessionHints);
+    let entry = sessionHints.get(uid);
+    if (!entry) { entry = { keys: new Set(), ts: Date.now() }; sessionHints.set(uid, entry); }
+    entry.ts = Date.now();
+    if (entry.keys.has(key)) return false;
+    entry.keys.add(key);
     return true;
 }
 
 function showHintOnce(uid, key, message, extra = {}) {
-    const userHints = hintsShown.get(uid);
-    if (userHints?.has(key)) return null;
-    if (!userHints) hintsShown.set(uid, new Set());
-    hintsShown.get(uid).add(key);
+    pruneHints(hintsShown);
+    let entry = hintsShown.get(uid);
+    if (!entry) { entry = { keys: new Set(), ts: Date.now() }; hintsShown.set(uid, entry); }
+    entry.ts = Date.now();
+    if (entry.keys.has(key)) return null;
+    entry.keys.add(key);
     return { text: message, extra };
 }
 
@@ -676,14 +685,17 @@ export function registerActionHandlers(bot, userState) {
             await ctx.editMessageReplyMarkup(undefined).catch(() => {});
             const tip = showHintOnce(uid, "status_change",
                 `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
-            if (tip) ctx.reply(`${message}\n\n━━━━\n${tip.text}`, {
-                parse_mode: "Markdown",
-                ...dashboardMenu(),
-            }).catch(() => {});
-            else return ctx.reply(message, {
-                parse_mode: "Markdown",
-                ...dashboardMenu(),
-            });
+            if (tip) {
+                await ctx.reply(`${message}\n\n━━━━\n${tip.text}`, {
+                    parse_mode: "Markdown",
+                    ...dashboardMenu(),
+                }).catch(() => {});
+            } else {
+                await ctx.reply(message, {
+                    parse_mode: "Markdown",
+                    ...dashboardMenu(),
+                });
+            }
         } catch (err) {
             logger.error("setStatus:", err);
             const action = status === STATUS.DONE ? "done" : status === STATUS.IN_PROGRESS ? "prog" : "todo";

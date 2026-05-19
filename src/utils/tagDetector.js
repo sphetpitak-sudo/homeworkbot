@@ -88,9 +88,9 @@ export function inferTags(text) {
     return [...tags];
 }
 
-export function inferAndParseTags(text, { priority } = {}) {
+export function inferAndParseTags(text) {
     const hashtags = parseTags(text);
-    const inferred = inferTags(text, { priority });
+    const inferred = inferTags(text);
     const merged = [...new Set([...inferred, ...hashtags])];
     return merged.length ? merged : undefined;
 }

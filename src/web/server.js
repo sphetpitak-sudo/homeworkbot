@@ -157,7 +157,7 @@ export function startWebServer(port = 8080) {
             });
         } catch (err) {
             logger.error("API /api/all:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
@@ -171,7 +171,7 @@ export function startWebServer(port = 8080) {
             res.json(computeStats(activePages, donePages));
         } catch (err) {
             logger.error("API /api/stats:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
@@ -184,39 +184,42 @@ export function startWebServer(port = 8080) {
             res.json(buildHomeworkList(activePages, donePages));
         } catch (err) {
             logger.error("API /api/homework:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
     app.post("/api/homework", requireAuth, async (req, res) => {
-        const { title, subject, due, note, tags } = req.body;
+        const { title, subject, due, priority, note, tags } = req.body;
         if (!title?.trim()) return res.status(400).json({ error: "Title required" });
         try {
-            const priority = recalcPriority(due || null);
+            const effectivePriority = priority || recalcPriority(due || null);
             await createHomework({
                 title: title.trim(),
                 subject: subject || "ทั่วไป",
                 due: due || null,
-                priority,
+                priority: effectivePriority,
                 note: note?.trim() || "",
                 tags: Array.isArray(tags) ? tags : undefined,
             });
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/homework:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
     app.post("/api/status", requireAuth, async (req, res) => {
         const { id, status } = req.body;
         if (!id || !status) return res.status(400).json({ error: "id and status required" });
+        if (![STATUS.TODO, STATUS.IN_PROGRESS, STATUS.DONE].includes(status)) {
+            return res.status(400).json({ error: "Invalid status, must be Todo, In Progress, or Done" });
+        }
         try {
             await updateStatus(id, status);
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/status:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
@@ -235,7 +238,7 @@ export function startWebServer(port = 8080) {
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/homework/update:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
@@ -247,13 +250,16 @@ export function startWebServer(port = 8080) {
             res.json({ success: true });
         } catch (err) {
             logger.error("API POST /api/homework/delete:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
     app.post("/api/bulk-status", requireAuth, async (req, res) => {
         const { ids, status } = req.body;
         if (!ids?.length || !status) return res.status(400).json({ error: "ids and status required" });
+        if (![STATUS.TODO, STATUS.IN_PROGRESS, STATUS.DONE].includes(status)) {
+            return res.status(400).json({ error: "Invalid status" });
+        }
         try {
             const results = await Promise.allSettled(ids.map((id) => updateStatus(id, status)));
             const succeeded = results.filter(r => r.status === "fulfilled").length;
@@ -261,7 +267,7 @@ export function startWebServer(port = 8080) {
             res.json({ success: failed === 0, updated: succeeded, failed });
         } catch (err) {
             logger.error("API POST /api/bulk-status:", err);
-            res.status(500).json({ error: err.message });
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 

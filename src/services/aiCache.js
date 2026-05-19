@@ -23,8 +23,17 @@ function doWrite() {
     const data = JSON.stringify(corrections, null, 2);
     fs.promises.writeFile(tmp, data)
         .then(() => fs.promises.rename(tmp, CORRECTIONS_FILE))
-        .then(() => { writeInProgress = false; if (saveResolve) { saveResolve(); saveResolve = null; } if (pendingWrite) doWrite(); })
-        .catch((e) => { writeInProgress = false; logger.warn("Failed to save corrections:", e.message); if (saveResolve) { saveResolve(); saveResolve = null; } });
+        .then(() => {
+            writeInProgress = false;
+            if (pendingWrite) { doWrite(); return; }
+            if (saveResolve) { saveResolve(); saveResolve = null; }
+        })
+        .catch((e) => {
+            writeInProgress = false;
+            logger.warn("Failed to save corrections:", e.message);
+            if (pendingWrite) { doWrite(); return; }
+            if (saveResolve) { saveResolve(); saveResolve = null; }
+        });
 }
 
 function loadCorrections() {

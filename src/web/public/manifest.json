@@ -2,7 +2,7 @@
   "name": "Homework Bot",
   "short_name": "Homework",
   "description": "Manage your homework with AI",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f2ede7",
   "theme_color": "#e8854a",

@@ -65,7 +65,7 @@ async function sendReminders() {
         nextWeek.setDate(today.getDate() + 7);
 
         const past = new Date(today);
-        past.setDate(today.getDate() - 30);
+        past.setDate(today.getDate() - 3);
 
         const pages = await fetchUpcoming(
             formatDate(past),
@@ -119,7 +119,9 @@ async function autoUpdatePriority() {
         if (!needsUpdate.length) return;
         const CONCURRENCY = 5;
         for (let i = 0; i < needsUpdate.length; i += CONCURRENCY) {
-            await Promise.all(needsUpdate.slice(i, i + CONCURRENCY).map(p => updatePriority(p.id, p.target)));
+            const results = await Promise.allSettled(needsUpdate.slice(i, i + CONCURRENCY).map(p => updatePriority(p.id, p.target)));
+            const failed = results.filter(r => r.status === "rejected");
+            if (failed.length) logger.warn(`Priority batch ${i / CONCURRENCY}: ${failed.length} failed`);
         }
         logger.info(`Auto-priority updated ${needsUpdate.length} items`);
     } catch (err) {
@@ -152,7 +154,9 @@ async function autoArchive() {
         if (!toArchive.length) return;
         const CONCURRENCY = 5;
         for (let i = 0; i < toArchive.length; i += CONCURRENCY) {
-            await Promise.all(toArchive.slice(i, i + CONCURRENCY).map(id => archivePage(id)));
+            const results = await Promise.allSettled(toArchive.slice(i, i + CONCURRENCY).map(id => archivePage(id)));
+            const failed = results.filter(r => r.status === "rejected");
+            if (failed.length) logger.warn(`Archive batch ${i / CONCURRENCY}: ${failed.length} failed`);
         }
         logger.info(`Auto-archived ${toArchive.length} items`);
     } catch (err) {
