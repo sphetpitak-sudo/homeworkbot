@@ -1,4 +1,4 @@
-const CACHE_NAME = "homework-bot-v1";
+const CACHE_NAME = "homework-bot-v2";
 const STATIC_ASSETS = ["/", "/index.html", "/manifest.json"];
 
 self.addEventListener("install", (e) => {
@@ -17,6 +17,10 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  if (e.request.mode === "navigate") {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const fetched = fetch(e.request).then((response) => {
