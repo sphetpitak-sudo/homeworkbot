@@ -19,6 +19,12 @@ AI-powered Telegram bot + web dashboard for managing homework. Built with Node.j
 - **Quick Add** — Modal form with auto-priority preview
 - **Dark Mode** — Auto-detect + toggle, persisted in localStorage
 - **PWA** — Installable on mobile via manifest.json + service worker
+- **Health Check** — Express server on PORT 8080 for container hosting
+- **409 Retry** — Bot auto-retries launch on polling conflict
+- **Error Retry Buttons** — Consistent inline retry + home buttons on errors
+- **Hint System** — One-time contextual tips (post-save, status change, priority legend)
+- **AI Confident Skip** — Skips intermediate preview when AI matches regex
+- **Edit Saved Items** — Web API supports partial field updates + delete
 
 ## Quick Start
 
@@ -45,28 +51,28 @@ node index.js
 ## Architecture
 
 ```
-index.js                     ← entry (bot.launch, 4 crons, state/cache cleanup)
+index.js                     ← entry (bot.launch, 4 crons, state/cache cleanup, graceful shutdown)
 src/
   handlers/
-    commandHandlers.js       ← /start, /menu, /help, /ask, /undo, text router
-    actionHandlers.js        ← inline keyboard callbacks, paginated lists, dashboard
+    commandHandlers.js       ← /start, /menu, /help, /ask, /undo, text router, preview, confirm screen
+    actionHandlers.js        ← inline keyboard callbacks, paginated lists, dashboard, edit/delete/status
   services/
-    aiService.js             ← Typhoon via OpenAI SDK, 2-model chain + fallback
-    aiCache.js               ← correction persistence + in-memory AI cache
-    qaService.js             ← AI Q&A with homework context
-    notionService.js         ← Notion SDK with TTL-cached queries
-    cache.js                 ← Generic in-memory TTL Map
+    aiService.js             ← Typhoon via OpenAI SDK, 2-model chain + fallback, corrections cache
+    aiCache.js               ← .corrections.json persistence + in-memory AI cache (debounced atomic write)
+    qaService.js             ← AI Q&A with homework context (2-model fallback)
+    notionService.js         ← Notion SDK with TTL-cached queries, auto-invalidate on write
+    cache.js                 ← Generic in-memory TTL Map, pattern-based bulk invalidation
   web/
-    server.js                ← Express server (REST API + static files)
-    public/                  ← Frontend (Chart.js, calendar, PWA)
+    server.js                ← Express server (REST API + static files, rate-limited, Bearer auth)
+    public/                  ← Frontend (Chart.js, calendar, PWA, dark mode, bulk actions)
   utils/
-    dateParser.js            ← Thai date regex parsing
-    subjectDetector.js       ← 50+ keyword → 10 subjects
-    tagDetector.js           ← Tag inference + hashtag parsing
-    telegramFormat.js        ← Markdown escape helpers
-    constants.js             ← STATUS, PRIORITY, dashboard limits
-    priority.js              ← recalcPriority(due) → priority
-    logger.js                ← Console wrapper with Thai timestamps
+    dateParser.js            ← Thai date regex parsing (วันนี้/พรุ่งนี้/มะรืน/etc)
+    subjectDetector.js       ← 50+ keyword → 10 subjects (ไทย→สุขศึกษา)
+    tagDetector.js           ← Tag inference (สอบ/โครงการ/กลุ่ม/ด่วน/อ่าน/ใบงาน) + hashtag parsing
+    telegramFormat.js        ← Markdown escape helpers (_ * ` [)
+    constants.js             ← STATUS, PRIORITY (🔴สูง/🟡กลาง/🟢ต่ำ), dashboard limits
+    priority.js              ← recalcPriority(due) → priority (≤3d HIGH, ≤14d MEDIUM, >14d LOW)
+    logger.js                ← Console wrapper with Thai timestamps [HH:MM:SS]
     validateEnv.js           ← Environment validation
 ```
 
@@ -80,7 +86,8 @@ src/
 | POST | `/api/homework` | Bearer | Create homework |
 | POST | `/api/status` | Bearer | Update single status |
 | POST | `/api/bulk-status` | Bearer | Batch status update |
-| POST | `/api/homework/update` | Bearer | Partial update |
+| GET | `/api/health` | None | Health check |
+| POST | `/api/homework/update` | Bearer | Partial update (title, subject, due, priority, note, tags) |
 | POST | `/api/homework/delete` | Bearer | Archive homework |
 
 ## Tech Stack
