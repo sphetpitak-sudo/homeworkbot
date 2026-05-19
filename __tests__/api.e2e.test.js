@@ -118,9 +118,9 @@ describe('Web Dashboard API E2E', () => {
       expect(res.status).toBe(200);
     });
 
-    test('query param token fallback', async () => {
+    test('rejects query param token (no CSRF)', async () => {
       const res = await fetch(`${baseUrl}/api/all?token=${TOKEN}`);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
     });
   });
 

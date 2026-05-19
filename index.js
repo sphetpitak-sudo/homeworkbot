@@ -243,7 +243,7 @@ async function launchBot(retries = 5, delay = 3000) {
             logger.info("🤖 Homework Bot running...");
             return;
         } catch (err) {
-            const is409 = err?.response?.error_code === 409;
+            const is409 = err?.response?.error_code === 409 || err?.response?.status === 409 || String(err?.message ?? "").includes("409");
             if (is409 && i < retries - 1) {
                 logger.warn(`409 Conflict (attempt ${i + 1}/${retries}), retrying in ${delay}ms...`);
                 await new Promise((r) => setTimeout(r, delay));

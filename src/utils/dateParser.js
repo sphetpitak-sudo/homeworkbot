@@ -50,13 +50,17 @@ export function parseThaiDate(text) {
     let m;
     m = t.match(/อีก\s*(\d+)\s*วัน/);
     if (m) {
-        now.setDate(now.getDate() + +m[1]);
+        const days = +m[1];
+        if (days < 1 || days > 36500) return null;
+        now.setDate(now.getDate() + days);
         return formatDate(now);
     }
 
     m = t.match(/อีก\s*(\d+)\s*(สัปดาห์|อาทิตย์)/);
     if (m) {
-        now.setDate(now.getDate() + +m[1] * 7);
+        const weeks = +m[1];
+        if (weeks < 1 || weeks > 5200) return null;
+        now.setDate(now.getDate() + weeks * 7);
         return formatDate(now);
     }
 
@@ -129,10 +133,6 @@ export function formatDateLabel(dateStr, type = "due") {
     if (diff === 0) return `📅 ${label} (🔥 วันนี้!)`;
     if (diff === 1) return `📅 ${label} (⏰ พรุ่งนี้)`;
     return `📅 ${label} (อีก ${diff} วัน)`;
-}
-
-export function formatCompletedDisplay(completed) {
-    return formatDateLabel(completed, "completed");
 }
 
 export function formatDueDisplay(due) {

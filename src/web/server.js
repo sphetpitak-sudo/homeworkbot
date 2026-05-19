@@ -140,7 +140,7 @@ export function startWebServer(port = 8080) {
     app.get("/health", (req, res) => res.json({ status: "ok" }));
 
     function requireAuth(req, res, next) {
-        const t = req.headers["authorization"]?.replace("Bearer ", "") || req.query.token;
+        const t = req.headers["authorization"]?.replace("Bearer ", "");
         if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
         }

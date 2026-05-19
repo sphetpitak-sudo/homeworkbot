@@ -60,8 +60,8 @@ async function completeWithRetry(systemMsg, userMsg) {
             });
             return { resp, model };
         } catch (err) {
-            const isQuota = err.status === 429 || (err.message && /^429\b/.test(String(err.message)));
-            if (isQuota && attempt < MODELS.length - 1) {
+            const isRetryable = err.status === 429 || err.status >= 500 || (err.message && /^429\b/.test(String(err.message)));
+            if (isRetryable && attempt < MODELS.length - 1) {
                 logger.warn(`${model} quota hit, switching to ${MODELS[attempt + 1]}...`);
                 continue;
             }

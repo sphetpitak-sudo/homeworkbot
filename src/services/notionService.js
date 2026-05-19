@@ -104,7 +104,6 @@ export async function createHomework({
     due,
     rawText,
     note: noteProp,
-    eventId,
     priority,
     tags,
 }) {
@@ -116,8 +115,6 @@ export async function createHomework({
     };
 
     if (due) props.Due = { date: { start: due } };
-    if (eventId)
-        props.EventId = { rich_text: [{ text: { content: eventId } }] };
     if (priority)
         props.Priority = { select: { name: priority } };
     if (tags?.length)
@@ -172,13 +169,34 @@ export async function updatePriority(pageId, priority) {
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
 
+const pageCache = new Map();
+const PAGE_CACHE_TTL = 5000;
+
+function getCachedPage(pageId) {
+    const entry = pageCache.get(pageId);
+    if (entry && Date.now() < entry.expires) return entry.page;
+    return null;
+}
+
+function setCachedPage(pageId, page) {
+    pageCache.set(pageId, { page, expires: Date.now() + PAGE_CACHE_TTL });
+}
+
 export async function getPageStatus(pageId) {
-    const page = await notion.pages.retrieve({ page_id: pageId });
+    let page = getCachedPage(pageId);
+    if (!page) {
+        page = await notion.pages.retrieve({ page_id: pageId });
+        setCachedPage(pageId, page);
+    }
     return page.properties.Status?.select?.name || STATUS.TODO;
 }
 
 export async function getPageTitle(pageId) {
-    const page = await notion.pages.retrieve({ page_id: pageId });
+    let page = getCachedPage(pageId);
+    if (!page) {
+        page = await notion.pages.retrieve({ page_id: pageId });
+        setCachedPage(pageId, page);
+    }
     return page.properties.Name?.title?.[0]?.plain_text || "งานนี้";
 }
 

@@ -698,6 +698,7 @@ export function registerActionHandlers(bot, userState) {
             }
         } catch (err) {
             logger.error("setStatus:", err);
+            await ctx.answerCbQuery("❌ " + (err?.message || "Error")).catch(() => {});
             const action = status === STATUS.DONE ? "done" : status === STATUS.IN_PROGRESS ? "prog" : "todo";
             const errMsg = errorWithRetry(`อัปเดตสถานะ "${action}" ไม่ได้`, `RETRY_STATUS_${pageId}_${action}`);
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
@@ -783,13 +784,11 @@ export function registerActionHandlers(bot, userState) {
                 },
             );
 
-            setTimeout(async () => {
-                try {
-                    await ctx.telegram.editMessageReplyMarkup(
-                        ctx.chat.id, recoveryMsg.message_id, undefined, { inline_keyboard: [] },
-                    );
-                } catch {}
+            setTimeout(() => {
                 deletedItems.delete(uid);
+                ctx.telegram.editMessageReplyMarkup(
+                    ctx.chat.id, recoveryMsg.message_id, undefined, { inline_keyboard: [] },
+                ).catch(() => {});
             }, 10000);
         } catch (err) {
             logger.error("DELETE confirm:", err);
