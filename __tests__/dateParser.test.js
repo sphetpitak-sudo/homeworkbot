@@ -182,9 +182,9 @@ describe('parseThaiDate', () => {
 
 describe('formatDueDisplay', () => {
     describe('returns fallback for null', () => {
-        test('null input', () => expect(formatDueDisplay(null)).toBe('ไม่กำหนดวัน'));
-        test('undefined input', () => expect(formatDueDisplay(undefined)).toBe('ไม่กำหนดวัน'));
-        test('empty string input', () => expect(formatDueDisplay('')).toBe('ไม่กำหนดวัน'));
+        test('null input', () => expect(formatDueDisplay(null)).toBe('ไม่มีกำหนดส่ง 📅'));
+        test('undefined input', () => expect(formatDueDisplay(undefined)).toBe('ไม่มีกำหนดส่ง 📅'));
+        test('empty string input', () => expect(formatDueDisplay('')).toBe('ไม่มีกำหนดส่ง 📅'));
     });
 
     describe('overdue dates', () => {

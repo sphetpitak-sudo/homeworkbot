@@ -111,7 +111,7 @@ export function parseThaiDate(text) {
 }
 
 export function formatDateLabel(dateStr, type = "due") {
-    if (!dateStr) return type === "completed" ? "—" : "ไม่กำหนดวัน";
+    if (!dateStr) return type === "completed" ? "—" : "ไม่มีกำหนดส่ง 📅";
     const dt = parseYMDToLocalDate(dateStr);
     if (isNaN(dt.getTime())) return dateStr;
     const today = new Date();

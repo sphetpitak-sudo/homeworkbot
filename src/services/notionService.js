@@ -172,6 +172,11 @@ export async function updatePriority(pageId, priority) {
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
 
+export async function getPageStatus(pageId) {
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    return page.properties.Status?.select?.name || STATUS.TODO;
+}
+
 export async function getPageTitle(pageId) {
     const page = await notion.pages.retrieve({ page_id: pageId });
     return page.properties.Name?.title?.[0]?.plain_text || "งานนี้";
@@ -181,4 +186,10 @@ export async function archivePage(pageId) {
     await notion.pages.update({ page_id: pageId, archived: true });
     cacheInvalidate("notion:");
     logger.info(`Archived: ${pageId}`);
+}
+
+export async function restorePage(pageId) {
+    await notion.pages.update({ page_id: pageId, archived: false });
+    cacheInvalidate("notion:");
+    logger.info(`Restored: ${pageId}`);
 }

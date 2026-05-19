@@ -33,6 +33,7 @@ initAI();
 bot.telegram.setMyCommands([
     { command: "menu", description: "📋 เปิดเมนูหลัก" },
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
+    { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
 ]).catch(() => {});
 

@@ -26,5 +26,8 @@ export const SUBJECT_BAR_MAX = 6;
 export const SUBJECT_DISPLAY_MAX = 6;
 export const PROGRESS_BAR_SLOTS = 10;
 
+// ── AI confidence threshold for skipping preview ──
+export const AI_CONFIDENCE_THRESHOLD = 0.9;
+
 // ── Notion pagination ──
 export const NOTION_PAGE_SIZE = 100;

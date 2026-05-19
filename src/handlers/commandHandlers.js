@@ -1,5 +1,6 @@
 import { Markup } from "telegraf";
 import { parseThaiDate, formatDueDisplay } from "../utils/dateParser.js";
+import { updateStatus } from "../services/notionService.js";
 import {
     detectSubject,
     cleanTitle,
@@ -17,6 +18,7 @@ import {
     safeItalic,
     safeCode,
 } from "../utils/telegramFormat.js";
+import { AI_CONFIDENCE_THRESHOLD } from "../utils/constants.js";
 
 const WEB_URL = process.env.WEB_URL || "";
 
@@ -67,6 +69,45 @@ export const moreOptionsMenu = Markup.inlineKeyboard([
     ],
 ]);
 
+export function errorWithRetry(message, retryAction) {
+    return {
+        text: `❌ *${escapeMarkdown(message)}*\nกรุณาลองใหม่`,
+        parse_mode: "Markdown",
+        reply_markup: {
+            inline_keyboard: [[
+                { text: "🔁 ลองอีกครั้ง", callback_data: retryAction },
+                { text: "🏠 เมนูหลัก", callback_data: "HOME" },
+            ]],
+        },
+    };
+}
+
+function isUnambiguous(parsed, rawText) {
+    if (parsed.parseSource !== "ai") return false;
+    const regexSubject = detectSubject(rawText);
+    if (!regexSubject || regexSubject === "ทั่วไป") return false;
+    return parsed.subject === regexSubject;
+}
+
+export function buildHomeworkPreview(parsed) {
+    const subject = parsed?.subject || "ทั่วไป";
+    const title = parsed?.title || "ไม่มีชื่อ";
+    const due = parsed?.due ? formatDueDisplay(parsed.due) : "ไม่มีกำหนดส่ง 📅";
+    const priority = parsed?.priority || "🟡 กลาง";
+    const tags = parsed?.tags?.length ? parsed.tags.join("  ") : null;
+    const badge = parsed.parseSource === "ai"
+        ? `\n🤖 ${safeItalic("AI ช่วยตรวจจับ — ถ้าไม่ตรงแก้ไขได้ด้านล่าง")}`
+        : parsed.parseSource === "regex"
+        ? `\n📝 ${safeItalic("ตรวจจับอัตโนมัติ — กรุณาตรวจสอบความถูกต้อง")}`
+        : "";
+    let msg =
+        `${subjectEmoji(subject)} ${safeBold(title)}\n` +
+        `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  📅 ${escapeMarkdown(due)}`;
+    if (tags) msg += `\n🏷️ ${tags}`;
+    if (badge) msg += badge;
+    return msg;
+}
+
 function buildWelcomeMessage(name) {
     return (
         `👋 ${safeBold("สวัสดี " + name + "!")}\n` +
@@ -89,25 +130,13 @@ function buildMenuMessage() {
     );
 }
 
-export function showConfirm(ctx, pending, aiUsed = false, model = "") {
-    const title = pending?.title || "ไม่มีชื่อ";
-    const subject = pending?.subject || "ทั่วไป";
-    const due = pending?.due ? formatDueDisplay(pending.due) : "ไม่กำหนดวัน";
-    const priority = pending?.priority || "🟡 กลาง";
-    const tags = pending?.tags?.length ? pending.tags.map(t => `#${t}`).join(" ") : null;
-    const aiBadge = aiUsed
-        ? `\n🤖 ${safeItalic("วิเคราะห์โดย AI")}${model ? ` (${safeCode(model)})` : ""}`
-        : "";
+export function showConfirm(ctx, pending, parseSource = "") {
+    const srcPending = { ...pending, parseSource: parseSource || pending?.parseSource };
     return ctx.reply(
         `📝 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `${subjectEmoji(subject)}  ${safeBold(title)}\n\n` +
-            `📚 วิชา      ${escapeMarkdown(subject)}\n` +
-            `🎯 สำคัญ    ${priority}\n` +
-            `📅 กำหนดส่ง  ${escapeMarkdown(due)}\n` +
-            (tags ? `🏷️ แท็ก     ${tags}\n` : "") +
-            (aiBadge ? `${aiBadge}\n` : "") +
-            `\n━━━━━━━━━━━━━━━━━━━━\n` +
+            `${buildHomeworkPreview(srcPending)}\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
             `✅ กดบันทึก หรือ ✏️ แก้ไขส่วนที่ต้องการ`,
         {
             parse_mode: "Markdown",
@@ -147,6 +176,7 @@ async function parseText(text) {
             usedAI: true,
             model: aiResult.model || "",
             tags: aiResult.tags,
+            parseSource: "ai",
         };
     }
     const due = parseThaiDate(text);
@@ -160,6 +190,7 @@ async function parseText(text) {
         usedAI: false,
         model: "",
         tags: inferAndParseTags(text, { priority }),
+        parseSource: "regex",
     };
 }
 
@@ -214,6 +245,33 @@ export function registerCommandHandlers(bot, userState) {
             },
         ),
     );
+
+    bot.command("undo", async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+        if (!state?._lastAction || Date.now() - state._lastAction._timestamp > 30000) {
+            return ctx.reply("⏱️ ไม่มีการกระทำล่าสุดที่ยกเลิกได้", { parse_mode: "Markdown" });
+        }
+        const { type, pageId, from, to } = state._lastAction;
+        if (type === "STATUS_CHANGE") {
+            try {
+                await updateStatus(pageId, from);
+                delete state._lastAction;
+                userState.set(uid, state);
+                return ctx.reply(`↩️ ${safeBold("ยกเลิกแล้ว")} — คืนค่าเป็น "${from}" เรียบร้อย`, {
+                    parse_mode: "Markdown",
+                    ...mainMenu,
+                });
+            } catch (err) {
+                logger.error("UNDO:", err);
+                return ctx.reply(`❌ ${safeBold("ยกเลิกไม่ได้")} — กรุณาลองอีกครั้ง`, {
+                    parse_mode: "Markdown",
+                    ...mainMenu,
+                });
+            }
+        }
+        return ctx.reply("⏱️ ไม่สามารถยกเลิกการกระทำนี้ได้", { parse_mode: "Markdown" });
+    });
 
     bot.action("HOME", async (ctx) => {
         userState.delete(ctx.from.id);
@@ -316,7 +374,7 @@ export function registerCommandHandlers(bot, userState) {
             const parsed = await parseText(text);
             const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
-            return showConfirm(ctx, pending, parsed.usedAI, parsed.model);
+            return showConfirm(ctx, pending, parsed.parseSource);
         }
 
         if (state?.mode === "ASK_AI") {
@@ -333,12 +391,21 @@ export function registerCommandHandlers(bot, userState) {
 
         // Not in any mode — smart preview with AI or regex
         const parsed = await parseText(text);
+        const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags, _parseSource: parsed.parseSource };
+
+        // Fix 1: skip preview if AI is confident + regex agrees
+        if (isUnambiguous(parsed, text)) {
+            userState.set(uid, { mode: "CONFIRM", pending, originalText: text, _timestamp: Date.now() });
+            await ctx.reply(`🤖 ${safeItalic("AI มั่นใจ — ตรวจสอบก่อนบันทึก")}`, { parse_mode: "Markdown" });
+            return showConfirm(ctx, pending, "ai");
+        }
+
+        userState.set(uid, { mode: "PENDING_PARSE", pending, originalText: text, _timestamp: Date.now() });
+
         const previewText =
             `⚡ ${safeBold("เจองานแล้ว!")}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
-            `${subjectEmoji(parsed.subject)} ${safeBold(parsed.title)}\n` +
-            `📚 ${escapeMarkdown(parsed.subject)} • ${parsed.priority || "🟡 กลาง"}\n` +
-            `📅 ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +
+            `${buildHomeworkPreview(parsed)}\n` +
             `━━━━━━━━━━━━━━━━━━\n` +
             `กดปุ่มด้านล่างเพื่อเพิ่มเข้าสู่ระบบ`;
 
