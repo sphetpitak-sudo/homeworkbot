@@ -29,6 +29,18 @@ const userState = new Map();
 
 initAI();
 
+/* ── startup: verify reminder can reach chat ── */
+const remindChatId = process.env.REMINDER_CHAT_ID;
+if (remindChatId) {
+    bot.telegram.sendMessage(remindChatId, "🤖 บอทเริ่มทำงานแล้ว — จะแจ้งเตือนเวลา 08:00 น. ทุกวัน", { parse_mode: "Markdown" })
+        .then(() => logger.info(`Reminder chat verified (${remindChatId})`))
+        .catch((err) => {
+            const desc = err?.response?.description || err?.message || err;
+            logger.warn(`Reminder chat unreachable (${remindChatId}): ${desc}`);
+            logger.warn(`ผู้ใช้ ${remindChatId} ต้องส่ง /start มาที่บอทก่อน ไม่งั้นบอทส่งข้อความหาไม่ได้`);
+        });
+}
+
 /* ── bot commands (Telegram menu) ── */
 bot.telegram.setMyCommands([
     { command: "menu", description: "📋 เปิดเมนูหลัก" },
@@ -71,7 +83,10 @@ async function sendReminders() {
             formatDate(past),
             formatDate(nextWeek),
         );
-        if (!pages.length) return;
+        if (!pages.length) {
+            logger.info("Reminder: no upcoming homework found");
+            return;
+        }
 
         let msg = "⏰ *แจ้งเตือนการบ้าน*\n━━━━━━━━━━━━━━━━━━\n";
 
@@ -97,7 +112,8 @@ async function sendReminders() {
         await bot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" });
         logger.info(`Reminder sent to ${chatId} (${pages.length} items)`);
     } catch (err) {
-        logger.error("Reminder:", err);
+        const desc = err?.response?.description || err?.message || err;
+        logger.error(`Reminder failed to ${chatId}: ${desc}`);
     } finally {
         cronRunning.reminder = false;
     }
