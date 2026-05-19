@@ -29,6 +29,13 @@ const userState = new Map();
 
 initAI();
 
+/* ── bot commands (Telegram menu) ── */
+bot.telegram.setMyCommands([
+    { command: "menu", description: "📋 เปิดเมนูหลัก" },
+    { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
+    { command: "help", description: "🆘 วิธีใช้งาน" },
+]).catch(() => {});
+
 /* ── register handlers ── */
 registerCommandHandlers(bot, userState);
 registerActionHandlers(bot, userState);
@@ -65,7 +72,7 @@ async function sendReminders() {
         );
         if (!pages.length) return;
 
-        let msg = "⏰ *แจ้งเตือนการบ้านใกล้ครบกำหนด*\n━━━━━━━━━━━━━━━━━━\n";
+        let msg = "⏰ *แจ้งเตือนการบ้าน*\n━━━━━━━━━━━━━━━━━━\n";
 
         for (const p of pages) {
             const title =

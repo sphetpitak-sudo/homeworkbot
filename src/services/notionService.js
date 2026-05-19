@@ -172,6 +172,11 @@ export async function updatePriority(pageId, priority) {
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
 
+export async function getPageTitle(pageId) {
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    return page.properties.Name?.title?.[0]?.plain_text || "งานนี้";
+}
+
 export async function archivePage(pageId) {
     await notion.pages.update({ page_id: pageId, archived: true });
     cacheInvalidate("notion:");

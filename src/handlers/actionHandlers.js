@@ -1,6 +1,6 @@
 import { Markup } from "telegraf";
 import {
-    formatDueDisplay, formatCompletedDisplay,
+    formatDueDisplay, formatCompletedDisplay, formatDateLabel,
     parseYMDToLocalDate,
     parseThaiDate,
     THAI_DAYS,
@@ -16,13 +16,15 @@ import {
     updatePriority,
     archivePage,
     getPageProps,
+    getPageTitle,
 } from "../services/notionService.js";
 
-import { mainMenu, cancelMenu, showConfirm } from "./commandHandlers.js";
+import { mainMenu, cancelMenu, showConfirm, compactConfirmMenu, moreOptionsMenu } from "./commandHandlers.js";
 import {
     escapeMarkdown,
     safeBold,
     safeItalic,
+    safeCode,
 } from "../utils/telegramFormat.js";
 import {
     STATUS,
@@ -110,28 +112,18 @@ function actionButtons(pageId, mode = "active") {
     ]);
 }
 
-/* ── card builder ── */
+/* ── card builder (compact, no box art) ── */
 function buildHomeworkCard(page, mode = "active") {
     const { title, status, due, subject, priority, tags, completed } = getPageProps(page);
-    const safeSubject = escapeMarkdown(subject);
+    const dateLabel = status === STATUS.DONE && completed
+        ? formatDateLabel(completed, "completed")
+        : formatDateLabel(due, "due");
     const tagsStr = tags?.length ? tags.map(t => `#${t}`).join(" ") : null;
 
-    return {
-        text:
-            `${safeItalic("┌")}${safeItalic("─".repeat(16))}${safeItalic("┐")}\n` +
-            `${statusEmoji(status)} ${safeBold(title)}\n` +
-            `${safeItalic("├")}${safeItalic("─".repeat(16))}${safeItalic("┤")}\n` +
-            `${subjectEmoji(subject)} ${safeSubject}\n` +
-            `${priority}\n` +
-            `${tagsStr ? tagsStr + `\n` : ""}` +
-            `📅 ${formatDueDisplay(due)}` +
-            (status === STATUS.DONE ? `\n✅ ${formatCompletedDisplay(completed)}` : "") +
-            `\n${safeItalic("└")}${safeItalic("─".repeat(16))}${safeItalic("┘")}`,
-        extra: {
-            parse_mode: "Markdown",
-            ...actionButtons(page.id, mode),
-        },
-    };
+    let text = `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${dateLabel}`;
+    if (tagsStr) text += `\n${tagsStr}`;
+
+    return { text, extra: { parse_mode: "Markdown", ...actionButtons(page.id, mode) } };
 }
 
 async function sendPageCard(ctx, page, mode = "active") {
@@ -139,7 +131,7 @@ async function sendPageCard(ctx, page, mode = "active") {
     await ctx.reply(card.text, card.extra);
 }
 
-/* ── dashboard builder ── */
+/* ── compact dashboard builder ── */
 function buildDashboard(activePages, donePages) {
     let todo = 0, prog = 0;
     const bySubject = {};
@@ -169,39 +161,32 @@ function buildDashboard(activePages, donePages) {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const bar = progressBar(pct);
 
-    let msg = `${safeItalic("━".repeat(20))}\n`;
-    msg += `📊 ${safeBold("ภาพรวมการบ้าน")}\n`;
-    msg += `${safeItalic("━".repeat(20))}\n`;
-    msg += `📌 ยังไม่ทำ    ${safeBold(String(todo))}\n`;
-    msg += `🔄 กำลังทำ     ${safeBold(String(prog))}\n`;
-    msg += `✅ เสร็จ       ${safeBold(String(done))}\n`;
-    if (overduePages.length) msg += `🚨 เลยกำหนด   ${safeBold(String(overduePages.length))}\n`;
-    msg += `${safeItalic("━".repeat(20))}\n`;
-    msg += `${safeBold("ความคืบหน้า")} [${bar}] ${pct}%\n`;
-    msg += `${safeItalic(`(ทั้งหมด ${total} รายการ)`)}\n`;
+    let msg = `📊 ${safeBold("ภาพรวมการบ้าน")}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📌 ${todo}  🔄 ${prog}  ✅ ${done}`;
+    if (overduePages.length) msg += `  🚨 ${overduePages.length}`;
+    msg += `\n${bar} ${pct}% (${total} รายการ)\n`;
 
-    msg += `\n${sectionHeader("⚡", "ใกล้ครบ", "≤ " + URGENT_DAYS + " วัน")}\n`;
+    msg += `\n⚡ ${safeBold("ใกล้ครบ")} (≤ ${URGENT_DAYS} วัน)\n`;
     if (!urgent.length) {
         msg += `✨ ไม่มีการบ้านเร่งด่วน\n`;
     } else {
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
             const { title, due, status, subject, priority } = getPageProps(p);
-            msg += `${statusEmoji(status)} ${safeBold(title)} `;
-            msg += `${priority} ${safeItalic(subject)} — ${formatDueDisplay(due)}\n`;
+            msg += `${statusEmoji(status)} ${safeBold(title)} ${priority} ${subjectEmoji(subject)} — ${formatDueDisplay(due)}\n`;
         }
         if (urgent.length > URGENT_DISPLAY_MAX) {
             msg += `… และอีก ${urgent.length - URGENT_DISPLAY_MAX} รายการ\n`;
         }
     }
 
-    msg += `\n${sectionHeader("📖", "วิชาที่ยังค้าง")}\n`;
+    msg += `\n📖 ${safeBold("วิชาที่ยังค้าง")}\n`;
     const sorted = Object.entries(bySubject).sort((a, b) => b[1] - a[1]);
     if (!sorted.length) {
         msg += `🎉 ไม่มีการบ้านค้าง\n`;
     } else {
         for (const [subject, count] of sorted.slice(0, SUBJECT_DISPLAY_MAX)) {
-            msg += `${subjectEmoji(subject)} ${safeBold(subject)}: `;
-            msg += `${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
+            msg += `${subjectEmoji(subject)} ${safeBold(subject)} ${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
         }
     }
 
@@ -216,13 +201,13 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `✏️ ${safeBold("เพิ่มการบ้านใหม่")}\n` +
-                `${safeItalic("━".repeat(16))}\n` +
-                `${safeItalic("ส่งข้อความเดียว เช่น")}\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `ส่งข้อความเดียว เช่น\n` +
                 `${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n` +
                 `${safeCode("รายงานอังกฤษ วันศุกร์")}\n` +
                 `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}\n\n` +
                 `🤖 ระบบเดาวิชา + วันที่ + ความสำคัญให้อัตโนมัติ\n` +
-                `${safeItalic("━".repeat(16))}`,
+                `━━━━━━━━━━━━━━━━━━`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -233,12 +218,12 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery("ยกเลิกแล้ว ✅").catch(() => {});
         try {
             await ctx.editMessageText(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n${safeItalic("━".repeat(14))}`,
+                `❌ ${safeBold("ยกเลิกแล้ว")}\n━━━━━━━━━━━━━━━━`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         } catch {
             await ctx.reply(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n${safeItalic("━".repeat(14))}`,
+                `❌ ${safeBold("ยกเลิกแล้ว")}\n━━━━━━━━━━━━━━━━`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         }
@@ -280,20 +265,19 @@ export function registerActionHandlers(bot, userState) {
             const priText = priority || "🟡 กลาง";
             await ctx.editMessageText(
                 `🎉 ${safeBold("บันทึกสำเร็จ!")}\n` +
-                    `${safeItalic("━".repeat(16))}\n` +
+                    `━━━━━━━━━━━━━━━━━━\n` +
                     `${subjectEmoji(subject)} ${safeBold(title)}\n` +
-                    `📚 ${safeSubject}\n` +
-                    `${priText}\n` +
+                    `📚 ${safeSubject} • ${priText}\n` +
                     `📅 ${dueText}\n` +
-                    `${safeItalic("━".repeat(16))}\n` +
-                    `${safeItalic("เลือกเมนูด้านล่างเพื่อไปต่อ")}`,
+                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `เลือกเมนูด้านล่างเพื่อไปต่อ`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
             ).catch(() => {});
         } catch (err) {
             logger.error("CONFIRM_SAVE:", err);
             await ctx.editMessageText(
                 `❌ ${safeBold("บันทึกไม่สำเร็จ")}\n` +
-                    `${safeItalic("━".repeat(14))}\n` +
+                    `━━━━━━━━━━━━━━━━\n` +
                     `เกิดข้อผิดพลาด กรุณาลองใหม่`,
                 {
                     parse_mode: "Markdown",
@@ -321,7 +305,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `✏️ ${safeBold("แก้ชื่อการบ้าน")}\n` +
-                `${safeItalic("━".repeat(14))}\n` +
+                `━━━━━━━━━━━━━━━━\n` +
                 `ส่งชื่อใหม่มาได้เลย`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
@@ -340,9 +324,9 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `📚 ${safeBold("แก้ไขวิชา")}\n` +
-                `${safeItalic("━".repeat(14))}\n` +
+                `━━━━━━━━━━━━━━━━\n` +
                 `พิมพ์ชื่อวิชาที่ถูกต้อง\n` +
-                `${safeItalic("เช่น")} คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม`,
+                `เช่น คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -360,9 +344,9 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `📅 ${safeBold("แก้วันกำหนดส่ง")}\n` +
-                `${safeItalic("━".repeat(14))}\n` +
+                `━━━━━━━━━━━━━━━━\n` +
                 `พิมพ์วันที่ใหม่\n` +
-                `${safeItalic("เช่น")} พรุ่งนี้, 15/06/2026, อีก 3 วัน, พุธหน้า`,
+                `เช่น พรุ่งนี้, 15/06/2026, อีก 3 วัน, พุธหน้า`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -388,7 +372,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `🎯 ${safeBold("เลือกความสำคัญ")}\n` +
-                `${safeItalic("━".repeat(14))}\n` +
+                `━━━━━━━━━━━━━━━━\n` +
                 `ปัจจุบัน: ${current}\n\n` +
                 "เลือกระดับความสำคัญด้านล่าง",
             {
@@ -414,12 +398,12 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `🏷️ ${safeBold("แก้ไขแท็ก")}\n` +
-                `${safeItalic("━".repeat(14))}\n` +
+                `━━━━━━━━━━━━━━━━\n` +
                 `แท็กที่มี: ${VALID_TAGS.join(", ")}\n\n` +
                 `พิมพ์แท็กที่ต้องการ คั่นด้วยช่องว่าง\n` +
-                `${safeItalic("เช่น")}: สอบ ด่วน อ่าน\n` +
+                `เช่น สอบ ด่วน อ่าน\n` +
                 `หรือพิมพ์ \`-\` เพื่อล้างแท็ก\n` +
-                `${safeItalic("━".repeat(14))}`,
+                `━━━━━━━━━━━━━━━━`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -454,18 +438,18 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
             `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n` +
-                `${safeItalic("━".repeat(16))}\n` +
-                `${safeItalic("พิมพ์คำถาม เช่น")}\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `พิมพ์คำถาม เช่น\n` +
                 `• "งานคณิตส่งวันไหนบ้าง"\n` +
                 `• "มีงานอะไรที่ยังไม่ทำ"\n` +
                 `• "อาทิตย์นี้มีงานกี่ชิ้น"\n\n` +
-                `${safeItalic("พิมพ์คำถามเลย หรือกดยกเลิก")}\n` +
-                `${safeItalic("━".repeat(16))}`,
+                `พิมพ์คำถามเลย หรือกดยกเลิก\n` +
+                `━━━━━━━━━━━━━━━━━━`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
 
-    /* LIST ACTIVE */
+    /* LIST ACTIVE — consolidated single message */
     bot.action("LIST_ACTIVE", async (ctx) => {
         await ctx.answerCbQuery().catch(() => {});
 
@@ -483,67 +467,33 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านค้าง")}\n` +
-                    `${safeItalic("━".repeat(14))}\n` +
-                    `พักผ่อนได้เต็มที่เลย 🏆`,
+                    `🎉 ${safeBold("ไม่มีการบ้านค้าง")}\n━━━━━━━━━━━━━━━━\nพักผ่อนได้เต็มที่เลย 🏆`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
 
-            const prog = pages.filter(
-                (p) => p.properties.Status?.select?.name === STATUS.IN_PROGRESS,
-            );
-            const todo = pages.filter(
-                (p) => p.properties.Status?.select?.name === STATUS.TODO,
-            );
+            const MAX_DISPLAY = 20;
+            const display = pages.slice(0, MAX_DISPLAY);
+            const items = display.map(p => {
+                const { title, status, due, subject, priority } = getPageProps(p);
+                return `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${formatDateLabel(due, "due")}`;
+            });
 
-            await ctx.reply(
-                `📋 ${safeBold("งานที่ยังค้างอยู่")}\n` +
-                    `${safeItalic("━".repeat(18))}\n` +
-                    `🔄 กำลังทำ  ${safeBold(String(prog.length))}\n` +
-                    `📌 ยังไม่ทำ  ${safeBold(String(todo.length))}\n` +
-                    `${safeItalic("━".repeat(18))}\n` +
-                    `รวม ${safeBold(String(pages.length))} รายการ`,
-                { parse_mode: "Markdown", ...listFooterMenu() },
-            );
+            let msg = `📋 ${safeBold("งานที่ยังค้าง")} (${pages.length})\n━━━━━━━━━━━━━━━━━━\n${items.join("\n")}`;
+            if (pages.length > MAX_DISPLAY) msg += `\n… และอีก ${pages.length - MAX_DISPLAY} รายการ`;
+            msg += `\n━━━━━━━━━━━━━━━━━━\n🔴 สูง = ด่วน  🟡 กลาง = ปกติ  🟢 ต่ำ = ยังมีเวลา`;
 
-            const MAX_DISPLAY = 15;
-
-            if (prog.length) {
-                await ctx.reply(
-                    `🔄 ${safeBold("กำลังทำอยู่")}\n${safeItalic("━".repeat(14))}`,
-                    { parse_mode: "Markdown" },
-                );
-                const display = prog.slice(0, MAX_DISPLAY);
-                for (const page of display)
-                    await sendPageCard(ctx, page, "active");
-                if (prog.length > MAX_DISPLAY)
-                    await ctx.reply(`⋯ และอีก ${prog.length - MAX_DISPLAY} รายการ`, { parse_mode: "Markdown" });
-            }
-
-            if (todo.length) {
-                await ctx.reply(
-                    `📌 ${safeBold("ยังไม่ได้เริ่ม")}\n${safeItalic("━".repeat(14))}`,
-                    { parse_mode: "Markdown" },
-                );
-                const display = todo.slice(0, MAX_DISPLAY);
-                for (const page of display)
-                    await sendPageCard(ctx, page, "active");
-                if (todo.length > MAX_DISPLAY)
-                    await ctx.reply(`⋯ และอีก ${todo.length - MAX_DISPLAY} รายการ`, { parse_mode: "Markdown" });
-            }
-
-            return ctx.reply(`📋 รายการทั้งหมด (${pages.length})`, listFooterMenu());
+            return ctx.reply(msg, { parse_mode: "Markdown", ...listFooterMenu() });
         } catch (err) {
             logger.error("LIST_ACTIVE:", err);
-            return ctx.reply("❌ ดึงข้อมูลไม่ได้ กรุณาลองใหม่", {
+            return ctx.reply(`❌ ${safeBold("โหลดรายการไม่ได้")} — ลองใหม่อีกครั้ง`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
         }
     });
 
-    /* LIST DONE */
+    /* LIST DONE — consolidated single message */
     bot.action("LIST_DONE", async (ctx) => {
         await ctx.answerCbQuery().catch(() => {});
 
@@ -552,29 +502,26 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีงานที่ทำเสร็จ")}\n` +
-                    `${safeItalic("━".repeat(14))}\n` +
-                    `สู้ต่ออีกนิด 💪`,
+                    `📭 ${safeBold("ยังไม่มีงานที่ทำเสร็จ")}\n━━━━━━━━━━━━━━━━\nสู้ต่ออีกนิด 💪`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
 
-            await ctx.reply(
-                `✅ ${safeBold("งานที่ทำเสร็จแล้ว")}\n` +
-                    `${safeItalic("━".repeat(18))}\n` +
-                    `ทั้งหมด ${safeBold(String(pages.length))} รายการ`,
-                { parse_mode: "Markdown", ...listFooterMenu() },
-            );
+            const MAX_DISPLAY = 20;
+            const display = pages.slice(0, MAX_DISPLAY);
+            const items = display.map(p => {
+                const { title, status, due, subject, priority, completed } = getPageProps(p);
+                const dateLabel = formatDateLabel(completed, "completed");
+                return `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${dateLabel}`;
+            });
 
-            const display = pages.slice(0, 20);
-            for (const page of display) await sendPageCard(ctx, page, "done");
-            if (pages.length > 20)
-                await ctx.reply(`⋯ และอีก ${pages.length - 20} รายการ`, { parse_mode: "Markdown" });
+            let msg = `✅ ${safeBold("งานที่ทำเสร็จแล้ว")} (${pages.length})\n━━━━━━━━━━━━━━━━━━\n${items.join("\n")}`;
+            if (pages.length > MAX_DISPLAY) msg += `\n… และอีก ${pages.length - MAX_DISPLAY} รายการ`;
 
-            return ctx.reply(`✅ เสร็จแล้ว (${pages.length})`, listFooterMenu());
+            return ctx.reply(msg, { parse_mode: "Markdown", ...listFooterMenu() });
         } catch (err) {
             logger.error("LIST_DONE:", err);
-            return ctx.reply("❌ ดึงข้อมูลไม่ได้ กรุณาลองใหม่", {
+            return ctx.reply(`❌ ${safeBold("โหลดรายการไม่ได้")} — ลองใหม่อีกครั้ง`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -596,7 +543,7 @@ export function registerActionHandlers(bot, userState) {
             });
         } catch (err) {
             logger.error("DASHBOARD:", err);
-            return ctx.reply("❌ โหลด Dashboard ไม่ได้ กรุณาลองใหม่", {
+            return ctx.reply(`❌ ${safeBold("โหลด Dashboard ไม่ได้")} — ลองใหม่อีกครั้ง`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -615,7 +562,7 @@ export function registerActionHandlers(bot, userState) {
             });
         } catch (err) {
             logger.error("setStatus:", err);
-            return ctx.reply("❌ อัปเดตไม่ได้ กรุณาลองใหม่", {
+            return ctx.reply(`❌ ${safeBold("อัปเดตสถานะไม่ได้")} — ลองใหม่อีกครั้ง`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -627,9 +574,7 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.DONE,
-            `✅ ${safeBold("เสร็จแล้ว!")}\n` +
-            `${safeItalic("━".repeat(12))}\n` +
-            `เก่งมาก! บันทึกว่าทำเสร็จแล้ว 🎉`,
+            `✅ ${safeBold("เสร็จแล้ว!")} — เก่งมาก! 🎉`,
         ),
     );
 
@@ -638,9 +583,7 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.IN_PROGRESS,
-            `🔄 ${safeBold("อัปเดตแล้ว")}\n` +
-            `${safeItalic("━".repeat(12))}\n` +
-            `บันทึกว่ากำลังทำอยู่ สู้ ๆ 💪`,
+            `✏️ ${safeBold("อัปเดตแล้ว")} — บันทึกเรียบร้อย`,
         ),
     );
 
@@ -649,30 +592,101 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.TODO,
-            `📌 ${safeBold("ย้ายกลับแล้ว")}\n` +
-            `${safeItalic("━".repeat(12))}\n` +
-            `ย้ายกลับเป็นงานที่ต้องทำ`,
+            `↩️ ${safeBold("ย้ายกลับแล้ว")} — ยังไม่เสร็จก็ไม่เป็นไร`,
         ),
     );
 
-    /* DELETE */
+    /* DELETE — confirmation first */
     bot.action(/del_(.+)/, async (ctx) => {
+        const pageId = ctx.match[1];
         await ctx.answerCbQuery().catch(() => {});
 
+        try {
+            const title = await getPageTitle(pageId);
+            return ctx.reply(
+                `🗑️ ${safeBold("ลบ " + title + "?")}\n` +
+                `การลบไม่สามารถยกเลิกได้\n` +
+                `━━━━━━━━━━━━━━━━`,
+                {
+                    parse_mode: "Markdown",
+                    ...Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback("✅ ยืนยันลบ", `confirm_del_${pageId}`),
+                            Markup.button.callback("❌ ยกเลิก", `cancel_del_${pageId}`),
+                        ],
+                    ]),
+                },
+            );
+        } catch (err) {
+            logger.error("DELETE confirm fetch:", err);
+            return ctx.reply(`❌ ${safeBold("ลบไม่ได้")} — กรุณาลองอีกครั้ง`, {
+                parse_mode: "Markdown",
+                ...mainMenu,
+            });
+        }
+    });
+
+    /* CONFIRM DELETE — actually archive */
+    bot.action(/confirm_del_(.+)/, async (ctx) => {
+        await ctx.answerCbQuery().catch(() => {});
         try {
             await archivePage(ctx.match[1]);
             await ctx.editMessageReplyMarkup(undefined).catch(() => {});
             return ctx.reply(
                 `🗑️ ${safeBold("ลบแล้ว")}\n` +
-                `${safeItalic("━".repeat(10))}`,
+                `━━━━━━━━━━━━━━━━`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
             );
         } catch (err) {
-            logger.error("DELETE:", err);
-            return ctx.reply("❌ ลบไม่ได้ กรุณาลองใหม่", {
+            logger.error("DELETE confirm:", err);
+            return ctx.reply(`❌ ${safeBold("ลบไม่ได้")} — กรุณาลองอีกครั้ง`, {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
         }
+    });
+
+    /* CANCEL DELETE */
+    bot.action(/cancel_del_(.+)/, async (ctx) => {
+        await ctx.answerCbQuery("✅ ยกเลิกการลบ").catch(() => {});
+        try {
+            await ctx.deleteMessage();
+        } catch {}
+    });
+
+    /* MORE OPTIONS (from compact confirm) */
+    bot.action("MORE_OPTIONS", async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+        if (!state?.pending) {
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+        }
+        await ctx.answerCbQuery().catch(() => {});
+        const { title, subject, due, priority } = state.pending;
+        const dueText = formatDueDisplay(due);
+        const msg =
+            `📝 ${safeBold("ตั้งค่าเพิ่มเติม")}\n` +
+            `━━━━━━━━━━━━━━━━\n` +
+            `${subjectEmoji(subject)} ${safeBold(title)}\n` +
+            `🎯 ${priority || "🟡 กลาง"}  |  📅 ${dueText}\n` +
+            `━━━━━━━━━━━━━━━━\n` +
+            `เลือกรายการด้านล่าง`;
+
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...moreOptionsMenu,
+        });
+    });
+
+    /* BACK TO CONFIRM */
+    bot.action("BACK_TO_CONFIRM", async (ctx) => {
+        const uid = ctx.from.id;
+        const state = userState.get(uid);
+        if (!state?.pending) {
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+        }
+        await ctx.answerCbQuery().catch(() => {});
+        await ctx.deleteMessage().catch(() => {});
+        return showConfirm(ctx, state.pending);
     });
 }

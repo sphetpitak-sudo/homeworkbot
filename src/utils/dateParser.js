@@ -110,33 +110,31 @@ export function parseThaiDate(text) {
     return null;
 }
 
-export function formatCompletedDisplay(completed) {
-    if (!completed) return "—";
-    const completedDate = parseYMDToLocalDate(completed);
-    if (isNaN(completedDate.getTime())) return completed;
+export function formatDateLabel(dateStr, type = "due") {
+    if (!dateStr) return type === "completed" ? "—" : "ไม่กำหนดวัน";
+    const dt = parseYMDToLocalDate(dateStr);
+    if (isNaN(dt.getTime())) return dateStr;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = Math.floor((today - completedDate) / 86_400_000);
-    const label = `${THAI_DAYS[completedDate.getDay()]}${completedDate.getDate()} ${THAI_MONTHS[completedDate.getMonth()]}`;
-    if (diff === 0) return `${label} ✅ วันนี้`;
-    if (diff === 1) return `${label} ✅ เมื่อวาน`;
-    return `${label} ✅ เสร็จแล้ว ${diff} วัน`;
+    const diff = Math.floor((dt - today) / 86_400_000);
+    const label = `${THAI_DAYS[dt.getDay()]}${dt.getDate()} ${THAI_MONTHS[dt.getMonth()]}`;
+
+    if (type === "completed") {
+        if (diff === 0) return `✅ เสร็จแล้ว ${label} (วันนี้)`;
+        if (diff === -1) return `✅ เสร็จแล้ว ${label} (เมื่อวาน)`;
+        return `✅ เสร็จแล้ว ${label} (${Math.abs(diff)} วันที่แล้ว)`;
+    }
+
+    if (diff < 0) return `📅 ${label} (⚠️ เกินกำหนด ${Math.abs(diff)} วัน)`;
+    if (diff === 0) return `📅 ${label} (🔥 วันนี้!)`;
+    if (diff === 1) return `📅 ${label} (⏰ พรุ่งนี้)`;
+    return `📅 ${label} (อีก ${diff} วัน)`;
+}
+
+export function formatCompletedDisplay(completed) {
+    return formatDateLabel(completed, "completed");
 }
 
 export function formatDueDisplay(due) {
-    if (!due) return "ไม่กำหนดวัน";
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = parseYMDToLocalDate(due);
-    if (isNaN(dueDate.getTime())) return due;
-    const diff = Math.floor((dueDate - today) / 86_400_000);
-    const label = `${THAI_DAYS[dueDate.getDay()]}${dueDate.getDate()} ${THAI_MONTHS[dueDate.getMonth()]}`;
-
-    if (diff < 0) return `${label} ⚠️ เกินกำหนด ${Math.abs(diff)} วัน`;
-    if (diff === 0) return `${label} 🔥 วันนี้!`;
-    if (diff === 1) return `${label} ⏰ พรุ่งนี้`;
-    if (diff <= 3) return `${label} 😰 อีก ${diff} วัน`;
-    if (diff <= 7) return `${label} 📆 อีก ${diff} วัน`;
-    return `${label} (อีก ${diff} วัน)`;
+    return formatDateLabel(due, "due");
 }
