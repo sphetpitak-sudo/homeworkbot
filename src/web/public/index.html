@@ -1033,9 +1033,15 @@ async function bulkStatus(status){
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
       body:JSON.stringify({ids,status}),
     });
-    if(!res.ok)throw new Error(await res.text());
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||res.statusText);
+    if(data.failed>0){showToast(`Updated ${data.updated}/${ids.length} (${data.failed} failed)`);}
+    else{showToast(`Updated ${ids.length} items!`);}
     ids.forEach(id=>{const item=S.items.find(i=>i.id===id);if(item)item.status=status;});
-    showToast(`Updated ${ids.length} items!`);
+    S.selected.clear();
+    updateBulkBar();
+    listRenderFilters();
+    listFilter();
     S.selected.clear();
     updateBulkBar();
     S.ts=0;

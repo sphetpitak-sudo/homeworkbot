@@ -297,7 +297,7 @@ export function registerCommandHandlers(bot, userState) {
             }
             const pending = {
                 ...state.pending, due,
-                priority: recalcPriority(due),
+                priority: state.pending._manualPriority ? state.pending.priority : recalcPriority(due),
             };
             userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
             return showConfirm(ctx, pending);

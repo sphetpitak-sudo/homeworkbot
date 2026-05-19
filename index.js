@@ -55,8 +55,11 @@ async function sendReminders() {
         const nextWeek = new Date(today);
         nextWeek.setDate(today.getDate() + 7);
 
+        const past = new Date(today);
+        past.setDate(today.getDate() - 30);
+
         const pages = await fetchUpcoming(
-            formatDate(today),
+            formatDate(past),
             formatDate(nextWeek),
         );
         if (!pages.length) return;
@@ -174,7 +177,7 @@ async function sendWeeklySummary() {
         }).length;
 
         const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay());
+        weekStart.setDate(today.getDate() - 7);
         const weekDone = donePages.filter(p => {
             const d = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
             if (!d) return false;
@@ -242,6 +245,10 @@ launchBot().catch((err) => {
 });
 
 /* ── graceful shutdown ── */
-const shutdown = (sig) => { logger.info(`Received ${sig}, stopping...`); bot.stop(sig); };
+const shutdown = (sig) => {
+    logger.info(`Received ${sig}, stopping...`);
+    bot.stop(sig);
+    process.exit(0);
+};
 process.once("SIGINT",  () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));

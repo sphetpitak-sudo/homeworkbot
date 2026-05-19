@@ -266,6 +266,12 @@ export function registerActionHandlers(bot, userState) {
                 .catch(() => {});
         }
 
+        if (state._saving) {
+            return ctx.answerCbQuery("⏳ กำลังบันทึก…").catch(() => {});
+        }
+        state._saving = true;
+        userState.set(uid, state);
+
         const { title, subject, due, rawText, priority, tags } = state.pending;
 
         await ctx.answerCbQuery().catch(() => {});
@@ -443,7 +449,7 @@ export function registerActionHandlers(bot, userState) {
             return ctx.answerCbQuery("❌ ค่าความสำคัญไม่ถูกต้อง").catch(() => {});
         }
 
-        const pending = { ...state.pending, priority };
+        const pending = { ...state.pending, priority, _manualPriority: true };
         userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
         await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch(() => {});
         try {
