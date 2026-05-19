@@ -284,6 +284,6 @@ export function startWebServer(port = 8080) {
         }
     });
 
-    app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`))
+    return app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`))
         .on("error", (err) => logger.error(`Web server failed to listen on ${port}:`, err.message));
 }

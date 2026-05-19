@@ -140,7 +140,7 @@ export async function updateStatus(pageId, status) {
         const d = String(today.getDate()).padStart(2, "0");
         props.Completed = { date: { start: `${y}-${m}-${d}` } };
     } else {
-        props.Completed = null;
+        props.Completed = { date: null };
     }
     await notion.pages.update({
         page_id: pageId,
@@ -154,7 +154,7 @@ export async function updateHomework(pageId, { title, subject, due, priority, no
     const props = {};
     if (title !== undefined) props.Name = { title: [{ text: [{ content: title }] }] };
     if (subject !== undefined) props.Subject = { rich_text: [{ text: [{ content: subject }] }] };
-    if (due !== undefined) props.Due = due ? { date: { start: due } } : null;
+    if (due !== undefined) props.Due = due ? { date: { start: due } } : { date: null };
     if (priority !== undefined) props.Priority = { select: { name: priority } };
     if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };
     if (tags !== undefined) props.Tags = { multi_select: tags.map(name => ({ name })) };

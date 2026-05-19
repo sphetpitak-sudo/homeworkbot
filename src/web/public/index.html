@@ -1042,11 +1042,6 @@ async function bulkStatus(status){
     updateBulkBar();
     listRenderFilters();
     listFilter();
-    S.selected.clear();
-    updateBulkBar();
-    S.ts=0;
-    listRenderFilters();
-    listFilter();
   }catch(err){
     showToast("Error: "+err.message);
   }
