@@ -7,10 +7,10 @@ describe('escapeMarkdown', () => {
             ['*', '\\*'],
             ['`', '\\`'],
             ['[', '\\['],
-            ['~', '\\~'],
-            ['(', '\\('],
-            [')', '\\)'],
-            ['|', '\\|'],
+            ['~', '~'],
+            ['(', '('],
+            [')', ')'],
+            ['|', '|'],
         ])('escapes "%s" -> "%s"', (char, expected) => {
             expect(escapeMarkdown(char)).toBe(expected);
         });
@@ -34,11 +34,11 @@ describe('escapeMarkdown', () => {
             ['hello_world', 'hello\\_world'],
             ['*bold*', '\\*bold\\*'],
             ['text_with_underscores', 'text\\_with\\_underscores'],
-            ['(parentheses)', '\\(parentheses\\)'],
+            ['(parentheses)', '(parentheses)'],
             ['[bracket]', '\\[bracket]'],
-            ['pipe|symbol', 'pipe\\|symbol'],
-            ['tilde~test', 'tilde\\~test'],
-            ['combo_*test*_(ok)', 'combo\\_\\*test\\*\\_\\(ok\\)'],
+            ['pipe|symbol', 'pipe|symbol'],
+            ['tilde~test', 'tilde~test'],
+            ['combo_*test*_(ok)', 'combo\\_\\*test\\*\\_(ok)'],
         ])('escapes "%s" -> "%s"', (input, expected) => {
             expect(escapeMarkdown(input)).toBe(expected);
         });
@@ -82,7 +82,7 @@ describe('safeBold', () => {
         test.each([
             ['hello_world', '*hello\\_world*'],
             ['*bold*', '*\\*bold\\**'],
-            ['(paren)', '*\\(paren\\)*'],
+            ['(paren)', '*(paren)*'],
             ['test_123*', '*test\\_123\\**'],
         ])('bold "%s" -> "%s"', (input, expected) => {
             expect(safeBold(input)).toBe(expected);
@@ -118,7 +118,7 @@ describe('safeItalic', () => {
         test.each([
             ['hello*world', '_hello\\*world_'],
             ['_italic_', '_\\_italic\\__'],
-            ['(paren)', '_\\(paren\\)_'],
+            ['(paren)', '_(paren)_'],
             ['test*123_', '_test\\*123\\__'],
         ])('italic "%s" -> "%s"', (input, expected) => {
             expect(safeItalic(input)).toBe(expected);
@@ -187,7 +187,7 @@ describe('safeCode', () => {
 describe('combined formatting', () => {
     test('bold inside text with special chars', () => {
         const result = safeBold('hello_world') + ' normal ' + safeItalic('italic_(test)');
-        expect(result).toBe('*hello\\_world* normal _italic\\_\\(test\\)_');
+        expect(result).toBe('*hello\\_world* normal _italic\\_(test)_');
     });
 
     test('multiple formatting in sequence', () => {

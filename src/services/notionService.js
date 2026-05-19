@@ -139,6 +139,8 @@ export async function updateStatus(pageId, status) {
         const m = String(today.getMonth() + 1).padStart(2, "0");
         const d = String(today.getDate()).padStart(2, "0");
         props.Completed = { date: { start: `${y}-${m}-${d}` } };
+    } else {
+        props.Completed = null;
     }
     await notion.pages.update({
         page_id: pageId,

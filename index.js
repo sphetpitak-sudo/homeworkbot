@@ -130,9 +130,9 @@ async function autoArchive() {
         let archived = 0;
 
         for (const p of pages) {
-            const due = p.properties.Due?.date?.start;
-            if (!due) continue;
-            const dt = new Date(due + "T00:00:00");
+            const completed = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
+            if (!completed) continue;
+            const dt = new Date(completed + "T00:00:00");
             if (isNaN(dt.getTime())) continue;
             if (dt >= cutoff) continue;
 

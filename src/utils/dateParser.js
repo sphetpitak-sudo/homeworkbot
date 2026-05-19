@@ -65,7 +65,7 @@ export function parseThaiDate(text) {
         return formatDate(now);
     }
 
-    m = t.match(/วัน[ที่]*\s*(\d{1,2})/);
+    m = t.match(/วันที่?\s*(\d{1,2})/);
     if (m) {
         const day = +m[1];
         if (day >= 1 && day <= 31) {

@@ -1,4 +1,4 @@
-const MARKDOWN_SPECIALS = /([_*`\[~()|])/g;
+const MARKDOWN_SPECIALS = /([_*`\[])/g;
 
 export function escapeMarkdown(value) {
   return String(value ?? "").replace(MARKDOWN_SPECIALS, "\\$1");
