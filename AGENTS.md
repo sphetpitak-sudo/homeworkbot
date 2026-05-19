@@ -31,13 +31,13 @@ src/web/
   public/
     index.html               ← Web dashboard (Chart.js, calendar, detail panel, CSV, dark mode, PWA, quick add, bulk actions)
     manifest.json            ← PWA manifest (name, theme color, icons)
-    sw.js                    ← Service worker (cache-first strategy)
+    sw.js                    ← Service worker (network-first navigation, cache-first static assets)
 src/utils/
   dateParser.js              ← Thai date regex: parseThaiDate, formatDueDisplay, formatDateLabel, parseYMDToLocalDate, formatDate
   subjectDetector.js         ← Thai keyword matching + misspelling support (50+ keywords, 10 subjects), cleanTitle, subjectEmoji
   tagDetector.js             ← Tag inference (สอบ/โครงการ/กลุ่ม/ด่วน/อ่าน/ใบงาน), hashtag parsing, inferAndParseTags, VALID_TAGS
   telegramFormat.js          ← Markdown escape: _ * ` [, safeBold, safeItalic, safeCode
-  constants.js               ← STATUS, PRIORITY, priorityWeight, PRIORITY_ORDER, dashboard limits, AI_CONFIDENCE_THRESHOLD, NOTION_PAGE_SIZE
+  constants.js               ← STATUS, PRIORITY, priorityWeight, PRIORITY_ORDER, dashboard limits, NOTION_PAGE_SIZE
   logger.js                  ← console wrapper with Thai timestamps
   validateEnv.js             ← validates TELEGRAM_TOKEN, NOTION_TOKEN, DATABASE_ID
   priority.js                ← recalcPriority(dueStr) → shared priority calculation
@@ -75,7 +75,7 @@ src/utils/
 1. `.corrections.json` — user-edited values, zero API calls
 2. In-memory cache (1h TTL)
 3. Typhoon models in order: `typhoon-v2.5-30b-a3b-instruct` → `typhoon-v2.1-12b-instruct`
-4. On 429 → auto-switch to next model; on bad JSON → retry once with minimal prompt
+4. On 429/5xx/network error → auto-switch to next model; on bad JSON → retry once with minimal prompt
 5. If all fail → regex fallback (`parseThaiDate` + `detectSubject` + `inferAndParseTags`)
 
 ## Priority
@@ -83,7 +83,7 @@ src/utils/
 - AI detects from text: urgent words → สูง, far due → ต่ำ, no due → ต่ำ, else → กลาง
 - Edit button `🎯 ความสำคัญ` in confirm menu → choose from inline keyboard
 - EDIT_DATE → `recalcPriority(due)` auto-updates priority (unless overridden by `_manualPriority`)
-- `recalcPriority()` in `src/utils/priority.js`: ≤3 days → สูง, ≤14 days → กลาง, >14 days → ต่ำ, no due → ต่ำ
+- `recalcPriority()` in `src/utils/priority.js`: ≤3 days → สูง, ≤14 days → กลาง, >14 days → ต่ำ, >30 days overdue → ต่ำ, no due → ต่ำ
 - `autoUpdatePriority()` cron at 06:00 daily (runs before reminder 08:00)
 - LIST_ACTIVE sorts by priority (สูง→กลาง→ต่ำ) then by due
 - Web dashboard auto-priority preview updates live when due date changes
@@ -98,7 +98,7 @@ src/utils/
 
 ## Web Dashboard
 - URL: `https://homework.k.jrnm.app/?token=<DASHBOARD_TOKEN>`
-- Auth: `Authorization: Bearer <token>` header (fallback: `?token=` query param for backward compat)
+- Auth: `Authorization: Bearer <token>` header only (no query param fallback — prevents CSRF)
 - Pages: Home | Dashboard (แดชบอร์ด) | Calendar (ปฏิทิน) | List (รายการ)
 - **Home**: stats cards (6 items), today+tomorrow schedule, overdue alert, quick links, "+ Add" button
 - **Dashboard**: 6 stats cards, status+priority donuts (custom HTML legends), weekly progress bar chart, subject pills with urgency bar, 30-day trend line, 7-day mini grid
@@ -121,7 +121,7 @@ src/utils/
 | 07:00 Mon | `0 7 * * 1` | `sendWeeklySummary()` | Send weekly summary to REMINDER_CHAT_ID |
 | 08:00 | `0 8 * * *` | `sendReminders()` | Send upcoming homework reminders (next 7 days) |
 
-All crons have overlap guards (`cronRunning` object) to prevent concurrent execution.
+All crons have overlap guards (`cronRunning` object) to prevent concurrent execution. Batch operations use `Promise.allSettled` so partial failures don't halt remaining items.
 
 ## Auto-archive
 - cron `0 2 * * *` — runs daily at 02:00 Bangkok time
@@ -186,9 +186,11 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 
 ## Security
 - `DASHBOARD_TOKEN` separate from `TELEGRAM_TOKEN` — never expose bot token in URLs
-- Token auto-generated on startup if not set via env var (persisted to `.dashboard_token`)
-- Auth via `Authorization: Bearer <token>` header (query param fallback for backward compat)
+- Token derived from `NOTION_TOKEN` SHA256 hash for stability across deploys; override via `DASHBOARD_TOKEN` env var
+- Auth via `Authorization: Bearer <token>` header only (no query param fallback — prevents CSRF on API endpoints)
 - Web API rate-limited (60 req/min)
+- All API error responses return generic `"Internal server error"` (no info leak)
+- Status validation on `/api/status` and `/api/bulk-status` — rejects invalid status values
 - `.env` gitignored
 
 ## Testing quirks
@@ -196,7 +198,8 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 - `.mjs` test files are standalone (`node __tests__/dateParser.test.mjs`)
 - Cache tests call `beforeEach(() => cacheInvalidate())` for isolation
 - TTL tests use real `setTimeout` (timing-sensitive)
-- 539 tests total across 5 test suites
+- 539 tests total across 5 test suites (all pass)
+- `api.e2e.test.js` test for query param token fallback updated to expect 401 (CSRF fix)
 
 ## Thai-specific
 - `parseThaiDate()`: วันนี้, พรุ่งนี้, มะรืน, อีก X วัน/สัปดาห์/อาทิตย์, วันNAME(หน้า), dd/mm/yy(yy), วันที่ X
@@ -210,3 +213,4 @@ All crons have overlap guards (`cronRunning` object) to prevent concurrent execu
 - JustRunMy occasionally returns "No matching nodes" during deployment — retry after a few minutes
 - PWA service worker registration may fail silently on localhost (expected, only works on HTTPS)
 - Demo mode (`?token=demo`) uses fake data — trend chart shows random data, status changes are local-only
+- Service worker uses network-first for navigation, cache-first for static assets
