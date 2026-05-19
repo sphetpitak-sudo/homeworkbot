@@ -19,14 +19,19 @@ if (!DASHBOARD_TOKEN) {
     try {
         DASHBOARD_TOKEN = fs.readFileSync(TOKEN_FILE, "utf-8").trim();
     } catch {
-        DASHBOARD_TOKEN = crypto.randomBytes(24).toString("base64url");
+        /* Derive from NOTION_TOKEN for determinism across deploys */
+        if (process.env.NOTION_TOKEN) {
+            DASHBOARD_TOKEN = crypto.createHash("sha256").update(process.env.NOTION_TOKEN).digest("base64url").slice(0, 32);
+        } else {
+            DASHBOARD_TOKEN = crypto.randomBytes(24).toString("base64url");
+        }
         try {
             fs.writeFileSync(TOKEN_FILE, DASHBOARD_TOKEN);
         } catch (e) {
             logger.warn("Could not persist dashboard token:", e.message);
         }
         logger.info(`Dashboard token auto-generated: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
-        logger.info(`Set DASHBOARD_TOKEN env var to keep it across restarts`);
+        logger.info(`Set DASHBOARD_TOKEN env var to override`);
     }
 }
 
