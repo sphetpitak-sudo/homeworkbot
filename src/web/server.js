@@ -8,14 +8,26 @@ import { recalcPriority } from "../utils/priority.js";
 import { formatDate } from "../utils/dateParser.js";
 import { logger } from "../utils/logger.js";
 import crypto from "crypto";
+import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TOKEN_FILE = path.join(__dirname, "..", "..", ".dashboard_token");
 
 /* ── separate dashboard token (never expose TELEGRAM_TOKEN) ── */
 let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim();
 if (!DASHBOARD_TOKEN) {
-    DASHBOARD_TOKEN = crypto.randomBytes(24).toString("base64url");
-    logger.info(`Dashboard token auto-generated: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
+    try {
+        DASHBOARD_TOKEN = fs.readFileSync(TOKEN_FILE, "utf-8").trim();
+    } catch {
+        DASHBOARD_TOKEN = crypto.randomBytes(24).toString("base64url");
+        try {
+            fs.writeFileSync(TOKEN_FILE, DASHBOARD_TOKEN);
+        } catch (e) {
+            logger.warn("Could not persist dashboard token:", e.message);
+        }
+        logger.info(`Dashboard token auto-generated: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
+        logger.info(`Set DASHBOARD_TOKEN env var to keep it across restarts`);
+    }
 }
 
 export function getDashboardToken() {
@@ -142,7 +154,7 @@ export function startWebServer(port = 8080) {
     app.get("/health", (req, res) => res.json({ status: "ok" }));
 
     function requireAuth(req, res, next) {
-        const t = req.headers["authorization"]?.replace("Bearer ", "");
+        const t = req.headers["authorization"]?.replace("Bearer ", "") || req.query.token;
         if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
         }

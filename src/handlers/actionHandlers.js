@@ -7,6 +7,7 @@ import {
     THAI_MONTHS,
 } from "../utils/dateParser.js";
 import { subjectEmoji } from "../utils/subjectDetector.js";
+import { VALID_TAGS } from "../utils/tagDetector.js";
 import {
     fetchActive,
     fetchDone,
@@ -73,8 +74,6 @@ function progressBar(percent) {
     return "█".repeat(filled) + "░".repeat(PROGRESS_BAR_SLOTS - filled);
 }
 
-const SEP = "─".repeat(18);
-
 function sectionHeader(icon, title, meta = "") {
     return `${icon} ${safeBold(title)}${meta ? ` ${safeItalic(meta)}` : ""}`;
 }
@@ -125,14 +124,13 @@ function actionButtons(pageId, mode = "active") {
 /* ── card builder ── */
 function buildHomeworkCard(page, mode = "active") {
     const { title, status, due, subject, priority, tags } = getPageProps(page);
-    const safeTitle = escapeMarkdown(title);
     const safeSubject = escapeMarkdown(subject);
     const tagsStr = tags?.length ? tags.map(t => `#${t}`).join(" ") : null;
 
     return {
         text:
             `${safeItalic("┌")}${safeItalic("─".repeat(16))}${safeItalic("┐")}\n` +
-            `${statusEmoji(status)} ${safeBold(safeTitle)}\n` +
+            `${statusEmoji(status)} ${safeBold(title)}\n` +
             `${safeItalic("├")}${safeItalic("─".repeat(16))}${safeItalic("┤")}\n` +
             `${subjectEmoji(subject)} ${safeSubject}\n` +
             `${priority}\n` +
@@ -199,8 +197,8 @@ function buildDashboard(activePages, donePages) {
     } else {
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
             const { title, due, status, subject, priority } = getPageProps(p);
-            msg += `${statusEmoji(status)} ${safeBold(escapeMarkdown(title))} `;
-            msg += `${priority} ${safeItalic(escapeMarkdown(subject))} — ${formatDueDisplay(due)}\n`;
+            msg += `${statusEmoji(status)} ${safeBold(title)} `;
+            msg += `${priority} ${safeItalic(subject)} — ${formatDueDisplay(due)}\n`;
         }
         if (urgent.length > URGENT_DISPLAY_MAX) {
             msg += `… และอีก ${urgent.length - URGENT_DISPLAY_MAX} รายการ\n`;
@@ -213,7 +211,7 @@ function buildDashboard(activePages, donePages) {
         msg += `🎉 ไม่มีการบ้านค้าง\n`;
     } else {
         for (const [subject, count] of sorted.slice(0, SUBJECT_DISPLAY_MAX)) {
-            msg += `${subjectEmoji(subject)} ${safeBold(escapeMarkdown(subject))}: `;
+            msg += `${subjectEmoji(subject)} ${safeBold(subject)}: `;
             msg += `${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
         }
     }
@@ -281,7 +279,6 @@ export function registerActionHandlers(bot, userState) {
 
             userState.delete(uid);
 
-            const safeTitle = escapeMarkdown(title);
             const safeSubject = escapeMarkdown(subject);
             const dueText = formatDueDisplay(due);
 
@@ -289,7 +286,7 @@ export function registerActionHandlers(bot, userState) {
             await ctx.editMessageText(
                 `🎉 ${safeBold("บันทึกสำเร็จ!")}\n` +
                     `${safeItalic("━".repeat(16))}\n` +
-                    `${subjectEmoji(subject)} ${safeBold(safeTitle)}\n` +
+                    `${subjectEmoji(subject)} ${safeBold(title)}\n` +
                     `📚 ${safeSubject}\n` +
                     `${priText}\n` +
                     `📅 ${dueText}\n` +
@@ -299,22 +296,20 @@ export function registerActionHandlers(bot, userState) {
             ).catch(() => {});
         } catch (err) {
             logger.error("CONFIRM_SAVE:", err);
-            if (err.message?.includes("create") || err.response?.data) {
-                await ctx.editMessageText(
-                    `❌ ${safeBold("บันทึกไม่สำเร็จ")}\n` +
-                        `${safeItalic("━".repeat(14))}\n` +
-                        `เกิดข้อผิดพลาด กรุณาลองใหม่`,
-                    {
-                        parse_mode: "Markdown",
-                        ...Markup.inlineKeyboard([
-                            [
-                                Markup.button.callback("🔁 ลองใหม่", "CONFIRM_SAVE"),
-                                Markup.button.callback("❌ ยกเลิก", "CANCEL"),
-                            ],
-                        ]),
-                    },
-                ).catch(() => {});
-            }
+            await ctx.editMessageText(
+                `❌ ${safeBold("บันทึกไม่สำเร็จ")}\n` +
+                    `${safeItalic("━".repeat(14))}\n` +
+                    `เกิดข้อผิดพลาด กรุณาลองใหม่`,
+                {
+                    parse_mode: "Markdown",
+                    ...Markup.inlineKeyboard([
+                        [
+                            Markup.button.callback("🔁 ลองใหม่", "CONFIRM_SAVE"),
+                            Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+                        ],
+                    ]),
+                },
+            ).catch(() => {});
         }
     });
 
@@ -425,7 +420,7 @@ export function registerActionHandlers(bot, userState) {
         return ctx.reply(
             `🏷️ ${safeBold("แก้ไขแท็ก")}\n` +
                 `${safeItalic("━".repeat(14))}\n` +
-                `แท็กที่มี: ${["สอบ", "โครงการ", "กลุ่ม", "ด่วน", "อ่าน", "ใบงาน"].join(", ")}\n\n` +
+                `แท็กที่มี: ${VALID_TAGS.join(", ")}\n\n` +
                 `พิมพ์แท็กที่ต้องการ คั่นด้วยช่องว่าง\n` +
                 `${safeItalic("เช่น")}: สอบ ด่วน อ่าน\n` +
                 `หรือพิมพ์ \`-\` เพื่อล้างแท็ก\n` +

@@ -140,7 +140,6 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
 
 export async function parseHomework(text, opts = {}) {
     if (!client) return null;
-    if (!opts.skipLengthCheck && text.length >= 300) return null;
 
     const cached = getAICache(text);
     if (cached) {
@@ -154,6 +153,8 @@ export async function parseHomework(text, opts = {}) {
             tags: inferAndParseTags(text, { priority: cached.priority }),
         };
     }
+
+    if (!opts.skipLengthCheck && text.length >= 300) return null;
 
     const today = formatDate(new Date());
     const tomorrow = formatDate(new Date(Date.now() + 86400000));

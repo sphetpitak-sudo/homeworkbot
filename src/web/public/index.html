@@ -579,7 +579,7 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
     <label>Due <input type="date" id="addDue"></label>
     <label>Priority <span id="addPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
       <select id="addPriority">
-        <option value="🔴 สูง"> สูง</option>
+        <option value="🔴 สูง">🔴 สูง</option>
         <option value="🟡 กลาง" selected>🟡 กลาง</option>
         <option value="🟢 ต่ำ">🟢 ต่ำ</option>
       </select>
@@ -670,8 +670,10 @@ function computeWeeklyDone(){
   const mon=new Date(today);mon.setDate(today.getDate()-(dow===0?6:dow-1));
   const counts=[0,0,0,0,0,0,0];
   for(const i of S.items){
-    if(i.status!==STATUS.DONE||!i.due)continue;
-    const dt=new Date(i.due+"T00:00:00");
+    if(i.status!==STATUS.DONE)continue;
+    const completed=i.completed||i.due;
+    if(!completed)continue;
+    const dt=new Date(completed+"T00:00:00");
     const diff=Math.floor((dt-mon)/86400000);
     if(diff>=0&&diff<7)counts[diff]++;
   }
@@ -989,7 +991,8 @@ function toggleSelect(id){
 }
 function toggleSelectAll(){
   const all=getFilteredList();
-  if(S.selected.size===all.length){S.selected.clear();}
+  const allSelected=all.every(i=>S.selected.has(i.id));
+  if(allSelected){all.forEach(i=>S.selected.delete(i.id));}
   else{all.forEach(i=>S.selected.add(i.id));}
   updateBulkBar();
   listRenderTable(applyListFilters());

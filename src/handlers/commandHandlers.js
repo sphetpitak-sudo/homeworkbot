@@ -20,8 +20,6 @@ import {
 
 const WEB_URL = process.env.WEB_URL || "";
 
-const SEP = "─".repeat(20);
-
 export const mainMenu = Markup.inlineKeyboard([
     [
         Markup.button.callback("➕ เพิ่มการบ้าน", "ADD"),
@@ -101,7 +99,7 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
     return ctx.reply(
         `📝 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
             `${safeItalic("━".repeat(20))}\n` +
-            `${subjectEmoji(subject)}  ${safeBold(escapeMarkdown(title))}\n\n` +
+            `${subjectEmoji(subject)}  ${safeBold(title)}\n\n` +
             `📚 วิชา      ${escapeMarkdown(subject)}\n` +
             `🎯 สำคัญ    ${priority}\n` +
             `📅 กำหนดส่ง  ${escapeMarkdown(due)}\n` +
@@ -119,7 +117,8 @@ export function showConfirm(ctx, pending, aiUsed = false, model = "") {
 function shortenTitle(title, subject = "") {
     if (!title) return "";
     const firstLine = title.split("\n")[0].trim();
-    if (firstLine.length <= 80) return firstLine || title.slice(0, 77) + "...";
+    if (!firstLine) return subject || "...";
+    if (firstLine.length <= 80) return firstLine;
 
     const prefixMatch = firstLine.match(
         /^(แบบฝึกหัด[^\s\d]*\s*\d*|ใบงาน[^\s]*|ข้อสอบ[^\s]*|แบบทดสอบ[^\s]*|รายงาน[^\s]*|สอบ[^\s]*|โครงการ[^\s]*)/,
@@ -264,12 +263,24 @@ export function registerCommandHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (state?.mode === "EDIT_TITLE") {
+            if (text.length > MAX_TEXT_LENGTH) {
+                return ctx.reply(`⚠️ ${safeBold("ชื่อยาวเกินไป")}\n\nสูงสุด ${MAX_TEXT_LENGTH} ตัวอักษร`, {
+                    parse_mode: "Markdown",
+                    ...cancelMenu,
+                });
+            }
             const pending = { ...state.pending, title: text };
             userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
             return showConfirm(ctx, pending);
         }
 
         if (state?.mode === "EDIT_SUBJECT") {
+            if (text.length > MAX_TEXT_LENGTH) {
+                return ctx.reply(`⚠️ ${safeBold("ชื่อวิชายาวเกินไป")}\n\nสูงสุด ${MAX_TEXT_LENGTH} ตัวอักษร`, {
+                    parse_mode: "Markdown",
+                    ...cancelMenu,
+                });
+            }
             const pending = { ...state.pending, subject: text };
             userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
             return showConfirm(ctx, pending);
@@ -332,7 +343,7 @@ export function registerCommandHandlers(bot, userState) {
         const previewText =
             `⚡ ${safeBold("เจองานแล้ว!")}\n` +
             `${safeItalic("━".repeat(18))}\n` +
-            `${subjectEmoji(parsed.subject)}  ${safeBold(escapeMarkdown(parsed.title))}\n` +
+            `${subjectEmoji(parsed.subject)}  ${safeBold(parsed.title)}\n` +
             `📚 ${escapeMarkdown(parsed.subject)}\n` +
             `🎯 ${parsed.priority || "🟡 กลาง"}\n` +
             `📅 ${parsed.due ? formatDueDisplay(parsed.due) : "ไม่กำหนดวัน"}\n` +

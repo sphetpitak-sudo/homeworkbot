@@ -62,6 +62,8 @@ const TAG_ALIASES = {
     "ใบงาน": ["ใบงาน", "แบบฝึกหัด", "worksheet"],
 };
 
+export const VALID_TAGS = TAG_RULES.map(r => r.tag);
+
 export function parseTags(text) {
     const matches = text.match(/#(\S+)/g);
     if (!matches) return [];
@@ -70,7 +72,7 @@ export function parseTags(text) {
         .filter(Boolean);
 }
 
-export function inferTags(text, { priority } = {}) {
+export function inferTags(text) {
     const tags = new Set();
     const lower = text.toLowerCase();
 
@@ -81,10 +83,6 @@ export function inferTags(text, { priority } = {}) {
                 break;
             }
         }
-    }
-
-    if (priority === "🔴 สูง") {
-        tags.add("ด่วน");
     }
 
     return [...tags];

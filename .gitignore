@@ -8,3 +8,4 @@ homebot.json
 .opencode/
 .DS_Store
 .aider*
+.dashboard_token

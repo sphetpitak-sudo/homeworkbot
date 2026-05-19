@@ -1,4 +1,5 @@
 import "dotenv/config";
+process.env.TZ = "Asia/Bangkok";
 import { Telegraf }    from "telegraf";
 import cron            from "node-cron";
 import { validateEnv } from "./src/utils/validateEnv.js";
@@ -60,7 +61,7 @@ async function sendReminders() {
         );
         if (!pages.length) return;
 
-        let msg = "⏰ *แจ้งเตือนการบ้านใกล้ครบกำหนด\\!*\n━━━━━━━━━━━━━━━━━━\n";
+        let msg = "⏰ *แจ้งเตือนการบ้านใกล้ครบกำหนด*\n━━━━━━━━━━━━━━━━━━\n";
 
         for (const p of pages) {
             const title =
@@ -79,7 +80,7 @@ async function sendReminders() {
             msg += `${sEmoji} *${escapeMarkdown(title)}* _${escapeMarkdown(sub)}_ — ${escapeMarkdown(formatDueDisplay(due))}\n`;
         }
 
-        msg += "\n💪 สู้ๆ นะ\\!";
+        msg += "\n💪 สู้ๆ นะ!";
 
         await bot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" });
         logger.info(`Reminder sent to ${chatId} (${pages.length} items)`);
@@ -175,7 +176,7 @@ async function sendWeeklySummary() {
         const weekStart = new Date(today);
         weekStart.setDate(today.getDate() - today.getDay());
         const weekDone = donePages.filter(p => {
-            const d = p.properties.Due?.date?.start;
+            const d = p.properties.Completed?.date?.start || p.properties.Due?.date?.start;
             if (!d) return false;
             return new Date(d + "T00:00:00") >= weekStart;
         }).length;
