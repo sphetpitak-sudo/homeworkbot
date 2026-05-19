@@ -110,6 +110,19 @@ export function parseThaiDate(text) {
     return null;
 }
 
+export function formatCompletedDisplay(completed) {
+    if (!completed) return "—";
+    const completedDate = parseYMDToLocalDate(completed);
+    if (isNaN(completedDate.getTime())) return completed;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.floor((today - completedDate) / 86_400_000);
+    const label = `${THAI_DAYS[completedDate.getDay()]}${completedDate.getDate()} ${THAI_MONTHS[completedDate.getMonth()]}`;
+    if (diff === 0) return `${label} ✅ วันนี้`;
+    if (diff === 1) return `${label} ✅ เมื่อวาน`;
+    return `${label} ✅ เสร็จแล้ว ${diff} วัน`;
+}
+
 export function formatDueDisplay(due) {
     if (!due) return "ไม่กำหนดวัน";
 

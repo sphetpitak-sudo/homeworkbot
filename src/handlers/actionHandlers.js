@@ -1,6 +1,6 @@
 import { Markup } from "telegraf";
 import {
-    formatDueDisplay,
+    formatDueDisplay, formatCompletedDisplay,
     parseYMDToLocalDate,
     parseThaiDate,
     THAI_DAYS,
@@ -123,7 +123,7 @@ function actionButtons(pageId, mode = "active") {
 
 /* ── card builder ── */
 function buildHomeworkCard(page, mode = "active") {
-    const { title, status, due, subject, priority, tags } = getPageProps(page);
+    const { title, status, due, subject, priority, tags, completed } = getPageProps(page);
     const safeSubject = escapeMarkdown(subject);
     const tagsStr = tags?.length ? tags.map(t => `#${t}`).join(" ") : null;
 
@@ -134,8 +134,9 @@ function buildHomeworkCard(page, mode = "active") {
             `${safeItalic("├")}${safeItalic("─".repeat(16))}${safeItalic("┤")}\n` +
             `${subjectEmoji(subject)} ${safeSubject}\n` +
             `${priority}\n` +
-            (tagsStr ? `${tagsStr}\n` : "") +
+            `${tagsStr ? tagsStr + `\n` : ""}` +
             `📅 ${formatDueDisplay(due)}` +
+            (status === STATUS.DONE ? `\n✅ ${formatCompletedDisplay(completed)}` : "") +
             `\n${safeItalic("└")}${safeItalic("─".repeat(16))}${safeItalic("┘")}`,
         extra: {
             parse_mode: "Markdown",
