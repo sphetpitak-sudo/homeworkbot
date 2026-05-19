@@ -8,8 +8,8 @@ AI-powered Telegram bot + web dashboard for managing homework. Built with Node.j
 - **Priority System** — Auto-detect (🔴สูง/🟡กลาง/🟢ต่ำ), manual override, auto-recalc via daily cron
 - **Tag Inference** — Auto-tagged from keywords (สอบ, โครงการ, กลุ่ม, ด่วน, อ่าน, ใบงาน) + #hashtag support
 - **AI Q&A** — `/ask` command queries homework context in natural language
-- **Web Dashboard** — Express + Chart.js with dark mode, calendar, CSV export, PWA support
-- **Pagination** — 10 items per page, prev/next navigation
+- **Web Dashboard** — Express + Chart.js with dark mode, calendar, CSV export, PWA support, paginated list (20 items/page)
+- **Pagination** — 20 items per page with prev/next/first/last navigation
 - **Delete Recovery** — 10-second window to restore archived items
 - **Undo** — `/undo` reverts last status change within 30 seconds
 - **Reminders** — Daily 08:00 upcoming homework notifications

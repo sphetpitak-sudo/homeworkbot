@@ -51,7 +51,7 @@ src/utils/
 | ✅ Priority auto-update | cron 06:00 — recalc all active homework priorities based on remaining days (runs before reminder 08:00) |
 | ✅ Tags | Auto-inferred from text (สอบ/โครงการ/กลุ่ม/ด่วน/อ่าน/ใบงาน), displayed without `#` prefix, stored as Notion multi_select, editable via confirm menu |
 | ✅ AI Q&A | /ask command — ask about homework in natural language, AI responds with context |
-| ✅ Web Dashboard | Express + Chart.js: donuts, trend line, calendar, detail panel, CSV export, dark mode, PWA |
+| ✅ Web Dashboard | Express + Chart.js: donuts, trend line, calendar, detail panel, CSV export, dark mode, PWA, paginated list |
 | ✅ Quick Add from Web | Modal form with subject dropdown, auto-priority preview, POST `/api/homework` |
 | ✅ Status Change from Web | Clickable status buttons (To Do / In Progress / Done) in list rows |
 | ✅ Bulk Actions | Checkboxes + select all + bulk status update via POST `/api/bulk-status` |
@@ -104,7 +104,7 @@ src/utils/
 - **Home**: stats cards (6 items), today+tomorrow schedule, overdue alert, quick links, "+ Add" button
 - **Dashboard**: 6 stats cards, status+priority donuts (custom HTML legends), weekly progress bar chart, subject pills with urgency bar, 30-day trend line, 7-day mini grid
 - **Calendar**: monthly grid with status dots (red/amber/green for todo/prog/done), click day → show items with priority tags, Buddhist year display, legend for colors
-- **List**: checkbox column + select all, sortable columns (click header), subject emoji, search in title+subject+note, subject filter + date range, status filter tabs with counts, grouped by (overdue/this week/next week/later/no date/done), colored rows (done dimmed), clickable status buttons per row, click row for detail panel
+- **List**: checkbox column + select all, sortable columns (click header), subject emoji, search in title+subject+note, subject filter + date range, status filter tabs with counts, grouped by (overdue/this week/next week/later/no date/done), colored rows (done dimmed), clickable status buttons per row, click row for detail panel, **20 items/page with prev/next/first/last pagination**
 - **Detail panel**: priority badge, time remaining with color, status, subject, note, Notion link
 - **Quick Add modal**: center overlay, title (required), subject dropdown (from SUBJ_EMOJI), due date picker, auto-priority preview (overrideable), note textarea
 - **Bulk actions**: bar appears when items selected, buttons for To Do / In Progress / Done, clear button, filter counts refresh after update
