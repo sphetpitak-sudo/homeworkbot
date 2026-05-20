@@ -26,14 +26,106 @@ AI-powered Telegram bot + web dashboard for managing homework. Built with Node.j
 - **AI Confident Skip** — Skips intermediate preview when AI matches regex
 - **Edit Saved Items** — Web API supports partial field updates + delete
 
-## Quick Start
+## How to Install
+
+### Prerequisites
+
+- **Node.js 20+** — [Download](https://nodejs.org/)
+- **A Telegram bot token** — create one via [@BotFather](https://t.me/BotFather)
+- **A Notion integration token + database** — [Create integration](https://www.notion.so/my-integrations)
+- **(Optional) Typhoon API key** — [Get free API key](https://playground.opentyphoon.ai/settings/api-key) for AI parsing + Q&A
+
+### Step-by-step
+
+#### 1. Clone & install
 
 ```bash
+git clone <your-repo-url>
+cd homeworkbot
 npm install
+```
+
+#### 2. Configure environment
+
+```bash
 cp .env.example .env
-# fill in TELEGRAM_TOKEN, NOTION_TOKEN, DATABASE_ID
+```
+
+Then edit `.env` with your credentials:
+
+```env
+# Required
+TELEGRAM_TOKEN=123456:ABC-DEF1234     # From @BotFather
+NOTION_TOKEN=secret_abc123...          # From notion.so/my-integrations
+DATABASE_ID=abc123def456...            # Your Notion DB ID (see below)
+
+# Optional but recommended
+TYPHOON_API_KEY=typhoon-...            # For AI parsing + Q&A
+REMINDER_CHAT_ID=123456789             # Chat ID for daily reminders
+WEB_URL=https://your-app.com           # Shows web dashboard button in bot menu
+```
+
+#### 3. Set up Notion database
+
+Create a new Notion database with **exactly these properties**:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Name` | Title | Homework title |
+| `Subject` | Rich text | e.g. คณิต, ไทย, อังกฤษ |
+| `Status` | Select | Options: `Todo`, `In Progress`, `Done` |
+| `Due` | Date | Due date |
+| `Priority` | Select | Options: `🔴 สูง`, `🟡 กลาง`, `🟢 ต่ำ` |
+| `Tags` | Multi-select | Optional tags |
+| `Note` | Rich text | Optional notes |
+| `Completed` | Date | Auto-set when status → Done |
+
+> **To get your DATABASE_ID:** Open your database in Notion, copy the URL. It looks like:
+> `https://www.notion.so/workspace/abc123def456789?v=...`
+> The part between the last `/` and `?` (or end) is your DATABASE_ID.
+
+> **Important:** Go to your integration settings → " integrations" → select your integration → **"Add connections"** → select your homework database. Without this, the API cannot access the DB.
+
+#### 4. Test
+
+```bash
 npm test
+```
+
+All 1025+ tests should pass.
+
+#### 5. Run
+
+```bash
 node index.js
+```
+
+The bot will start polling Telegram. Open your bot in Telegram and type `/start`.
+
+### Docker
+
+```bash
+docker build -t homework-bot .
+docker run -p 8080:8080 --env-file .env homework-bot
+```
+
+Or pull from your registry and run with env vars set in your hosting platform.
+
+### Deployment (JustRunMy)
+
+```bash
+git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
+```
+
+The platform reads the Dockerfile, auto-builds, and restarts on every push. Port 8080 exposed.
+
+### Updating
+
+```bash
+git pull
+npm install    # if dependencies changed
+npm test       # verify no regressions
+node index.js  # restart
 ```
 
 ## Environment Variables
