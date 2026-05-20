@@ -6,10 +6,13 @@ import { cacheGet, cacheSet, cacheInvalidate } from "./cache.js";
 const notion = new Client({ auth: process.env.NOTION_TOKEN?.trim() });
 const DB = process.env.DATABASE_ID;
 
+const MAX_QUERY_PAGES = 50; // safety limit (~5000 items)
+
 /* ── pagination helper ── */
 async function queryAll(params) {
     const results = [];
     let cursor = undefined;
+    let pages = 0;
 
     do {
         const res = await notion.databases.query({
@@ -19,7 +22,8 @@ async function queryAll(params) {
         });
         results.push(...res.results);
         cursor = res.has_more ? res.next_cursor : undefined;
-    } while (cursor);
+        pages++;
+    } while (cursor && pages < MAX_QUERY_PAGES);
 
     return results;
 }
@@ -149,8 +153,8 @@ export async function updateStatus(pageId, status) {
 
 export async function updateHomework(pageId, { title, subject, due, priority, note, tags }) {
     const props = {};
-    if (title !== undefined) props.Name = { title: [{ text: [{ content: title }] }] };
-    if (subject !== undefined) props.Subject = { rich_text: [{ text: [{ content: subject }] }] };
+    if (title !== undefined) props.Name = { title: [{ text: { content: title } }] };
+    if (subject !== undefined) props.Subject = { rich_text: [{ text: { content: subject } }] };
     if (due !== undefined) props.Due = due ? { date: { start: due } } : { date: null };
     if (priority !== undefined) props.Priority = { select: { name: priority } };
     if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };

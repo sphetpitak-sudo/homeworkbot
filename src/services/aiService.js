@@ -65,9 +65,8 @@ async function completeWithRetry(systemMsg, userMsg) {
                 logger.warn(`${model} quota hit, switching to ${MODELS[attempt + 1]}...`);
                 continue;
             }
-            if (isQuota) {
+            if (isRetryable) {
                 logger.warn(`All models exhausted — falling back to regex`);
-                throw err;
             }
             throw err;
         }

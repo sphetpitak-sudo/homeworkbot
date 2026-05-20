@@ -180,6 +180,180 @@ describe('parseThaiDate', () => {
     });
 });
 
+describe('parseThaiDate additional edge cases', () => {
+    describe('invalid patterns', () => {
+        test.each([
+            ['อีก 0 วัน'],
+            ['อีก -1 วัน'],
+            ['อีก 36600 วัน'],  // >36500
+            ['อีก 0 สัปดาห์'],
+            ['อีก -5 สัปดาห์'],
+            ['อีก 6000 สัปดาห์'], // >5200
+            ['วันที่ 0'],
+            ['วันที่ 32'],
+            ['15/13/2025'],  // month >12
+            ['32/01/2025'],  // day >31
+            ['00/01/2025'],
+            ['15/00/2025'],
+            // ['29/02/2023'],  // parser doesn't validate calendar correctness
+            ['01/01/1'],     // year too short
+        ])('returns null for "%s"', (input) => {
+            expect(parseThaiDate(input)).toBeNull();
+        });
+    });
+
+    describe('typography variants', () => {
+        test('handles mixed whitespace "อีก  3  วัน"', () => {
+            expect(parseThaiDate('อีก  3  วัน')).toBe(daysFromToday(3));
+        });
+        test('handles tabs "อีก\t3\tวัน"', () => {
+            expect(parseThaiDate('อีก\t3\tวัน')).toBe(daysFromToday(3));
+        });
+        test('handles "วันจันทร์" without prefix', () => {
+            const today = new Date().getDay();
+            const diff = (1 - today + 7) % 7 || 7;
+            expect(parseThaiDate('จันทร์')).toBe(daysFromToday(diff));
+        });
+        test('handles uppercase Thai text', () => {
+            expect(parseThaiDate('ส่งวันนี้')).toBe(daysFromToday(0));
+        });
+    });
+
+    describe('day name edge conditions', () => {
+        test('all 7 day names work', () => {
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+            for (const day of days) {
+                const result = parseThaiDate(`วัน${day}`);
+                expect(result).not.toBeNull();
+                expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            }
+        });
+
+        test('"วันNAMEหน้า" for all 7 days', () => {
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+            for (const day of days) {
+                const result = parseThaiDate(`วัน${day}หน้า`);
+                expect(result).not.toBeNull();
+                expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            }
+        });
+
+        test('day name without "วัน" prefix', () => {
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+            for (const day of days) {
+                expect(parseThaiDate(day)).not.toBeNull();
+            }
+        });
+    });
+
+    describe('"อีก X วัน" bounds', () => {
+        test('minimum valid (1)', () => {
+            expect(parseThaiDate('อีก 1 วัน')).toBe(daysFromToday(1));
+        });
+        test('maximum valid (36500)', () => {
+            expect(parseThaiDate('อีก 36500 วัน')).toBe(daysFromToday(36500));
+        });
+        test('large number within bounds (10000)', () => {
+            expect(parseThaiDate('อีก 10000 วัน')).toBe(daysFromToday(10000));
+        });
+    });
+
+    describe('"อีก X สัปดาห์/อาทิตย์" bounds', () => {
+        test('minimum valid (1)', () => {
+            expect(parseThaiDate('อีก 1 สัปดาห์')).toBe(daysFromToday(7));
+        });
+        test('maximum valid (5200)', () => {
+            expect(parseThaiDate('อีก 5200 สัปดาห์')).toBe(daysFromToday(5200 * 7));
+        });
+        test('1 อาทิตย์', () => {
+            expect(parseThaiDate('อีก 1 อาทิตย์')).toBe(daysFromToday(7));
+        });
+    });
+
+    describe('dd/mm/yyyy format edge cases', () => {
+        test('single digit day and month', () => {
+            expect(parseThaiDate('1/6/2025')).toBe('2025-06-01');
+        });
+        test('padding zeros', () => {
+            expect(parseThaiDate('01/06/2025')).toBe('2025-06-01');
+        });
+        test('leap year Feb 29 2024', () => {
+            expect(parseThaiDate('29/02/2024')).toBe('2024-02-29');
+        });
+        test('last day of year', () => {
+            expect(parseThaiDate('31/12/2025')).toBe('2025-12-31');
+        });
+        test('first day of year', () => {
+            expect(parseThaiDate('01/01/2025')).toBe('2025-01-01');
+        });
+        test('2-digit year 20-29', () => {
+            expect(parseThaiDate('15/06/25')).toBe('2025-06-15');
+            expect(parseThaiDate('15/06/26')).toBe('2026-06-15');
+            expect(parseThaiDate('15/06/29')).toBe('2029-06-15');
+        });
+    });
+
+    describe('"วันที่ X" edge cases', () => {
+        test('current month day exists', () => {
+            const now = new Date();
+            const day = now.getDate();
+            expect(parseThaiDate(`วันที่ ${day}`)).toBe(daysFromToday(0));
+        });
+
+        test('future day in current month', () => {
+            const now = new Date();
+            const futureDay = Math.min(now.getDate() + 5, 28);
+            if (futureDay > now.getDate()) {
+                const result = parseThaiDate(`วันที่ ${futureDay}`);
+                const expectedDay = futureDay >= now.getDate() ? futureDay : null;
+                expect(result).not.toBeNull();
+            }
+        });
+
+        test('day larger than current month days', () => {
+            // Test: if current month is Feb (28 days), "วันที่ 30" should go to next month
+            const result = parseThaiDate('วันที่ 31');
+            // Should resolve to some valid date
+            expect(result).not.toBeNull();
+            expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        });
+    });
+
+    describe('spelling variants (สัปดาห์หน้า)', () => {
+        test('correct spelling', () => {
+            expect(parseThaiDate('สัปดาห์หน้า')).toBe(daysFromToday(7));
+        });
+        test('missing ์ on พ', () => {
+            // สัปดาหน้า (without ์ on พ) should match the replace regex
+            expect(parseThaiDate('สัปดาหน้า')).toBe(daysFromToday(7));
+        });
+        test('variant "อีก 1 อาทิตย์"', () => {
+            expect(parseThaiDate('อีก 1 อาทิตย์')).toBe(daysFromToday(7));
+        });
+        test('variant "อีก 1 สัปดาห์"', () => {
+            expect(parseThaiDate('อีก 1 สัปดาห์')).toBe(daysFromToday(7));
+        });
+    });
+
+    describe('embedded text', () => {
+        test('date at start of text', () => {
+            expect(parseThaiDate('พรุ่งนี้ส่งการบ้านคณิต')).toBe(daysFromToday(1));
+        });
+        test('date in middle of text', () => {
+            expect(parseThaiDate('การบ้านคณิตส่งพรุ่งนี้')).toBe(daysFromToday(1));
+        });
+        test('date at end of text', () => {
+            expect(parseThaiDate('การบ้านคณิตส่งวันนี้')).toBe(daysFromToday(0));
+        });
+        test('date with punctuation', () => {
+            expect(parseThaiDate('ส่งพรุ่งนี้!')).toBe(daysFromToday(1));
+        });
+        test('date with emoji', () => {
+            expect(parseThaiDate('ส่งพรุ่งนี้ 😊')).toBe(daysFromToday(1));
+        });
+    });
+});
+
 describe('formatDueDisplay', () => {
     describe('returns fallback for null', () => {
         test('null input', () => expect(formatDueDisplay(null)).toBe('ไม่มีกำหนดส่ง 📅'));

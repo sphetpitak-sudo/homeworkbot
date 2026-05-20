@@ -54,15 +54,16 @@ function debouncedSave() {
 }
 
 export async function flushCorrections() {
-    await new Promise((resolve) => {
-        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
-        if (!writeInProgress && !pendingWrite) { resolve(); return; }
-        saveResolve = resolve;
-        if (!writeInProgress) doWrite();
-    });
-    if (debounceTimer) {
-        clearTimeout(debounceTimer); debounceTimer = null;
-        await new Promise((resolve) => { saveResolve = resolve; doWrite(); });
+    for (;;) {
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+            debounceTimer = null;
+            doWrite();
+        }
+        if (!writeInProgress && !pendingWrite) break;
+        await new Promise((resolve) => {
+            saveResolve = resolve;
+        });
     }
 }
 

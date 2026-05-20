@@ -91,11 +91,14 @@ export function parseThaiDate(text) {
         ศุกร์: 5,
         เสาร์: 6,
     };
+    const skipWords = ["หน้าต่าง", "หน้าหนังสือ", "หน้าจอ", "หน้าแรก", "หน้าตา", "หน้าปก", "หน้าไม้"];
     for (const [name, num] of Object.entries(days)) {
         if (t.includes(name)) {
             const target = new Date();
             let diff = (num - target.getDay() + 7) % 7;
-            if (t.includes("หน้า") && !t.includes("หน้าต่าง") && !t.includes("หน้าหนังสือ")) diff += 7;
+            const dayIdx = t.indexOf(name);
+            const afterText = t.slice(dayIdx + name.length, dayIdx + name.length + 15);
+            if (afterText.includes("หน้า") && !skipWords.some(w => afterText.includes(w))) diff += 7;
             if (diff === 0) diff = 7;
             target.setDate(target.getDate() + diff);
             return formatDate(target);

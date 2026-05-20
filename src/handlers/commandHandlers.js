@@ -391,7 +391,7 @@ export function registerCommandHandlers(bot, userState) {
 
         // Not in any mode — smart preview with AI or regex
         const parsed = await parseText(text);
-        const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags, _parseSource: parsed.parseSource };
+        const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags, parseSource: parsed.parseSource };
 
         // Fix 1: skip preview if AI is confident + regex agrees
         if (isUnambiguous(parsed, text)) {

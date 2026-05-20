@@ -42,6 +42,27 @@ import { setCorrection } from "../services/aiCache.js";
 const hintsShown = new Map();  // uid -> { keys: Set, ts: number }
 const deletedItems = new Map();
 const HINT_TTL = 3_600_000; // 1 hour
+const HINT_MAX_ENTRIES = 1000;
+
+// Periodic cleanup to prevent unbounded memory growth
+setInterval(() => {
+    pruneHints(hintsShown);
+    pruneHints(sessionHints);
+    const now = Date.now();
+    for (const [uid, item] of deletedItems) {
+        if (now - item._timestamp > 10000) deletedItems.delete(uid);
+    }
+    if (hintsShown.size > HINT_MAX_ENTRIES) {
+        const sorted = [...hintsShown.entries()].sort((a, b) => a[1].ts - b[1].ts);
+        const toDelete = sorted.slice(0, sorted.length - HINT_MAX_ENTRIES);
+        for (const [uid] of toDelete) hintsShown.delete(uid);
+    }
+    if (sessionHints.size > HINT_MAX_ENTRIES) {
+        const sorted = [...sessionHints.entries()].sort((a, b) => a[1].ts - b[1].ts);
+        const toDelete = sorted.slice(0, sorted.length - HINT_MAX_ENTRIES);
+        for (const [uid] of toDelete) sessionHints.delete(uid);
+    }
+}, HINT_TTL).unref();
 
 /* ── session-scoped hint tracking ── */
 const sessionHints = new Map(); // uid -> { keys: Set, ts: number }
@@ -245,7 +266,7 @@ export function registerActionHandlers(bot, userState) {
                 originalText: state.originalText, _timestamp: Date.now(),
             });
             await ctx.answerCbQuery().catch(() => {});
-            return showConfirm(ctx, state.pending, state.pending._parseSource || "");
+            return showConfirm(ctx, state.pending, state.pending.parseSource || "");
         }
         userState.set(uid, { mode: "ADD", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch(() => {});

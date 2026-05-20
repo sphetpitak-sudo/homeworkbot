@@ -456,4 +456,150 @@ describe('Web Dashboard API E2E', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  /* ── POST /api/homework validation ── */
+
+  describe('POST /api/homework validation', () => {
+    test('400 when body is empty', async () => {
+      const res = await fetch(`${baseUrl}/api/homework`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('400 when title is empty string', async () => {
+      const res = await fetch(`${baseUrl}/api/homework`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ title: '' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('accepts note field', async () => {
+      const res = await fetch(`${baseUrl}/api/homework`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ title: 'งานมีโน๊ต', note: 'รายละเอียดเพิ่มเติม' }),
+      });
+      expect(res.status).toBe(200);
+      expect(mockCreateHomework).toHaveBeenCalledWith(
+        expect.objectContaining({ note: 'รายละเอียดเพิ่มเติม' }),
+      );
+    });
+
+    test('priority auto-calculated when not provided', async () => {
+      mockCreateHomework.mockClear();
+      const res = await fetch(`${baseUrl}/api/homework`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ title: 'งาน', due: '2026-05-20' }),
+      });
+      expect(res.status).toBe(200);
+      expect(mockCreateHomework).toHaveBeenCalledWith(
+        expect.objectContaining({ priority: '🔴 สูง' }),
+      );
+    });
+  });
+
+  /* ── GET /api/all edge cases ── */
+
+  describe('GET /api/all edge cases', () => {
+    test('empty active list', async () => {
+      mockFetchActive.mockResolvedValueOnce([]);
+      const res = await fetch(`${baseUrl}/api/all`, { headers: authHeaders() });
+      const data = await res.json();
+      expect(data.stats.todo).toBe(0);
+      expect(data.stats.prog).toBe(0);
+      expect(data.stats.done).toBe(2);
+    });
+
+    test('empty done list', async () => {
+      mockFetchDone.mockResolvedValueOnce([]);
+      const res = await fetch(`${baseUrl}/api/all`, { headers: authHeaders() });
+      const data = await res.json();
+      expect(data.stats.done).toBe(0);
+    });
+
+    test('both lists empty', async () => {
+      mockFetchActive.mockResolvedValueOnce([]);
+      mockFetchDone.mockResolvedValueOnce([]);
+      const res = await fetch(`${baseUrl}/api/all`, { headers: authHeaders() });
+      const data = await res.json();
+      expect(data.stats.total).toBe(0);
+      expect(data.stats.pct).toBe(0);
+    });
+
+    test('stats has expected keys', async () => {
+      const res = await fetch(`${baseUrl}/api/all`, { headers: authHeaders() });
+      const data = await res.json();
+      const stats = data.stats;
+      expect(stats).toHaveProperty('todo');
+      expect(stats).toHaveProperty('prog');
+      expect(stats).toHaveProperty('done');
+      expect(stats).toHaveProperty('total');
+      expect(stats).toHaveProperty('pct');
+      expect(stats).toHaveProperty('urgent');
+      expect(stats).toHaveProperty('overdue');
+      expect(stats).toHaveProperty('bySubject');
+      expect(stats).toHaveProperty('byPriority');
+      expect(stats).toHaveProperty('byTags');
+    });
+  });
+
+  /* ── POST /api/status validation ── */
+
+  describe('POST /api/status validation', () => {
+    test('400 for invalid status value', async () => {
+      const res = await fetch(`${baseUrl}/api/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ id: 'page-1', status: 'InvalidStatus' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('400 for empty id', async () => {
+      const res = await fetch(`${baseUrl}/api/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ id: '', status: 'Done' }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  /* ── Rate limiting ── */
+
+  describe('Rate limiting', () => {
+    test('returns 429 after many requests', async () => {
+      const promises = [];
+      for (let i = 0; i < 70; i++) {
+        promises.push(
+          fetch(`${baseUrl}/api/all`, { headers: authHeaders() }),
+        );
+      }
+      const results = await Promise.all(promises);
+      const tooMany = results.filter(r => r.status === 429);
+      expect(tooMany.length).toBeGreaterThan(0);
+    });
+  });
+
+  /* ── Health check ── */
+
+  describe('Health check', () => {
+    test('GET /health returns ok', async () => {
+      const res = await fetch(`${baseUrl}/health`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.status).toBe('ok');
+    });
+
+    test('GET /health does not require auth', async () => {
+      const res = await fetch(`${baseUrl}/health`);
+      expect(res.status).toBe(200);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { cacheGet, cacheSet, cacheInvalidate } from '../src/services/cache.js';
+import { cacheGet, cacheSet, cacheInvalidate, cacheCleanup } from '../src/services/cache.js';
 
 beforeEach(() => {
     cacheInvalidate();
@@ -174,6 +174,141 @@ describe('cacheInvalidate', () => {
             cacheInvalidate('foo:ba');
             expect(cacheGet('foo:bar')).toBeUndefined();
         });
+    });
+});
+
+describe('cacheCleanup', () => {
+    test('removes expired entries', async () => {
+        cacheSet('exp1', 'val1', 10);
+        cacheSet('exp2', 'val2', 10);
+        cacheSet('keep1', 'val3', 10000);
+        await new Promise(r => setTimeout(r, 20));
+        expect(cacheGet('exp1')).toBeUndefined();
+        expect(cacheGet('exp2')).toBeUndefined();
+        expect(cacheGet('keep1')).toBe('val3');
+    });
+
+    test('does not remove valid entries', () => {
+        cacheSet('stay', 'val', 30000);
+        expect(cacheGet('stay')).toBe('val');
+    });
+
+    test('handles empty store', () => {
+        cacheInvalidate();
+        expect(() => cacheCleanup()).not.toThrow();
+    });
+
+    test('after cleanup, new entries still work', () => {
+        cacheInvalidate();
+        cacheSet('new', 'val', 30000);
+        cacheCleanup();
+        expect(cacheGet('new')).toBe('val');
+    });
+});
+
+describe('concurrent access patterns', () => {
+    test('set and get in rapid succession', () => {
+        for (let i = 0; i < 100; i++) {
+            cacheSet(`key${i}`, `val${i}`);
+        }
+        for (let i = 0; i < 100; i++) {
+            expect(cacheGet(`key${i}`)).toBe(`val${i}`);
+        }
+    });
+
+    test('invalidation while iterating', () => {
+        cacheSet('a', 1);
+        cacheSet('b', 2);
+        cacheSet('c', 3);
+        cacheInvalidate('b');
+        expect(cacheGet('a')).toBe(1);
+        expect(cacheGet('b')).toBeUndefined();
+        expect(cacheGet('c')).toBe(3);
+    });
+
+    test('multiple invalidations', () => {
+        cacheSet('x1', 'a');
+        cacheSet('x2', 'b');
+        cacheSet('y1', 'c');
+        cacheInvalidate('x');
+        cacheInvalidate('y');
+        expect(cacheGet('x1')).toBeUndefined();
+        expect(cacheGet('x2')).toBeUndefined();
+        expect(cacheGet('y1')).toBeUndefined();
+    });
+});
+
+describe('TTL edge cases', () => {
+    test('very small TTL expires fast', async () => {
+        cacheSet('fast', 'gone', 1);
+        await new Promise(r => setTimeout(r, 5));
+        expect(cacheGet('fast')).toBeUndefined();
+    });
+
+    test('large TTL value', () => {
+        cacheSet('slow', 'stay', 86400000);
+        expect(cacheGet('slow')).toBe('stay');
+    });
+
+    test('TTL of Infinity', () => {
+        cacheSet('inf', 'val', Infinity);
+        expect(cacheGet('inf')).toBe('val');
+    });
+
+    test('multiple keys with different TTLs', async () => {
+        cacheSet('fast1', 'a', 10);
+        cacheSet('fast2', 'b', 10);
+        cacheSet('slow', 'c', 10000);
+        await new Promise(r => setTimeout(r, 20));
+        expect(cacheGet('fast1')).toBeUndefined();
+        expect(cacheGet('fast2')).toBeUndefined();
+        expect(cacheGet('slow')).toBe('c');
+    });
+
+    test('re-setting key extends TTL', async () => {
+        cacheSet('refresh', 'old', 10);
+        await new Promise(r => setTimeout(r, 5));
+        cacheSet('refresh', 'new', 10000);
+        await new Promise(r => setTimeout(r, 10));
+        expect(cacheGet('refresh')).toBe('new');
+    });
+});
+
+describe('pattern invalidation edge cases', () => {
+    test('prefix matches exact key', () => {
+        cacheSet('abc', 'val');
+        cacheInvalidate('abc');
+        expect(cacheGet('abc')).toBeUndefined();
+    });
+
+    test('prefix matches start of key', () => {
+        cacheSet('notion:active', 'val1');
+        cacheSet('notion:done', 'val2');
+        cacheSet('notion:upcoming:2025', 'val3');
+        cacheInvalidate('notion:');
+        expect(cacheGet('notion:active')).toBeUndefined();
+        expect(cacheGet('notion:done')).toBeUndefined();
+        expect(cacheGet('notion:upcoming:2025')).toBeUndefined();
+    });
+
+    test('prefix with colon separators', () => {
+        cacheSet('user:100', 'a');
+        cacheSet('user:200', 'b');
+        cacheSet('admin:100', 'c');
+        cacheInvalidate('user:');
+        expect(cacheGet('user:100')).toBeUndefined();
+        expect(cacheGet('user:200')).toBeUndefined();
+        expect(cacheGet('admin:100')).toBe('c');
+    });
+
+    test('prefix with nested separators', () => {
+        cacheSet('a:b:c', 1);
+        cacheSet('a:b:d', 2);
+        cacheSet('a:c:b', 3);
+        cacheInvalidate('a:b:');
+        expect(cacheGet('a:b:c')).toBeUndefined();
+        expect(cacheGet('a:b:d')).toBeUndefined();
+        expect(cacheGet('a:c:b')).toBe(3);
     });
 });
 

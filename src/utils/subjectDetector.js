@@ -113,7 +113,7 @@ const SUBJECT_KEYWORD_PATTERN = new RegExp(
 export function detectSubject(text) {
     const t = text.toLowerCase();
     for (const [sub, keys] of Object.entries(SUBJECT_MAP))
-        for (const k of keys) if (t.includes(k)) return sub;
+        for (const k of keys) if (t.includes(k.toLowerCase())) return sub;
     return "ทั่วไป";
 }
 

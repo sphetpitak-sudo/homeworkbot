@@ -1,5 +1,97 @@
 import { escapeMarkdown, safeBold, safeItalic, safeCode } from '../src/utils/telegramFormat.js';
 
+describe('escapeMarkdown comprehensive', () => {
+    describe('full ASCII range', () => {
+        const safe = `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -=()[]{}|;:'",.<>!@#\$%^&/+~`;
+        test('non-special chars pass through', () => {
+            const result = escapeMarkdown(safe);
+            // Only _ * ` [ are escaped
+            expect(result).not.toContain('\\_');
+            expect(result).not.toContain('\\*');
+            expect(result).not.toContain('\\`');
+        });
+    });
+
+    describe('Thai character safety', () => {
+        test.each([
+            ['กขคงจ', 'กขคงจ'],
+            ['สวัสดีครับ', 'สวัสดีครับ'],
+            ['ภาษาไทย123', 'ภาษาไทย123'],
+            ['การบ้านคณิต', 'การบ้านคณิต'],
+            ['สอบปลายภาค', 'สอบปลายภาค'],
+            ['àéïôû', 'àéïôû'],
+            ['日本語', '日本語'],
+            ['한국어', '한국어'],
+            ['中文', '中文'],
+        ])('preserves "%s"', (input, expected) => {
+            expect(escapeMarkdown(input)).toBe(expected);
+        });
+    });
+
+    describe('multiple consecutive special chars', () => {
+        test.each([
+            ['___', '\\_\\_\\_'],
+            ['***', '\\*\\*\\*'],
+            ['```', '\\`\\`\\`'],
+            ['[_]', '\\[\\_' + ']'],
+            ['_*`', '\\_\\*\\`'],
+            ['*_`', '\\*\\_\\`'],
+            ['`_*', '\\`\\_\\*'],
+        ])('escapes "%s" -> "%s"', (input, expected) => {
+            expect(escapeMarkdown(input)).toBe(expected);
+        });
+    });
+
+    describe('real-world homework text', () => {
+        test.each([
+            ['แบบฝึกหัดที่ 1 (หน้า 20-25)', 'แบบฝึกหัดที่ 1 (หน้า 20-25)'],
+            ['คณิต: เรขาคณิต บทที่ 3', 'คณิต: เรขาคณิต บทที่ 3'],
+            ['รายงาน วิทย์ ส่ง 15/06/2025', 'รายงาน วิทย์ ส่ง 15/06/2025'],
+            ['ภาษาไทย_แต่งกลอน', 'ภาษาไทย\\_แต่งกลอน'],
+            ['*ฟิสิกส์* บทที่ 5', '\\*ฟิสิกส์\\* บทที่ 5'],
+            ['โค้ด: `console.log()`', 'โค้ด: \\`console.log()\\`'],
+            ['urgent_task [final]', 'urgent\\_task \\[final]'],
+            ['100% เสร็จแล้ว', '100% เสร็จแล้ว'],
+            ['อุณหภูมิ 30°C', 'อุณหภูมิ 30°C'],
+            ['น้ำหนัก 50±5 kg', 'น้ำหนัก 50±5 kg'],
+        ])('handles "%s" correctly', (input, expected) => {
+            expect(escapeMarkdown(input)).toBe(expected);
+        });
+    });
+
+    describe('edge cases', () => {
+        test('very long string', () => {
+            const long = 'x'.repeat(10000);
+            const result = escapeMarkdown(long);
+            expect(result.length).toBe(10000);
+        });
+        test('string with only special chars', () => {
+            expect(escapeMarkdown('_*`[')).toBe('\\_\\*\\`\\[');
+        });
+        test('string with only special chars repeated', () => {
+            expect(escapeMarkdown('_'.repeat(100))).toBe('\\_'.repeat(100));
+        });
+        test('null input', () => {
+            expect(escapeMarkdown(null)).toBe('');
+        });
+        test('undefined input', () => {
+            expect(escapeMarkdown(undefined)).toBe('');
+        });
+        test('number input', () => {
+            expect(escapeMarkdown(0)).toBe('0');
+            expect(escapeMarkdown(123.45)).toBe('123.45');
+        });
+        test('boolean input', () => {
+            expect(escapeMarkdown(true)).toBe('true');
+            expect(escapeMarkdown(false)).toBe('false');
+        });
+        test('object input', () => {
+            const obj = { toString: () => 'custom' };
+            expect(escapeMarkdown(obj)).toBe('custom');
+        });
+    });
+});
+
 describe('escapeMarkdown', () => {
     describe('escapes special characters', () => {
         test.each([
