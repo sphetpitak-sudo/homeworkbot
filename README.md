@@ -28,45 +28,45 @@
 
 | Feature | Description |
 |---------|-------------|
-| **AI Parse Homework** | พิมพ์ "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้" → AI (Typhoon) ดึง ชื่อวิชา, วันที่ส่ง, ความสำคัญ, แท็ก อัตโนมัติ |
-| **AI Q&A** | `/ask` ถามเกี่ยวกับการบ้านเป็นภาษาไทย — AI ตอบจากข้อมูลใน Notion |
-| **Priority System** | 🔴สูง / 🟡กลาง / 🟢ต่ำ — auto-detect, manual override, auto-recalc ทุกวัน 06:00 |
-| **Tag Inference** | auto-tag จาก keywords (สอบ, โครงการ, กลุ่ม, ด่วน, อ่าน, ใบงาน) + `#hashtag` |
-| **Edit Before Save** | preview + edit (ชื่อ, วิชา, วันที่, ความสำคัญ, แท็ก) ก่อนบันทึก |
-| **Pagination** | รายการงานค้าง/งานเสร็จ 10 รายการ/หน้า พร้อมปุ่ม previous/next |
-| **Delete Recovery** | ลบแล้วกู้คืนได้ภายใน 10 วินาที |
-| **Undo** | `/undo` ยกเลิกการเปลี่ยนสถานะล่าสุด (ภายใน 30 วินาที) |
-| **Reminders** | auto แจ้งเตือนงานที่ต้องส่ง 7 วันข้างหน้า ทุกวัน 08:00 น. |
-| **Weekly Summary** | สรุปผลงานประจำสัปดาห์ทุกวันจันทร์ 07:00 น. |
-| **Auto-Archive** | Archived งานที่เสร็จแล้วเกิน 7 วัน ทุกวัน 02:00 น. |
-| **Hint System** | เคล็ดลับการใช้งานแบบ one-time (หลังบันทึก, เปลี่ยนสถานะ, priority legend) |
-| **AI Confident Skip** | ถ้า AI แน่ใจ + ตรงกับ regex → ข้าม preview ไป confirm เลย |
+| **AI Parse Homework** | Type "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้" → AI (Typhoon) extracts subject, due date, priority, tags automatically |
+| **AI Q&A** | `/ask` command — ask about your homework in natural language, AI answers from your Notion data |
+| **Priority System** | 🔴 High / 🟡 Medium / 🟢 Low — auto-detect, manual override, auto-recalc daily at 06:00 |
+| **Tag Inference** | Auto-tagged from keywords (สอบ=exam, โครงการ=project, กลุ่ม=group, ด่วน=urgent, อ่าน=reading, ใบงาน=worksheet) + `#hashtag` support |
+| **Edit Before Save** | Preview + edit (title, subject, date, priority, tags) before saving |
+| **Pagination** | Active/completed lists: 10 items/page with previous/next navigation |
+| **Delete Recovery** | 10-second window to restore accidentally deleted items |
+| **Undo** | `/undo` reverts last status change within 30 seconds |
+| **Reminders** | Auto-notification for homework due in the next 7 days, daily at 08:00 |
+| **Weekly Summary** | Weekly completion stats every Monday at 07:00 |
+| **Auto-Archive** | Archives Done homework older than 7 days, daily at 02:00 |
+| **Hint System** | One-time contextual tips (post-save, status change, priority legend) |
+| **AI Confident Skip** | Skips preview when AI is confident and matches regex → goes straight to confirm |
 
 ### 🌐 Web Dashboard
 
 | Feature | Description |
 |---------|-------------|
-| **Stats Cards** | 6 ตัวเลขสรุป (todo, in progress, done, urgent, overdue, completion %) |
-| **Donut Charts** | สถานะ + ความสำคัญ (custom HTML legend) |
-| **30-Day Trend** | กราฟเส้นจำนวนงานที่ทำเสร็จย้อนหลัง 30 วัน |
-| **Weekly Progress** | Bar chart รายวัน (จ-อา) |
-| **Calendar View** | ปฏิทินรายเดือนแสดงสถานะ (แดง/ส้ม/เขียว), คลิกดูรายละเอียด |
-| **Subject Pills** | แสดงตามรายวิชาพร้อม urgency bar |
-| **Search & Filter** | ค้นหา title/subject/note, filter ตามสถานะ + ช่วงวันที่ |
-| **Sortable Columns** | คลิกหัวตารางเรียงลำดับ |
-| **Bulk Actions** | checkbox + select all + bulk status update |
-| **CSV Export** | Export ไฟล์ CSV รองรับ Excel (BOM) |
-| **Dark Mode** | Auto-detect + toggle, เก็บใน localStorage |
-| **PWA** | ติดตั้งบนมือถือได้ (manifest.json + service worker) |
-| **Responsive** | sidebar → bottom nav บนมือถือ |
+| **Stats Cards** | 6 summary cards (todo, in progress, done, urgent, overdue, completion %) |
+| **Donut Charts** | Status + priority breakdowns with custom HTML legend |
+| **30-Day Trend** | Line chart of completed homework over the last 30 days |
+| **Weekly Progress** | Daily bar chart (Mon-Sun) |
+| **Calendar View** | Monthly calendar with status dots (red/amber/green), click to see details |
+| **Subject Pills** | Subject distribution with urgency bars |
+| **Search & Filter** | Search by title/subject/note, filter by status + date range |
+| **Sortable Columns** | Click column headers to sort |
+| **Bulk Actions** | Checkboxes + select all + bulk status update |
+| **CSV Export** | CSV export with BOM for Excel |
+| **Dark Mode** | Auto-detect `prefers-color-scheme` + manual toggle, persisted in localStorage |
+| **PWA** | Installable on mobile (manifest.json + service worker) |
+| **Responsive** | Sidebar → bottom nav on mobile (≤768px) |
 
 ### 🔒 Security
 
-- Bearer token authentication (SHA256 ของ NOTION_TOKEN)
-- Rate limiting 60 req/min
-- ไม่ expose TELEGRAM_TOKEN ใน URL
-- Notion API retry with exponential backoff
-- Input validation ทุก endpoint
+- Bearer token authentication (SHA256 of `NOTION_TOKEN`)
+- Rate limiting: 60 req/min
+- `TELEGRAM_TOKEN` never exposed in URLs
+- Notion API retry with exponential backoff + jitter
+- Input validation on all API endpoints
 
 ---
 
@@ -74,12 +74,12 @@
 
 ### Prerequisites
 
-| สิ่งที่ต้องมี | รายละเอียด |
-|--------------|------------|
-| **Node.js 20+** | [Download](https://nodejs.org/) หรือใช้ nvm: `nvm install 20` |
-| **Telegram Bot Token** | สร้างได้ที่ [@BotFather](https://t.me/BotFather) — พิมพ์ `/newbot` แล้วทำตาม |
-| **Notion Token + Database** | สร้าง Integration ได้ที่ [my integrations](https://www.notion.so/my-integrations) |
-| **Typhoon API Key** (optional) | [Get free key](https://playground.opentyphoon.ai/settings/api-key) — ฟรี 5 req/s, 200 req/min |
+| Requirement | Details |
+|-------------|---------|
+| **Node.js 20+** | [Download](https://nodejs.org/) or use nvm: `nvm install 20` |
+| **Telegram Bot Token** | Create via [@BotFather](https://t.me/BotFather) — run `/newbot` and follow instructions |
+| **Notion Token + Database** | Create an integration at [my integrations](https://www.notion.so/my-integrations) |
+| **Typhoon API Key** (optional) | [Get free key](https://playground.opentyphoon.ai/settings/api-key) — free tier: 5 req/s, 200 req/min |
 
 ### Step-by-step
 
@@ -96,58 +96,58 @@ cd homeworkbot
 npm install
 ```
 
-#### 3️⃣ ตั้งค่า Environment
+#### 3️⃣ Set up environment
 
 ```bash
 cp .env.example .env
 ```
 
-แก้ไขไฟล์ `.env`:
+Edit `.env` with your credentials:
 
 ```env
 # ── Required ──
-TELEGRAM_TOKEN=123456:ABC-DEF1234        # จาก @BotFather
-NOTION_TOKEN=secret_abc123def456...      # จาก https://www.notion.so/my-integrations
-DATABASE_ID=abc123def456789abc123def456  # ID ของ Notion Database (ดูวิธีด้านล่าง)
+TELEGRAM_TOKEN=123456:ABC-DEF1234        # From @BotFather
+NOTION_TOKEN=secret_abc123def456...      # From https://www.notion.so/my-integrations
+DATABASE_ID=abc123def456789abc123def456  # Your Notion database ID (see below)
 
 # ── Required for AI parsing + Q&A ──
-TYPHOON_API_KEY=typhoon-abc123...        # จาก https://playground.opentyphoon.ai
+TYPHOON_API_KEY=typhoon-abc123...        # From https://playground.opentyphoon.ai
 
 # ── Optional ──
-REMINDER_CHAT_ID=123456789               # Chat ID สำหรับรับ reminder (หาโดยส่งข้อความหา @userinfobot)
-WEB_URL=https://homework.k.jrnm.app      # URL web dashboard (แสดงปุ่ม 🌐 ในเมนู)
+REMINDER_CHAT_ID=123456789               # Chat ID for reminders (get it from @userinfobot)
+WEB_URL=https://homework.k.jrnm.app      # Web dashboard URL (shows 🌐 button in bot menu)
 ```
 
-#### 4️⃣ สร้าง Notion Database
+#### 4️⃣ Create Notion Database
 
-สร้าง Database ใหม่ใน Notion (หรือใช้ template) แล้วเพิ่ม **connection** ให้ Integration ของคุณ
+Create a new database in Notion (or use a template), then **add a connection** to your integration.
 
-**Properties ที่ต้องมี:**
+**Required properties:**
 
-| Property | Type | Options | หมายเหตุ |
-|----------|------|---------|----------|
-| `Name` | **Title** | — | ชื่อการบ้าน (required) |
-| `Subject` | **Rich text** | — | ชื่อวิชา |
-| `Status` | **Select** | `Todo`, `In Progress`, `Done` | สถานะ |
-| `Due` | **Date** | — | กำหนดส่ง |
-| `Priority` | **Select** | `🔴 สูง`, `🟡 กลาง`, `🟢 ต่ำ` | ความสำคัญ |
-| `Tags` | **Multi-select** | — | แท็ก (สอบ, โครงการ, กลุ่ม, ด่วน, อ่าน, ใบงาน) |
-| `Note` | **Rich text** | — | หมายเหตุ |
-| `Completed` | **Date** | — | วันที่ทำเสร็จ (set อัตโนมัติ) |
+| Property | Type | Options | Notes |
+|----------|------|---------|-------|
+| `Name` | **Title** | — | Homework title (required) |
+| `Subject` | **Rich text** | — | Subject name (e.g. คณิต, ไทย, อังกฤษ) |
+| `Status` | **Select** | `Todo`, `In Progress`, `Done` | Current status |
+| `Due` | **Date** | — | Due date |
+| `Priority` | **Select** | `🔴 สูง`, `🟡 กลาง`, `🟢 ต่ำ` | Priority level |
+| `Tags` | **Multi-select** | — | Tags (สอบ, โครงการ, กลุ่ม, ด่วน, อ่าน, ใบงาน) |
+| `Note` | **Rich text** | — | Optional notes |
+| `Completed` | **Date** | — | Completion date (set automatically) |
 
-> **💡 วิธีหา DATABASE_ID:**
-> เปิด Database ของคุณใน Notion → copy URL
+> **💡 How to find your DATABASE_ID:**
+> Open your database in Notion and copy the URL:
 > ```
 > https://www.notion.so/workspace/abc123def456789abc123def456?v=xxx
 >                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
->                                        นี่คือ DATABASE_ID
+>                                        This is your DATABASE_ID
 > ```
-> ส่วนระหว่าง `/` สุดท้าย กับ `?` (หรือท้าย URL ถ้าไม่มี `?`)
+> It's the part between the last `/` and `?` (or the end of the URL if no `?`).
 
-> **⚠️ อย่าลืม!**
-> ไปที่ [Notion Integrations](https://www.notion.so/my-integrations) → เลือก integration ของคุณ → **"Add connections"** → เลือก Database ที่สร้างไว้ → กด Confirm
+> **⚠️ Important!**
+> Go to [Notion Integrations](https://www.notion.so/my-integrations) → select your integration → **"Add connections"** → select your database → Confirm. Without this step, the API cannot access your database.
 
-#### 5️⃣ ทดสอบ
+#### 5️⃣ Test
 
 ```bash
 npm test
@@ -158,16 +158,16 @@ Test Suites: 7 passed, 7 total
 Tests:       1025 passed, 1025 total
 ```
 
-#### 6️⃣ รัน
+#### 6️⃣ Run
 
 ```bash
 node index.js
 ```
 
-เปิด Telegram → หาบอทของคุณ → พิมพ์ `/start` หรือพิมพ์การบ้านเลย เช่น:
-- `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้`
-- `รายงานอังกฤษส่งวันศุกร์`
-- `สอบชีวะ บทที่ 5 อีก 3 วัน #สอบ`
+Open Telegram → find your bot → type `/start` or just type homework directly, e.g.:
+- `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้` (Math worksheet page 20, due tomorrow)
+- `รายงานอังกฤษส่งวันศุกร์` (English report due Friday)
+- `สอบชีวะ บทที่ 5 อีก 3 วัน #สอบ` (Biology exam chapter 5 in 3 days)
 
 ---
 
@@ -175,33 +175,34 @@ node index.js
 
 ### Telegram Commands
 
-| Command | คำอธิบาย |
-|---------|----------|
-| `/start` | เริ่มต้น + ข้อความต้อนรับ |
-| `/menu` | เปิดเมนูหลัก |
-| `/help` | วิธีใช้งานเบื้องต้น |
-| `/ask` | ถาม AI เกี่ยวกับการบ้านของคุณ |
-| `/undo` | ยกเลิกการเปลี่ยนสถานะล่าสุด (ภายใน 30 วินาที) |
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message + main menu |
+| `/menu` | Open main menu |
+| `/help` | Quick usage guide |
+| `/ask` | Ask AI about your homework |
+| `/undo` | Undo last status change (within 30 seconds) |
 
 ### Quick Start Examples
 
-พิมพ์ข้อความตรงๆ ลงในแชท:
+Just type into the chat:
 
-| Input | ผลลัพธ์ |
-|-------|---------|
-| `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้` | ✅ วิชาคณิต, วันที่: [พรุ่งนี้], 🔴 สูง |
-| `รายงานอังกฤษส่งวันศุกร์` | ✅ วิชาอังกฤษ, วันที่: [ศุกร์นี้], 🟡 กลาง |
-| `สอบชีวะ บทที่ 5 อีก 3 วัน #สอบ` | ✅ วิชาชีวะ, วันที่: +3 วัน, แท็ก: สอบ |
-| `ท่องอาขยานบทที่ 5` | ✅ วิชาไทย, ไม่มีกำหนดส่ง, 🟢 ต่ำ |
+| Input | Result |
+|-------|--------|
+| `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้` | ✅ Subject: Math, Due: tomorrow, 🔴 High priority |
+| `รายงานอังกฤษส่งวันศุกร์` | ✅ Subject: English, Due: this Friday, 🟡 Medium priority |
+| `สอบชีวะ บทที่ 5 อีก 3 วัน #สอบ` | ✅ Subject: Biology, Due: +3 days, Tags: exam |
+| `ท่องอาขยานบทที่ 5` | ✅ Subject: Thai, No due date, 🟢 Low priority |
 
 ### Web Dashboard
 
-เข้าใช้งานที่ URL (เช่น `https://homework.k.jrnm.app`) โดยใส่ token ใน header:
+Access at your deployment URL (e.g. `https://homework.k.jrnm.app`) with the dashboard token in the header:
+
 ```
 Authorization: Bearer <DASHBOARD_TOKEN>
 ```
 
-> Dashboard token: SHA256 ของ `NOTION_TOKEN` หรือ set `DASHBOARD_TOKEN` env var
+> The dashboard token is a SHA256 hash of your `NOTION_TOKEN`. You can override it by setting the `DASHBOARD_TOKEN` environment variable.
 
 ---
 
@@ -213,10 +214,10 @@ Authorization: Bearer <DASHBOARD_TOKEN>
 User Input → .corrections.json → in-memory cache (1h) → Typhoon v2.5 → Typhoon v2.1 → regex fallback
 ```
 
-1. **Correction check** — ถ้าเคยแก้ไขข้อความนี้มาก่อน → ใช้ค่าที่แก้ไขเลย (zero API call)
-2. **Cache check** — ถ้าเคย parse ข้อความนี้ใน 1 ชม. → ใช้ cached result
-3. **Typhoon v2.5** — Model แรก (30B) ถ้า 429/5xx → ข้ามไป model ถัดไป
-4. **Typhoon v2.1** — Model ที่สอง (12B) ถ้าล้มเหลว → fallback
+1. **Correction check** — if this text was corrected before, use the saved values (zero API calls)
+2. **Cache check** — if this text was parsed within 1 hour, use the cached result
+3. **Typhoon v2.5** — Primary model (30B). On 429/5xx → skip to next model
+4. **Typhoon v2.1** — Secondary model (12B). On failure → fallback to regex
 5. **Regex fallback** — `parseThaiDate()` + `detectSubject()` + `inferTags()`
 
 ### Data Flow
@@ -259,7 +260,7 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃ ┃    ┣ 📄 manifest.json            ← PWA manifest
  ┃ ┃    ┗ 📄 sw.js                    ← Service worker v2
  ┃ ┗ 📂 utils
- ┃    ┣ 📄 dateParser.js              ← Thai date regex (วันนี้, พรุ่งนี้, มะรืน, อีก X วัน, dd/mm/yy)
+ ┃    ┣ 📄 dateParser.js              ← Thai date regex parsing (วันนี้/พรุ่งนี้/มะรืน/อีก X วัน/dd/mm/yy)
  ┃    ┣ 📄 subjectDetector.js         ← 50+ keywords → 10 subjects (ไทย→สุขศึกษา)
  ┃    ┣ 📄 tagDetector.js             ← Tag inference + #hashtag parsing
  ┃    ┣ 📄 telegramFormat.js          ← Markdown escape helpers
@@ -286,45 +287,45 @@ Rate Limit: 60 req/min
 
 | Method | Path | Description | Request Body |
 |--------|------|-------------|--------------|
-| `GET` | `/api/homework` | รายการการบ้านทั้งหมด | — |
-| `POST` | `/api/homework` | เพิ่มการบ้านใหม่ | `{ title, subject?, due?, priority?, note?, tags? }` |
-| `POST` | `/api/homework/update` | แก้ไขบางฟิลด์ | `{ id, title?, subject?, due?, priority?, note?, tags? }` |
-| `POST` | `/api/homework/delete` | ลบ (archive) | `{ id }` |
+| `GET` | `/api/homework` | List all homework | — |
+| `POST` | `/api/homework` | Create new homework | `{ title, subject?, due?, priority?, note?, tags? }` |
+| `POST` | `/api/homework/update` | Partial update | `{ id, title?, subject?, due?, priority?, note?, tags? }` |
+| `POST` | `/api/homework/delete` | Delete (archive) | `{ id }` |
 
 ### Status
 
 | Method | Path | Description | Request Body |
 |--------|------|-------------|--------------|
-| `POST` | `/api/status` | เปลี่ยนสถานะ 1 รายการ | `{ id, status }` |
-| `POST` | `/api/bulk-status` | เปลี่ยนสถานะหลายรายการ | `{ ids[], status }` |
+| `POST` | `/api/status` | Update single item status | `{ id, status }` |
+| `POST` | `/api/bulk-status` | Batch status update | `{ ids[], status }` |
 
 ### Dashboard
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/all` | stats + homework + trend + weeklyDone |
-| `GET` | `/api/stats` | สถิติสรุปเท่านั้น |
+| `GET` | `/api/stats` | Stats summary only |
 
 ### Health
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | `{ status: "ok" }` — สำหรับ container health check |
+| `GET` | `/health` | `{ status: "ok" }` — container health check |
 
 ### Status Values
 
-| Value | ความหมาย |
-|-------|----------|
-| `Todo` | ยังไม่ทำ |
-| `In Progress` | กำลังทำ |
-| `Done` | เสร็จแล้ว |
+| Value | Meaning |
+|-------|---------|
+| `Todo` | Not started |
+| `In Progress` | Working on it |
+| `Done` | Completed |
 
 ---
 
 ## 🔧 Tech Stack
 
-| Category | Tech | หมายเหตุ |
-|----------|------|----------|
+| Category | Tech | Notes |
+|----------|------|-------|
 | **Runtime** | [Node.js](https://nodejs.org/) 20+ | ESM modules |
 | **Bot Framework** | [Telegraf](https://telegraf.js.org/) 4.x | Telegram Bot API wrapper |
 | **AI** | [Typhoon](https://opentyphoon.ai/) via OpenAI SDK | 2 models: v2.5-30b → v2.1-12b |
@@ -340,7 +341,7 @@ Rate Limit: 60 req/min
 
 ## 🚀 Deployment
 
-### Docker (通用)
+### Docker
 
 ```bash
 docker build -t homework-bot .
@@ -366,23 +367,23 @@ services:
 git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 ```
 
-- Dockerfile-based, auto-build + restart
-- Port 8080
-- Set env vars in dashboard settings
+- Dockerfile-based, auto-build + restart on push
+- Port 8080 exposed
+- Set environment variables in dashboard settings
 
 ### Environment Variables (Production)
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `TELEGRAM_TOKEN` | ✅ | — | Telegram bot token |
+| `TELEGRAM_TOKEN` | ✅ | — | Telegram bot token from @BotFather |
 | `NOTION_TOKEN` | ✅ | — | Notion integration secret |
 | `DATABASE_ID` | ✅ | — | Notion database ID |
-| `TYPHOON_API_KEY` | ❌ | — | AI parsing (ฟรี 5 req/s, 200 req/min) |
-| `REMINDER_CHAT_ID` | ❌ | — | Chat ID สำหรับรับ reminder + weekly summary |
-| `WEB_URL` | ❌ | — | URL web dashboard (แสดงปุ่ม 🌐) |
+| `TYPHOON_API_KEY` | ❌ | — | AI parsing (free: 5 req/s, 200 req/min) |
+| `REMINDER_CHAT_ID` | ❌ | — | Chat ID for daily reminders + weekly summary |
+| `WEB_URL` | ❌ | — | Web dashboard URL (shows 🌐 button in bot menu) |
 | `DASHBOARD_TOKEN` | ❌ | SHA256(NOTION_TOKEN) | Custom dashboard auth token |
 | `PORT` | ❌ | `8080` | Web server port |
-| `TZ` | ❌ | `Asia/Bangkok` | Timezone (in index.js) |
+| `TZ` | ❌ | `Asia/Bangkok` | Timezone (hardcoded in index.js) |
 
 ---
 
@@ -390,43 +391,43 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 
 | Time | Cron | Function | Description |
 |------|------|----------|-------------|
-| 02:00 | `0 2 * * *` | `autoArchive()` | Archive Done เก่า >7 วัน |
-| 06:00 | `0 6 * * *` | `autoUpdatePriority()` | Recalc priority ตามวันที่เหลือ |
-| 07:00 Mon | `0 7 * * 1` | `sendWeeklySummary()` | สรุปผลงานประจำสัปดาห์ |
-| 08:00 | `0 8 * * *` | `sendReminders()` | แจ้งเตือนงาน 7 วันข้างหน้า |
+| 02:00 | `0 2 * * *` | `autoArchive()` | Archive Done homework older than 7 days |
+| 06:00 | `0 6 * * *` | `autoUpdatePriority()` | Recalculate priority based on remaining days |
+| 07:00 Mon | `0 7 * * 1` | `sendWeeklySummary()` | Weekly completion stats summary |
+| 08:00 | `0 8 * * *` | `sendReminders()` | Notify about homework due in the next 7 days |
 
-> ทุก cron มี overlap guard ป้องกัน concurrent execution
+> All cron jobs have overlap guards to prevent concurrent execution.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-npm test                 # รันทั้งหมด (Jest)
-npm run test:watch       # watch mode
+npm test                 # Run all tests (Jest)
+npm run test:watch       # Watch mode
 ```
 
-| Test Suite | จำนวน Test | สิ่งที่ทดสอบ |
-|------------|-----------|-------------|
-| `dateParser` | ~300 | parseThaiDate(), formatDueDisplay(), formatDateLabel(), isPossiblyLastMonth() |
-| `subjectDetector` | ~180 | detectSubject(), cleanTitle(), subjectEmoji() |
-| `tagDetector` | ~120 | inferTags(), parseTags(), inferAndParseTags() |
-| `priority` | ~100 | recalcPriority(), boundary conditions, edge cases |
-| `telegramFormat` | ~50 | safeBold(), safeItalic(), safeCode(), escapeMarkdown() |
-| `cache` | ~75 | cacheGet/Set/Invalidate/Cleanup, TTL, pattern-based |
+| Test Suite | Tests | What it covers |
+|------------|-------|----------------|
+| `dateParser` | ~300 | `parseThaiDate()`, `formatDueDisplay()`, `formatDateLabel()`, `isPossiblyLastMonth()` |
+| `subjectDetector` | ~180 | `detectSubject()`, `cleanTitle()`, `subjectEmoji()` |
+| `tagDetector` | ~120 | `inferTags()`, `parseTags()`, `inferAndParseTags()` |
+| `priority` | ~100 | `recalcPriority()`, boundary conditions, edge cases |
+| `telegramFormat` | ~50 | `safeBold()`, `safeItalic()`, `safeCode()`, `escapeMarkdown()` |
+| `cache` | ~75 | `cacheGet/Set/Invalidate/Cleanup`, TTL, pattern-based |
 | `api.e2e` | ~200 | Express API endpoints, auth, error handling |
 
-**รวม: 1025+ tests, 7 suites, 0 failures**
+**Total: 1025+ tests, 7 suites, 0 failures**
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork repo
-2. Create branch: `git checkout -b feature/awesome-feature`
+1. Fork the repo
+2. Create a branch: `git checkout -b feature/awesome-feature`
 3. Commit: `git commit -m "Add awesome feature"`
 4. Push: `git push origin feature/awesome-feature`
-5. Open Pull Request
+5. Open a Pull Request
 
 ### Code Style
 
@@ -439,7 +440,7 @@ npm run test:watch       # watch mode
 
 ## 📝 License
 
-ISC License — ดูไฟล์ [LICENSE](LICENSE)
+ISC License — see [LICENSE](LICENSE)
 
 ---
 
