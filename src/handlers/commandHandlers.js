@@ -1,5 +1,5 @@
 import { Markup } from "telegraf";
-import { parseThaiDate, formatDueDisplay } from "../utils/dateParser.js";
+import { parseThaiDate, formatDueDisplay, isPossiblyLastMonth } from "../utils/dateParser.js";
 import { updateStatus } from "../services/notionService.js";
 import {
     detectSubject,
@@ -132,10 +132,15 @@ function buildMenuMessage() {
 
 export function showConfirm(ctx, pending, parseSource = "") {
     const srcPending = { ...pending, parseSource: parseSource || pending?.parseSource };
+    let dateHint = "";
+    if (pending?.due && isPossiblyLastMonth(pending.due, pending?.rawText)) {
+        dateHint = "📅 ตีความเป็นเดือนหน้า — ถ้าต้องการเดือนนี้ให้แก้วันที่\n";
+    }
     return ctx.reply(
         `📝 ${safeBold("ตรวจสอบก่อนบันทึก")}\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `${buildHomeworkPreview(srcPending)}\n` +
+            `${dateHint ? `━━━━━━━━━━━━━━━━━━━━\n${dateHint}` : ""}` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
             `✅ กดบันทึก หรือ ✏️ แก้ไขส่วนที่ต้องการ`,
         {
@@ -275,7 +280,7 @@ export function registerCommandHandlers(bot, userState) {
 
     bot.action("HOME", async (ctx) => {
         userState.delete(ctx.from.id);
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.editMessageText(buildMenuMessage(), {
                 parse_mode: "Markdown",
@@ -289,7 +294,7 @@ export function registerCommandHandlers(bot, userState) {
         }
     });
 
-    const MAX_TEXT_LENGTH = 500;
+    const MAX_TEXT_LENGTH = 4000;
 
     bot.on("text", async (ctx) => {
         const text = ctx.message.text.trim();
@@ -370,17 +375,23 @@ export function registerCommandHandlers(bot, userState) {
         }
 
         if (state?.mode === "ADD") {
-            userState.delete(uid);
-            const parsed = await parseText(text);
+            let parsed;
+            try {
+                parsed = await parseText(text);
+            } catch (err) {
+                throw err;
+            } finally {
+                if (parsed) userState.delete(uid);
+            }
             const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
             return showConfirm(ctx, pending, parsed.parseSource);
         }
 
         if (state?.mode === "ASK_AI") {
-            userState.delete(uid);
             await ctx.reply("⏳ *กำลังค้นหาคำตอบ...*", { parse_mode: "Markdown" });
             const answer = await askAI(text);
+            userState.delete(uid);
             return ctx.reply(
                 answer
                     ? `🤖 ${safeBold("คำตอบ")}\n━━━━━━━━━━━━━━━━━━\n${answer}`

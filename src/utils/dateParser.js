@@ -117,6 +117,18 @@ export function parseThaiDate(text) {
     return null;
 }
 
+export function isPossiblyLastMonth(parsed, rawText) {
+    if (!parsed || !rawText) return false;
+    const dayMatch = rawText.match(/วันที่?\s*(\d{1,2})/);
+    if (!dayMatch) return false;
+    const inputDay = parseInt(dayMatch[1], 10);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const parsedDate = parseYMDToLocalDate(parsed);
+    const diffDays = Math.ceil((parsedDate - today) / 86400000);
+    return diffDays > 20 && inputDay < today.getDate();
+}
+
 export function formatDateLabel(dateStr, type = "due") {
     if (!dateStr) return type === "completed" ? "—" : "ไม่มีกำหนดส่ง 📅";
     const dt = parseYMDToLocalDate(dateStr);

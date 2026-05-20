@@ -73,6 +73,12 @@ export function getCorrection(key) {
     return null;
 }
 
+/**
+ * Saves a user correction for the given rawText key.
+ * Thread safety: last-writer-wins for concurrent calls with the same key.
+ * This is intentional — corrections are low-stakes and rarely concurrent.
+ * The debounced write ensures the final state is always persisted.
+ */
 export function setCorrection(text, pending) {
     const key = text.trim().toLowerCase();
     corrections[key] = {

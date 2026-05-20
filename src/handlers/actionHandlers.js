@@ -286,7 +286,7 @@ export function registerActionHandlers(bot, userState) {
     /* CANCEL */
     bot.action("CANCEL", async (ctx) => {
         userState.delete(ctx.from.id);
-        await ctx.answerCbQuery("ยกเลิกแล้ว ✅").catch(() => {});
+        await ctx.answerCbQuery("ยกเลิกแล้ว ✅").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.editMessageText(
                 `❌ ${safeBold("ยกเลิกแล้ว")}\n━━━━━━━━━━━━━━━━`,
@@ -308,18 +308,18 @@ export function registerActionHandlers(bot, userState) {
         if (!state?.pending) {
             return ctx
                 .answerCbQuery("❌ ไม่มีข้อมูลที่รอบันทึก")
-                .catch(() => {});
+                .catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         if (state._saving) {
-            return ctx.answerCbQuery("⏳ กำลังบันทึก…").catch(() => {});
+            return ctx.answerCbQuery("⏳ กำลังบันทึก…").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         state._saving = true;
         userState.set(uid, state);
 
         const { title, subject, due, rawText, priority, tags } = state.pending;
 
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
         try {
             const created = await createHomework({ title, subject, due, rawText, priority, tags });
@@ -343,11 +343,11 @@ export function registerActionHandlers(bot, userState) {
                     `━━━━━━━━━━━━━━━━━━\n` +
                     `เลือกเมนูด้านล่างเพื่อไปต่อ`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
-            ).catch(() => {});
+            ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
             const tip = showHintOnce(uid, "post_save",
                 `💡 *เคล็ดลับ:* พิมพ์ /ask เพื่อถาม AI เกี่ยวกับการบ้าน`);
-            if (tip) ctx.reply(tip.text, { parse_mode: "Markdown" }).catch(() => {});
+            if (tip) ctx.reply(tip.text, { parse_mode: "Markdown" }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         } catch (err) {
             logger.error("CONFIRM_SAVE:", err);
             await ctx.editMessageText(
@@ -363,7 +363,7 @@ export function registerActionHandlers(bot, userState) {
                         ],
                     ]),
                 },
-            ).catch(() => {});
+            ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
     });
 
@@ -373,11 +373,11 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { mode: "EDIT_TITLE", pending: state.pending, _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `✏️ ${safeBold("แก้ชื่อการบ้าน")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -392,11 +392,11 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_SUBJECT", _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `📚 ${safeBold("แก้ไขวิชา")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -412,11 +412,11 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_DATE", _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `📅 ${safeBold("แก้วันกำหนดส่ง")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -432,7 +432,7 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         const current = state.pending.priority || PRIORITY.MEDIUM;
@@ -444,7 +444,7 @@ export function registerActionHandlers(bot, userState) {
         );
 
         userState.set(uid, { mode: "EDIT_PRIORITY", pending: state.pending, _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `🎯 ${safeBold("เลือกความสำคัญ")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -466,11 +466,11 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_TAGS", _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `🏷️ ${safeBold("แก้ไขแท็ก")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -490,16 +490,16 @@ export function registerActionHandlers(bot, userState) {
         const priority = ctx.match[1];
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         if (!PRIORITY_ORDER.includes(priority)) {
-            return ctx.answerCbQuery("❌ ค่าความสำคัญไม่ถูกต้อง").catch(() => {});
+            return ctx.answerCbQuery("❌ ค่าความสำคัญไม่ถูกต้อง").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         const pending = { ...state.pending, priority, _manualPriority: true };
         userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
-        await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch(() => {});
+        await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
         } catch {}
@@ -510,7 +510,7 @@ export function registerActionHandlers(bot, userState) {
     bot.action("ASK_AI", async (ctx) => {
         const uid = ctx.from.id;
         userState.set(uid, { mode: "ASK_AI", _timestamp: Date.now() });
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n` +
                 `━━━━━━━━━━━━━━━━━━\n` +
@@ -573,7 +573,7 @@ export function registerActionHandlers(bot, userState) {
 
     /* LIST ACTIVE — paginated */
     bot.action("LIST_ACTIVE", async (ctx) => {
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             const rawPages = await fetchActive();
             const pages = [...rawPages].sort((a, b) => {
@@ -610,7 +610,7 @@ export function registerActionHandlers(bot, userState) {
 
     /* LIST DONE — paginated */
     bot.action("LIST_DONE", async (ctx) => {
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             const pages = await fetchDone();
 
@@ -638,7 +638,7 @@ export function registerActionHandlers(bot, userState) {
 
     /* LIST PAGE — pagination handler */
     bot.action(/LIST_PAGE_(\w+)_(\d+)/, async (ctx) => {
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         const uid = ctx.from.id;
         const state = userState.get(uid);
         const page = parseInt(ctx.match[2]);
@@ -673,7 +673,7 @@ export function registerActionHandlers(bot, userState) {
 
     /* DASHBOARD */
     bot.action("DASHBOARD", async (ctx) => {
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
         try {
             const [activePages, donePages] = await Promise.all([
@@ -696,21 +696,21 @@ export function registerActionHandlers(bot, userState) {
         try {
             const oldStatus = await getPageStatus(pageId);
             await updateStatus(pageId, status);
-            await ctx.answerCbQuery().catch(() => {});
+            await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
             const uid = ctx.from.id;
             const state = userState.get(uid) || {};
             state._lastAction = { type: "STATUS_CHANGE", pageId, from: oldStatus, to: status, _timestamp: Date.now() };
             userState.set(uid, state);
 
-            await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+            await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             const tip = showHintOnce(uid, "status_change",
                 `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
             if (tip) {
                 await ctx.reply(`${message}\n\n━━━━\n${tip.text}`, {
                     parse_mode: "Markdown",
                     ...dashboardMenu(),
-                }).catch(() => {});
+                }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             } else {
                 await ctx.reply(message, {
                     parse_mode: "Markdown",
@@ -719,7 +719,7 @@ export function registerActionHandlers(bot, userState) {
             }
         } catch (err) {
             logger.error("setStatus:", err);
-            await ctx.answerCbQuery("❌ " + (err?.message || "Error")).catch(() => {});
+            await ctx.answerCbQuery("❌ " + (err?.message || "Error")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             const action = status === STATUS.DONE ? "done" : status === STATUS.IN_PROGRESS ? "prog" : "todo";
             const errMsg = errorWithRetry(`อัปเดตสถานะ "${action}" ไม่ได้`, `RETRY_STATUS_${pageId}_${action}`);
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
@@ -756,7 +756,7 @@ export function registerActionHandlers(bot, userState) {
     /* DELETE — confirmation first */
     bot.action(/del_(.+)/, async (ctx) => {
         const pageId = ctx.match[1];
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
         try {
             const title = await getPageTitle(pageId);
@@ -785,11 +785,11 @@ export function registerActionHandlers(bot, userState) {
     bot.action(/confirm_del_(.+)/, async (ctx) => {
         const pageId = ctx.match[1];
         const uid = ctx.from.id;
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             const name = await getPageTitle(pageId);
             await archivePage(pageId);
-            await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+            await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
             deletedItems.set(uid, { pageId, name, _timestamp: Date.now() });
 
@@ -809,7 +809,7 @@ export function registerActionHandlers(bot, userState) {
                 deletedItems.delete(uid);
                 ctx.telegram.editMessageReplyMarkup(
                     ctx.chat.id, recoveryMsg.message_id, undefined, { inline_keyboard: [] },
-                ).catch(() => {});
+                ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             }, 10000);
         } catch (err) {
             logger.error("DELETE confirm:", err);
@@ -820,7 +820,7 @@ export function registerActionHandlers(bot, userState) {
 
     /* CANCEL DELETE */
     bot.action(/cancel_del_(.+)/, async (ctx) => {
-        await ctx.answerCbQuery("✅ ยกเลิกการลบ").catch(() => {});
+        await ctx.answerCbQuery("✅ ยกเลิกการลบ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
         } catch {}
@@ -832,12 +832,12 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id;
         const item = deletedItems.get(uid);
         if (!item || item.pageId !== pageId || Date.now() - item._timestamp > 10000) {
-            return ctx.answerCbQuery("⏱️ หมดเวลากู้คืนแล้ว").catch(() => {});
+            return ctx.answerCbQuery("⏱️ หมดเวลากู้คืนแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         try {
             await restorePage(pageId);
             deletedItems.delete(uid);
-            await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch(() => {});
+            await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             return ctx.reply(
                 `↩️ ${safeBold("กู้คืนแล้ว")}\n` +
                 `━━━━━━━━━━━━━━━━\n` +
@@ -856,9 +856,9 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id;
         const state = userState.get(uid);
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         const { title, subject, due, priority } = state.pending;
         const dueText = formatDueDisplay(due);
         const msg =
@@ -880,9 +880,9 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id;
         const state = userState.get(uid);
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch(() => {});
+            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
-        await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         await ctx.deleteMessage().catch(() => {});
         return showConfirm(ctx, state.pending);
     });

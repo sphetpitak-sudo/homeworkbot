@@ -2,9 +2,28 @@ import { Client } from "@notionhq/client";
 import { logger } from "../utils/logger.js";
 import { STATUS, PRIORITY_DEFAULT, NOTION_PAGE_SIZE } from "../utils/constants.js";
 import { cacheGet, cacheSet, cacheInvalidate } from "./cache.js";
+import { cleanTitle } from "../utils/subjectDetector.js";
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN?.trim() });
 const DB = process.env.DATABASE_ID;
+
+const NOTION_MAX_RETRIES = 3;
+const NOTION_RETRY_BASE_MS = 1000;
+
+async function notionWithRetry(fn, retries = NOTION_MAX_RETRIES) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            const status = err?.status || err?.code;
+            const isRetryable = status === 429 || status >= 500;
+            if (!isRetryable || attempt === retries) throw err;
+            const delay = NOTION_RETRY_BASE_MS * Math.pow(2, attempt) + Math.random() * 200;
+            logger.warn(`Notion retry ${attempt + 1}/${retries} after ${Math.round(delay)}ms`);
+            await new Promise(r => setTimeout(r, delay));
+        }
+    }
+}
 
 const MAX_QUERY_PAGES = 50; // safety limit (~5000 items)
 
@@ -15,11 +34,11 @@ async function queryAll(params) {
     let pages = 0;
 
     do {
-        const res = await notion.databases.query({
+        const res = await notionWithRetry(() => notion.databases.query({
             ...params,
             start_cursor: cursor,
             page_size: NOTION_PAGE_SIZE,
-        });
+        }));
         results.push(...res.results);
         cursor = res.has_more ? res.next_cursor : undefined;
         pages++;
@@ -111,11 +130,13 @@ export async function createHomework({
     priority,
     tags,
 }) {
+    const cleanNote = rawText ? cleanTitle(rawText).trim() : "";
+    const noteToStore = cleanNote.length > 3 ? cleanNote : (noteProp || "");
     const props = {
         Name: { title: [{ text: { content: title } }] },
         Subject: { rich_text: [{ text: { content: subject } }] },
         Status: { select: { name: STATUS.TODO } },
-        Note: { rich_text: [{ text: { content: rawText || noteProp || "" } }] },
+        Note: { rich_text: [{ text: { content: noteToStore } }] },
     };
 
     if (due) props.Due = { date: { start: due } };
@@ -124,10 +145,10 @@ export async function createHomework({
     if (tags?.length)
         props.Tags = { multi_select: tags.map(name => ({ name })) };
 
-    await notion.pages.create({
+    await notionWithRetry(() => notion.pages.create({
         parent: { database_id: DB },
         properties: props,
-    });
+    }));
     cacheInvalidate("notion:");
     logger.info(`Created: "${title}" [${subject}] due=${due || "none"} priority=${priority || "none"}${tags?.length ? ` tags=${tags.join(",")}` : ""}`);
 }
@@ -143,10 +164,10 @@ export async function updateStatus(pageId, status) {
     } else {
         props.Completed = { date: null };
     }
-    await notion.pages.update({
+    await notionWithRetry(() => notion.pages.update({
         page_id: pageId,
         properties: props,
-    });
+    }));
     cacheInvalidate("notion:");
     logger.info(`Status updated: ${pageId} → ${status}`);
 }
@@ -159,16 +180,16 @@ export async function updateHomework(pageId, { title, subject, due, priority, no
     if (priority !== undefined) props.Priority = { select: { name: priority } };
     if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };
     if (tags !== undefined) props.Tags = { multi_select: tags.map(name => ({ name })) };
-    await notion.pages.update({ page_id: pageId, properties: props });
+    await notionWithRetry(() => notion.pages.update({ page_id: pageId, properties: props }));
     cacheInvalidate("notion:");
     logger.info(`Homework updated: ${pageId}`);
 }
 
 export async function updatePriority(pageId, priority) {
-    await notion.pages.update({
+    await notionWithRetry(() => notion.pages.update({
         page_id: pageId,
         properties: { Priority: { select: { name: priority } } },
-    });
+    }));
     cacheInvalidate("notion:");
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
@@ -205,13 +226,13 @@ export async function getPageTitle(pageId) {
 }
 
 export async function archivePage(pageId) {
-    await notion.pages.update({ page_id: pageId, archived: true });
+    await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: true }));
     cacheInvalidate("notion:");
     logger.info(`Archived: ${pageId}`);
 }
 
 export async function restorePage(pageId) {
-    await notion.pages.update({ page_id: pageId, archived: false });
+    await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: false }));
     cacheInvalidate("notion:");
     logger.info(`Restored: ${pageId}`);
 }

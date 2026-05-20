@@ -638,7 +638,7 @@ const S = { items: [], stats: null, ts: 0, filter: "all", search: "", subject: "
 
 function qs(id){return document.getElementById(id)}
 function esc(t){const d=document.createElement("div");d.textContent=String(t??"");return d.innerHTML}
-function safeUrl(u){const s=String(u||"");return s.startsWith("http://")||s.startsWith("https://")||s.startsWith("#")||s.startsWith("/")?s:"#"}
+function safeUrl(u){const s=String(u||"").trim();if(s.startsWith("https://")||s.startsWith("/")||s.startsWith("#"))return s;return "#"}
 function now(){return Date.now()}
 function fmtTime(){return new Date().toLocaleString("en-US")}
 function subjEmoji(s){return SUBJ_EMOJI[s]||"📖"}
