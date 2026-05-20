@@ -80,7 +80,9 @@ export function getCorrection(key) {
  * The debounced write ensures the final state is always persisted.
  */
 export function setCorrection(text, pending) {
+    if (!text) return;
     const key = text.trim().toLowerCase();
+    if (!key) return;
     corrections[key] = {
         title: pending.title || null,
         subject: pending.subject || null,

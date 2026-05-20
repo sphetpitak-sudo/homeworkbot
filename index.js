@@ -21,7 +21,7 @@ validateEnv();
 
 /* ── web server (dashboard + health check) ── */
 const PORT = process.env.PORT || 8080;
-startWebServer(PORT);
+const server = startWebServer(PORT);
 
 /* ── init ── */
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
@@ -35,7 +35,7 @@ bot.telegram.setMyCommands([
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
     { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
-]).catch(() => {});
+]).catch((err) => logger.error("Failed to set bot commands:", err?.message));
 
 /* ── register handlers ── */
 registerCommandHandlers(bot, userState);
@@ -260,7 +260,7 @@ async function launchBot(retries = 5, delay = 3000) {
 }
 launchBot().catch((err) => {
     logger.error(`Failed to launch bot after all retries: ${err?.message || err}`);
-    process.exit(1);
+    server.close(() => process.exit(1));
 });
 
 /* ── graceful shutdown ── */

@@ -88,9 +88,12 @@ export function inferTags(text) {
     return [...tags];
 }
 
-export function inferAndParseTags(text) {
+export function inferAndParseTags(text, priority) {
     const hashtags = parseTags(text);
     const inferred = inferTags(text);
     const merged = [...new Set([...inferred, ...hashtags])];
+    if (priority === "🔴 สูง" && !inferred.includes("ด่วน")) {
+        merged.push("ด่วน");
+    }
     return merged.length ? merged : undefined;
 }

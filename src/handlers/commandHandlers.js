@@ -194,7 +194,7 @@ async function parseText(text) {
         priority,
         usedAI: false,
         model: "",
-        tags: inferAndParseTags(text, { priority }),
+        tags: inferAndParseTags(text, priority),
         parseSource: "regex",
     };
 }
@@ -254,7 +254,7 @@ export function registerCommandHandlers(bot, userState) {
     bot.command("undo", async (ctx) => {
         const uid = ctx.from.id;
         const state = userState.get(uid);
-        if (!state?._lastAction || Date.now() - state._lastAction._timestamp > 30000) {
+        if (!state?._lastAction?._timestamp || Date.now() - state._lastAction._timestamp > 30000) {
             return ctx.reply("⏱️ ไม่มีการกระทำล่าสุดที่ยกเลิกได้", { parse_mode: "Markdown" });
         }
         const { type, pageId, from, to } = state._lastAction;

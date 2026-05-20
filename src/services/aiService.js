@@ -190,7 +190,7 @@ export async function parseHomework(text, opts = {}) {
             dueDate: parsed.dueDate || parseThaiDate(text),
             priority,
             model,
-            tags: inferAndParseTags(text, { priority }),
+            tags: inferAndParseTags(text, priority),
         };
 
         setAICache(text, result);

@@ -145,12 +145,13 @@ export async function createHomework({
     if (tags?.length)
         props.Tags = { multi_select: tags.map(name => ({ name })) };
 
-    await notionWithRetry(() => notion.pages.create({
+    const page = await notionWithRetry(() => notion.pages.create({
         parent: { database_id: DB },
         properties: props,
     }));
     cacheInvalidate("notion:");
     logger.info(`Created: "${title}" [${subject}] due=${due || "none"} priority=${priority || "none"}${tags?.length ? ` tags=${tags.join(",")}` : ""}`);
+    return page.id;
 }
 
 export async function updateStatus(pageId, status) {
