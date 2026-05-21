@@ -379,10 +379,14 @@ export function registerCommandHandlers(bot, userState) {
             try {
                 parsed = await parseText(text);
             } catch (err) {
-                throw err;
-            } finally {
-                if (parsed) userState.delete(uid);
+                userState.delete(uid);
+                logger.error("parseText:", err);
+                return ctx.reply(
+                    `❌ ${safeBold("เกิดข้อผิดพลาด")}\nกรุณาลองใหม่อีกครั้ง`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                );
             }
+            userState.delete(uid);
             const pending = { title: parsed.title, subject: parsed.subject, due: parsed.due, priority: parsed.priority, rawText: text, tags: parsed.tags };
             userState.set(uid, { mode: "CONFIRM", pending, _timestamp: Date.now(), originalText: text });
             return showConfirm(ctx, pending, parsed.parseSource);

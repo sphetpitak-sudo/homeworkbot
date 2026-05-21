@@ -68,7 +68,7 @@ export async function askAI(question) {
                 if (answer) return answer;
             } catch (err) {
                 lastErr = err;
-                if (err.status !== 429) break;
+                if (err.status !== 429 && err.status < 500) break;
             }
         }
 

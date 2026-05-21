@@ -400,6 +400,49 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 
 ---
 
+## 🔄 Rollback & Backup
+
+### Rollback a Bad Deploy
+
+If a deploy breaks production:
+
+```bash
+# Revert the last commit
+git revert HEAD
+
+# Push to trigger a new deploy on JustRunMy.app
+git push origin main
+git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
+```
+
+> There is no automated rollback on JustRunMy.app — the only option is to revert the commit and re-deploy.
+
+### Manual Backup
+
+Export all Notion homework items and `.corrections.json` to the `backups/` directory:
+
+```bash
+node scripts/backup.js
+```
+
+Output is written to `backups/notion_<timestamp>.json` and `backups/corrections_<timestamp>.json`.
+
+### Scheduled Backup (cron)
+
+Add a crontab entry for daily backups:
+
+```bash
+0 3 * * * cd /path/to/homeworkbot && node scripts/backup.js >> backups/backup.log 2>&1
+```
+
+### Restore
+
+There is no automated restore. The backup files contain the raw Notion API responses and corrections data. To restore:
+1. Re-create items via the Notion UI or API using the exported data
+2. Copy `corrections_<timestamp>.json` back to `.corrections.json`
+
+---
+
 ## 🧪 Testing
 
 ```bash
