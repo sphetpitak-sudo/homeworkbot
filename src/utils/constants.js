@@ -19,6 +19,15 @@ export function priorityWeight(p) {
     return idx === -1 ? 1 : PRIORITY_ORDER.length - idx;
 }
 
+/** Map a Notion status value to a human-readable Thai label. */
+export function statusLabel(status) {
+    return status === STATUS.DONE
+        ? "เสร็จแล้ว"
+        : status === STATUS.IN_PROGRESS
+          ? "กำลังทำ"
+          : "ยังไม่ทำ";
+}
+
 // ── Dashboard limits ──
 export const URGENT_DAYS = 3;
 export const URGENT_DISPLAY_MAX = 5;

@@ -89,6 +89,10 @@ function isUnambiguous(parsed, rawText) {
     return parsed.subject === regexSubject;
 }
 
+/**
+ * Build a markdown preview string for the user to review before saving.
+ * Shows subject, title, due date, priority, tags, and an AI/regex source badge.
+ */
 export function buildHomeworkPreview(parsed) {
     const subject = parsed?.subject || "ทั่วไป";
     const title = parsed?.title || "ไม่มีชื่อ";
@@ -130,6 +134,14 @@ function buildMenuMessage() {
     );
 }
 
+/**
+ * Show a confirmation message with the parsed homework details and action buttons.
+ * Includes a date ambiguity hint if the parsed date might refer to the wrong month.
+ *
+ * @param {import('telegraf').Context} ctx - Telegraf context
+ * @param {object} pending - Parsed homework data { title, subject, due, priority, rawText, tags }
+ * @param {string} [parseSource=""] - Source of parsing ("ai" or "regex")
+ */
 export function showConfirm(ctx, pending, parseSource = "") {
     const srcPending = { ...pending, parseSource: parseSource || pending?.parseSource };
     let dateHint = "";
@@ -150,6 +162,13 @@ export function showConfirm(ctx, pending, parseSource = "") {
     );
 }
 
+/**
+ * Shorten a title to fit display limits.
+ * - Takes only the first line if multi-line.
+ * - If > 80 chars, tries to extract a meaningful prefix (แบบฝึกหัด, ใบงาน, etc.)
+ *   and appends the subject in parentheses.
+ * - Otherwise truncates with "..." and appends subject.
+ */
 function shortenTitle(title, subject = "") {
     if (!title) return "";
     const firstLine = title.split("\n")[0].trim();

@@ -73,15 +73,55 @@ async function completeWithRetry(systemMsg, userMsg) {
     }
 }
 
+/**
+ * Extract JSON from AI response text.
+ * Handles code fences, trims content, and finds the matching closing brace
+ * using brace-depth tracking instead of lastIndexOf (which can fail if
+ * "}" appears inside a string value).
+ */
 function extractJson(raw) {
     if (!raw) return null;
     let cleaned = raw.trim();
     const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenceMatch) cleaned = fenceMatch[1].trim();
     const braceIdx = cleaned.indexOf("{");
-    if (braceIdx !== -1) cleaned = cleaned.slice(braceIdx);
-    const endBrace = cleaned.lastIndexOf("}");
-    if (endBrace !== -1) cleaned = cleaned.slice(0, endBrace + 1);
+    if (braceIdx === -1) return null;
+    cleaned = cleaned.slice(braceIdx);
+
+    // Find matching closing brace by tracking depth, ignoring braces inside strings
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    let endIdx = -1;
+    for (let i = 0; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (escapeNext) {
+            escapeNext = false;
+            continue;
+        }
+        if (ch === "\\" && inString) {
+            escapeNext = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) continue;
+        if (ch === "{") {
+            depth++;
+        } else if (ch === "}") {
+            depth--;
+            if (depth === 0) {
+                endIdx = i;
+                break;
+            }
+        }
+    }
+
+    if (endIdx === -1) return null;
+    cleaned = cleaned.slice(0, endIdx + 1);
+
     try {
         return JSON.parse(cleaned);
     } catch {
@@ -149,7 +189,7 @@ export async function parseHomework(text, opts = {}) {
             dueDate: cached.dueDate || parseThaiDate(text),
             priority: cached.priority,
             model: cached.source,
-            tags: inferAndParseTags(text, { priority: cached.priority }),
+            tags: inferAndParseTags(text, cached.priority),
         };
     }
 

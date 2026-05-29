@@ -30,6 +30,7 @@ import {
     PRIORITY,
     PRIORITY_ORDER,
     priorityWeight,
+    statusLabel,
     URGENT_DAYS,
     URGENT_DISPLAY_MAX,
     SUBJECT_BAR_MAX,
@@ -101,14 +102,6 @@ function statusEmoji(status) {
         : status === STATUS.IN_PROGRESS
           ? "🔄"
           : "📌";
-}
-
-function statusLabel(status) {
-    return status === STATUS.DONE
-        ? "เสร็จแล้ว"
-        : status === STATUS.IN_PROGRESS
-          ? "กำลังทำ"
-          : "ยังไม่ทำ";
 }
 
 function progressBar(percent) {
@@ -186,6 +179,11 @@ async function sendPageCard(ctx, page, mode = "active") {
 }
 
 /* ── compact dashboard builder ── */
+/**
+ * Build a comprehensive dashboard summary string.
+ * Shows completion progress bar, urgent items (≤ URGENT_DAYS days),
+ * overdue count, and subject breakdown with horizontal bars.
+ */
 function buildDashboard(activePages, donePages) {
     let todo = 0, prog = 0;
     const bySubject = {};
