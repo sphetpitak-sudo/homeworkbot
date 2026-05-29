@@ -15,6 +15,8 @@ import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
 import { startWebServer }      from "./src/web/server.js";
 import { flushCorrections }    from "./src/services/aiCache.js";
+import { flushStreaks }        from "./src/services/streakService.js";
+import { flushBadges }         from "./src/services/badgeService.js";
 
 /* ── validate env ── */
 validateEnv();
@@ -32,6 +34,21 @@ initAI();
 /* ── bot commands (Telegram menu) ── */
 bot.telegram.setMyCommands([
     { command: "menu", description: "📋 เปิดเมนูหลัก" },
+    { command: "stats", description: "📊 สถิติการบ้าน" },
+    { command: "panic", description: "🚨 โหมดฉุกเฉิน — 3 งานด่วนที่สุด" },
+    { command: "tomorrow", description: "📅 งานที่ต้องส่งพรุ่งนี้" },
+    { command: "week", description: "📅 ตารางการบ้านประจำสัปดาห์" },
+    { command: "deadline", description: "⏰ นับถอยหลังงานด่วนที่สุด" },
+    { command: "progress", description: "📊 ความคืบหน้าแยกตามวิชา" },
+    { command: "hint", description: "🧠 คำแนะนำการเริ่มทำการบ้าน" },
+    { command: "streak", description: "🔥 สถิติ Streak การทำการบ้าน" },
+    { command: "search", description: "🔍 ค้นหาการบ้าน" },
+    { command: "quote", description: "💬 คำคมกำลังใจ" },
+    { command: "export", description: "📋 ส่งออกรายการการบ้าน" },
+    { command: "noted", description: "📝 แนบโน๊ตให้การบ้าน" },
+    { command: "focus", description: "🎯 โฟกัสงานทีละชิ้น" },
+    { command: "badges", description: "🏅 เหรียญตราความสำเร็จ" },
+    { command: "review", description: "📋 สรุปการบ้านที่ทำเสร็จแล้ว" },
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
     { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
@@ -267,7 +284,7 @@ launchBot().catch((err) => {
 const shutdown = async (sig) => {
     logger.info(`Received ${sig}, shutting down gracefully...`);
     bot.stop(sig);
-    await flushCorrections();
+    await Promise.all([flushCorrections(), flushStreaks(), flushBadges()]);
     setTimeout(() => process.exit(0), 2000).unref();
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));

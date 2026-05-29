@@ -1,6 +1,6 @@
 import { Client } from "@notionhq/client";
 import { logger } from "../utils/logger.js";
-import { STATUS, PRIORITY_DEFAULT, NOTION_PAGE_SIZE } from "../utils/constants.js";
+import { STATUS, PRIORITY_DEFAULT, NOTION_PAGE_SIZE, URGENT_DAYS } from "../utils/constants.js";
 import { cacheGet, cacheSet, cacheInvalidate } from "./cache.js";
 import { cleanTitle } from "../utils/subjectDetector.js";
 
@@ -63,6 +63,36 @@ export function getPageProps(page) {
 }
 
 /* ── queries ── */
+export async function getHomeworkStats() {
+    const cached = cacheGet("notion:stats")
+    if (cached) return cached
+    const [activePages, donePages] = await Promise.all([fetchActive(), fetchDone()])
+    let todo = 0, prog = 0, urgent = 0, overdue = 0
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const urgentLimit = new Date(today)
+    urgentLimit.setDate(today.getDate() + URGENT_DAYS)
+
+    for (const p of activePages) {
+        const status = p.properties.Status?.select?.name
+        if (status === STATUS.TODO) todo++
+        else if (status === STATUS.IN_PROGRESS) prog++
+
+        const d = p.properties.Due?.date?.start
+        if (d) {
+            const dt = new Date(d + "T00:00:00")
+            if (dt >= today && dt <= urgentLimit) urgent++
+            if (dt < today) overdue++
+        }
+    }
+
+    const done = donePages.length
+    const total = todo + prog + done
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0
+    const result = { todo, prog, done, total, pct, urgent, overdue }
+    cacheSet("notion:stats", result, 120_000)
+    return result
+}
+
 export async function fetchActive() {
     const cached = cacheGet("notion:active");
     if (cached) return cached;

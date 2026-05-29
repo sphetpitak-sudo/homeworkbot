@@ -1,9 +1,9 @@
 import { Markup } from "telegraf";
 import {
-    formatDueDisplay, formatDateLabel,
-    parseYMDToLocalDate,
+    formatDate, formatDueDisplay, formatDateLabel,
+    parseYMDToLocalDate, THAI_DAYS,
 } from "../utils/dateParser.js";
-import { subjectEmoji } from "../utils/subjectDetector.js";
+import { detectSubject, subjectEmoji } from "../utils/subjectDetector.js";
 import { VALID_TAGS } from "../utils/tagDetector.js";
 import {
     fetchActive,
@@ -18,7 +18,7 @@ import {
     getPageStatus,
 } from "../services/notionService.js";
 
-import { mainMenu, cancelMenu, showConfirm, compactConfirmMenu, moreOptionsMenu, errorWithRetry } from "./commandHandlers.js";
+import { mainMenu, cancelMenu, showConfirm, compactConfirmMenu, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard } from "./commandHandlers.js";
 import {
     escapeMarkdown,
     safeBold,
@@ -39,6 +39,10 @@ import {
 } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 import { setCorrection } from "../services/aiCache.js";
+import { recordCompletion, getStreak } from "../services/streakService.js";
+import { QUOTES } from "../utils/quotes.js";
+import { askHint } from "../services/hintService.js";
+import { checkBadges, checkTaskBadges, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
 
 const hintsShown = new Map();  // uid -> { keys: Set, ts: number }
 const deletedItems = new Map();
@@ -689,6 +693,701 @@ export function registerActionHandlers(bot, userState) {
         }
     });
 
+    /* PANIC — same logic as /panic command */
+    bot.action("PANIC", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มีการบ้านด่วน!")}\nพักผ่อนได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const sorted = sortByUrgency(pages)
+            const top3 = sorted.slice(0, 3)
+
+            const keyboard = []
+            for (const p of top3) {
+                keyboard.push([
+                    Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
+                    Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
+                    Markup.button.callback("🗑️ ลบ", `del_${p.id}`),
+                ])
+            }
+            keyboard.push([
+                Markup.button.callback("➕ เพิ่ม", "ADD"),
+                Markup.button.callback("📋 ค้าง", "LIST_ACTIVE"),
+                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            ])
+
+            let msg = `🚨 ${safeBold("โหมดฉุกเฉิน!")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `${top3.length} งานที่ควรทำที่สุดตอนนี้\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (const p of top3) {
+                msg += `${buildPanicCard(p)}\n\n`
+            }
+            msg += `💪 ${safeBold("เริ่มจากอันแรกเลย!")}`
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("PANIC action:", err)
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* TOMORROW — same logic as /tomorrow command */
+    bot.action("TOMORROW", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const pages = await fetchActive()
+            const tomorrow = new Date()
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            const tomorrowStr = formatDate(tomorrow)
+
+            const dueTomorrow = pages.filter(p => {
+                const due = p.properties.Due?.date?.start
+                return due === tomorrowStr
+            })
+
+            if (!dueTomorrow.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("พรุ่งนี้ไม่มีการบ้านส่ง!")}\nไปเที่ยวได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const keyboard = []
+            for (const p of dueTomorrow) {
+                keyboard.push([
+                    Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
+                    Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
+                    Markup.button.callback("🗑️ ลบ", `del_${p.id}`),
+                ])
+            }
+            keyboard.push([
+                Markup.button.callback("➕ เพิ่ม", "ADD"),
+                Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
+                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            ])
+
+            let msg = `📅 ${safeBold("งานที่ต้องส่งพรุ่งนี้")} (${dueTomorrow.length} รายการ)\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (const p of dueTomorrow) {
+                const { title, status, due, subject, priority } = getPageProps(p)
+                const dt = due ? parseYMDToLocalDate(due) : null
+                const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+                let badge = ""
+                if (diff !== null && diff < 0) {
+                    badge = ` 🚨 (เลย ${Math.abs(diff)} วัน!)`
+                }
+                msg += `${statusEmoji(status)} ${safeBold(title)} ${badge}\n`
+                msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}\n\n`
+            }
+            msg += `💪 ${safeBold("เตรียมตัวให้พร้อม!")}`
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("TOMORROW action:", err)
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* SEARCH */
+    bot.action("SEARCH", async (ctx) => {
+        const uid = ctx.from.id
+        userState.set(uid, { mode: "SEARCH", _timestamp: Date.now() })
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        return ctx.reply(
+            `🔍 ${safeBold("ค้นหาการบ้าน")}\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `พิมพ์คำที่ต้องการค้นหา\n` +
+            `เช่น ${safeCode("คณิต")} หรือ ${safeCode("แคลคูลัส")}\n` +
+            `━━━━━━━━━━━━━━━━━━`,
+            { parse_mode: "Markdown", ...cancelMenu },
+        )
+    })
+
+    /* WEEK */
+    bot.action("WEEK", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const pages = await fetchActive()
+
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const dayOfWeek = today.getDay()
+            const mon = new Date(today)
+            mon.setDate(today.getDate() - ((dayOfWeek + 6) % 7))
+
+            const days = []
+            let totalCount = 0
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(mon)
+                d.setDate(mon.getDate() + i)
+                const dateStr = formatDate(d)
+                const items = pages.filter(p => p.properties.Due?.date?.start === dateStr)
+                const isToday = dateStr === formatDate(today)
+                days.push({ date: d, dateStr, items, isToday })
+                totalCount += items.length
+            }
+
+            const noDueItems = pages.filter(p => !p.properties.Due?.date?.start)
+
+            if (!pages.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มีการบ้านอาทิตย์นี้เลย!")}\nพักผ่อนได้ 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            let msg = `📅 ${safeBold("ตารางประจำสัปดาห์")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
+            for (const day of days) {
+                const dayName = THAI_DAYS[day.date.getDay()]
+                const dateLabel = `${day.date.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][day.date.getMonth()]}`
+                const prefix = day.isToday ? ">>> 📌 " : ""
+                const countLabel = day.items.length
+                    ? `(${day.items.length} งาน)`
+                    : "(✅ ว่าง)"
+                msg += `${prefix}${dayName} ${dateLabel}  ${countLabel}\n`
+
+                for (const p of day.items) {
+                    const { title, status, due, subject, priority } = getPageProps(p)
+                    const dt = due ? parseYMDToLocalDate(due) : null
+                    const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+                    const dayLabel = diff !== null
+                        ? (diff < 0 ? `เลย ${Math.abs(diff)} วัน` : (diff === 0 ? "วันนี้!" : `อีก ${diff} วัน`))
+                        : ""
+                    msg += `  ${statusEmoji(status)} ${safeBold(title)}  ${priority}`
+                    if (dayLabel) msg += ` — ${dayLabel}`
+                    msg += `\n`
+                }
+                msg += `━━━━━━━━━━━━━━━━━━━━\n`
+            }
+
+            if (noDueItems.length) {
+                msg += `📌 ไม่มีกำหนด (${noDueItems.length} รายการ)\n`
+                for (const p of noDueItems) {
+                    const { title, status, subject, priority } = getPageProps(p)
+                    msg += `  ${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority}\n`
+                }
+                msg += `━━━━━━━━━━━━━━━━━━━━\n`
+            }
+
+            msg += `\n📊 รวม ${totalCount} งานในสัปดาห์นี้`
+
+            if (noDueItems.length) {
+                msg += ` (+ ${noDueItems.length} ไม่มีกำหนด)`
+            }
+
+            const keyboard = [
+                [
+                    Markup.button.callback("➕ เพิ่ม", "ADD"),
+                    Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
+                ],
+                [
+                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("WEEK action:", err)
+            const errMsg = errorWithRetry("โหลดตารางไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* DEADLINE */
+    bot.action("DEADLINE", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const now = new Date()
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+
+            let closest = null
+            let closestDiff = Infinity
+            for (const p of pages) {
+                const due = p.properties.Due?.date?.start
+                if (!due) continue
+                const dt = parseYMDToLocalDate(due)
+                const diff = Math.ceil((dt - today) / 86400000)
+                if (Math.abs(diff) < Math.abs(closestDiff)) {
+                    closest = p
+                    closestDiff = diff
+                }
+            }
+
+            if (!closest) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const { title, status, due, subject, priority } = getPageProps(closest)
+            const dt = parseYMDToLocalDate(due)
+            const diffMs = dt - now
+            const absDiffMs = Math.abs(diffMs)
+            const totalDays = Math.floor(absDiffMs / 86400000)
+            const totalHours = Math.floor((absDiffMs % 86400000) / 3600000)
+            const totalMinutes = Math.floor((absDiffMs % 3600000) / 60000)
+
+            let badge, urgency
+            if (closestDiff < 0) {
+                badge = "🚨"
+                urgency = `เลยกำหนด ${Math.abs(closestDiff)} วัน`
+            } else if (closestDiff <= 3) {
+                badge = "🔥"
+                urgency = `เหลือ ${closestDiff} วัน`
+            } else if (closestDiff <= 7) {
+                badge = "⏰"
+                urgency = `เหลือ ${closestDiff} วัน`
+            } else {
+                badge = "📅"
+                urgency = `อีก ${closestDiff} วัน`
+            }
+
+            const barSlots = 20
+            const totalAvailable = closestDiff > 0 ? closestDiff + 14 : 14
+            const elapsed = totalAvailable - (closestDiff > 0 ? closestDiff : 0)
+            const filled = Math.max(0, Math.min(barSlots, Math.round((elapsed / totalAvailable) * barSlots)))
+            const bar = "█".repeat(filled) + "░".repeat(barSlots - filled)
+
+            let msg = `⏰ ${safeBold("นับถอยหลัง")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `${badge} ${safeBold("งานด่วน!")}\n\n`
+            msg += `${subjectEmoji(subject)} ${safeBold(title)}\n`
+            msg += `${safeBold(subject)} ${priority}  |  ${urgency}\n\n`
+            msg += `${bar}\n`
+
+            if (closestDiff < 0) {
+                msg += `⏱️  เลยกำหนดมา ${totalDays} วัน ${totalHours} ชม. แล้ว!\n\n`
+            } else {
+                msg += `⏱️  เหลือ ${totalDays} วัน ${totalHours} ชม. ${totalMinutes} นาที\n\n`
+            }
+
+            msg += `📅 ${formatDueDisplay(due)}`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("✅ เสร็จ", `done_${closest.id}`),
+                    Markup.button.callback("🔄 กำลังทำ", `prog_${closest.id}`),
+                    Markup.button.callback("🗑️ ลบ", `del_${closest.id}`),
+                ],
+                [
+                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("DEADLINE action:", err)
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* PROGRESS */
+    bot.action("PROGRESS", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const [activePages, donePages] = await Promise.all([fetchActive(), fetchDone()])
+
+            const bySubject = {}
+            for (const p of activePages) {
+                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
+                if (!bySubject[sub]) bySubject[sub] = { done: 0, total: 0 }
+                bySubject[sub].total++
+            }
+            for (const p of donePages) {
+                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
+                if (!bySubject[sub]) bySubject[sub] = { done: 0, total: 0 }
+                bySubject[sub].done++
+                bySubject[sub].total++
+            }
+
+            const entries = Object.entries(bySubject)
+            if (!entries.length) {
+                return ctx.reply(
+                    `📊 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const sorted = entries
+                .map(([sub, stats]) => ({
+                    subject: sub,
+                    pct: stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0,
+                    done: stats.done,
+                    total: stats.total,
+                }))
+                .sort((a, b) => a.pct - b.pct)
+
+            let msg = `📊 ${safeBold("ความคืบหน้าแยกวิชา")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
+
+            let totalDone = 0, totalAll = 0
+            for (const s of sorted) {
+                const filled = Math.max(0, Math.min(10, Math.round(s.pct / 10)))
+                const bar = "█".repeat(filled) + "░".repeat(10 - filled)
+                const pctStr = s.pct === 100 ? "🎉" : `${s.pct}%`
+                msg += `${subjectEmoji(s.subject)} ${safeBold(s.subject)}  ${bar}  ${pctStr} (${s.done}/${s.total})\n`
+                totalDone += s.done
+                totalAll += s.total
+            }
+
+            const totalPct = totalAll > 0 ? Math.round((totalDone / totalAll) * 100) : 0
+            msg += `\n━━━━━━━━━━━━━━━━━━━━\n`
+            msg += `📈 รวม: ${totalDone}/${totalAll} เสร็จ  ${totalPct}%`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("➕ เพิ่ม", "ADD"),
+                    Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
+                ],
+                [
+                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("PROGRESS action:", err)
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* QUOTE */
+    bot.action("QUOTE", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        let idx = Math.floor(Math.random() * QUOTES.length)
+        if (state?._lastQuote === idx) {
+            idx = (idx + 1) % QUOTES.length
+        }
+        userState.set(uid, { ...state, _lastQuote: idx, _timestamp: Date.now() })
+        const quote = QUOTES[idx]
+        const msg =
+            `💬 "${escapeMarkdown(quote.text)}"\n\n` +
+            `— ${escapeMarkdown(quote.author)}\n` +
+            `━━━━━━━━━━━━━━━━━━\n\n` +
+            `💪 ${safeBold("สู้ๆ นะ!")}`
+        const keyboard = [
+            [
+                Markup.button.callback("💬 อีกคำคม", "QUOTE"),
+                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+            ],
+            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+        ]
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard(keyboard),
+        })
+    })
+
+    /* HINT — subject picker */
+    bot.action(/HINT_(.+)/, async (ctx) => {
+        const subject = ctx.match[1]
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const pages = await fetchActive()
+            const kw = subject.toLowerCase()
+            const filtered = pages.filter(p => {
+                const subj = (p.properties.Subject?.rich_text?.[0]?.plain_text || "").toLowerCase()
+                return subj === kw || subj.includes(kw)
+            })
+
+            const hint = await askHint(subject, filtered)
+
+            if (!hint) {
+                return ctx.reply(
+                    `📭 ${safeBold(`ไม่มีงานวิชา ${subject} ค้างอยู่`)}\n` +
+                    `━━━━━━━━━━━━━━━━━━━━\n` +
+                    `ลองเลือกวิชาอื่น หรือเพิ่มการบ้านก่อน!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            return ctx.reply(hint, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("HINT action:", err)
+            const errMsg = errorWithRetry("ขออภัย เกิดข้อผิดพลาด", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* EXPORT */
+    bot.action("EXPORT", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const [activePages, donePages] = await Promise.all([fetchActive(), fetchDone()])
+            const today = formatDate(new Date())
+
+            if (!activePages.length && !donePages.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            let text = `📋 รายการการบ้าน (export ${today})\n`
+            text += `=====================================\n\n`
+
+            if (activePages.length) {
+                text += `📌 ยังไม่เสร็จ (${activePages.length}):\n`
+                activePages.forEach((p, i) => {
+                    const { title, subject, due, priority } = getPageProps(p)
+                    const dueStr = due ? `ส่ง ${due.slice(5).replace("-", "/")}` : "ไม่มีกำหนด"
+                    text += `  ${i + 1}. [${subject}] ${title} — ${dueStr} ${priority}\n`
+                })
+                text += `\n`
+            }
+
+            if (donePages.length) {
+                text += `✅ ทำเสร็จแล้ว (${donePages.length}):\n`
+                donePages.forEach((p, i) => {
+                    const { title, subject, completed, priority } = getPageProps(p)
+                    const doneStr = completed ? `เสร็จ ${completed.slice(5).replace("-", "/")}` : "เสร็จแล้ว"
+                    text += `  ${i + 1}. [${subject}] ${title} — ${doneStr} ${priority}\n`
+                })
+                text += `\n`
+            }
+
+            const total = activePages.length + donePages.length
+            const pct = total > 0 ? Math.round((donePages.length / total) * 100) : 0
+            text += `=====================================\n`
+            text += `รวม ${total} รายการ | เสร็จ ${pct}%\n`
+
+            const msg =
+                `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `${safeCode(text)}\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `💡 คัดลอกข้อความในกรอบไปแชร์ต่อได้เลย!`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("➕ เพิ่ม", "ADD"),
+                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                ],
+                [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            ]
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("EXPORT action:", err)
+            const errMsg = errorWithRetry("ส่งออกไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* NOTED — select page from results */
+    bot.action(/NOTED_SEL_(\d+)/, async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        if (!state?._pendingNoted) {
+            return ctx.answerCbQuery("⏱️ หมดเวลา กรุณาลองใหม่").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        }
+        const idx = parseInt(ctx.match[1])
+        const { matched, note } = state._pendingNoted
+        if (idx < 0 || idx >= matched.length) {
+            return ctx.answerCbQuery("❌ ไม่พบรายการ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        }
+        try {
+            const page = matched[idx]
+            const { title } = getPageProps(page)
+            await updateHomework(page.id, { note })
+            userState.delete(uid)
+            await ctx.answerCbQuery("✅ เพิ่มโน๊ตแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+            return ctx.reply(
+                `📝 ${safeBold("เพิ่มโน๊ตแล้ว!")}\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `📌 "${escapeMarkdown(title)}"\n` +
+                `📝 ${escapeMarkdown(note)}`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        } catch (err) {
+            logger.error("NOTED_SEL:", err)
+            return ctx.answerCbQuery("❌ บันทึกไม่ได้").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        }
+    })
+
+    /* FOCUS_NEXT — skip to next task */
+    bot.action("FOCUS_NEXT", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        const pages = state?._focusPages
+        const currentIdx = state?._focusIndex ?? 0
+
+        if (!pages || !pages.length || currentIdx + 1 >= pages.length) {
+            await ctx.answerCbQuery("⏱️ ไม่มีงานถัดไป").catch(() => {})
+            return ctx.reply(
+                `🎉 ${safeBold("ครบทุกงานแล้ว!")}\nพักผ่อนได้เลย 🏆`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+
+        const nextIdx = currentIdx + 1
+        const page = pages[nextIdx]
+        const { title, status, due, subject, priority } = getPageProps(page)
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const dt = due ? parseYMDToLocalDate(due) : null
+        const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+
+        let badge = ""
+        if (diff !== null && diff < 0) {
+            badge = ` 🚨 เลย ${Math.abs(diff)} วัน`
+        } else if (diff !== null && diff <= 3) {
+            badge = ` 🔥 เหลือ ${diff} วัน`
+        } else if (diff !== null && diff <= 7) {
+            badge = ` ⏰ เหลือ ${diff} วัน`
+        }
+
+        let msg = `🎯 ${safeBold("โฟกัสงานนี้!")}\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n\n`
+        msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
+        msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `📊 งาน ${nextIdx + 1} จาก ${pages.length} รายการ`
+
+        const hasNext = nextIdx + 1 < pages.length
+        const keyboard = [
+            [
+                Markup.button.callback("✅ เสร็จ", `done_${page.id}`),
+                Markup.button.callback("🔄 กำลังทำ", `prog_${page.id}`),
+            ],
+        ]
+        if (hasNext) {
+            keyboard.push([Markup.button.callback("⏩ ข้ามไปข้อถัดไป", "FOCUS_NEXT")])
+        }
+        keyboard.push([
+            Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
+            Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+        ])
+
+        userState.set(uid, {
+            ...state,
+            _focusIndex: nextIdx,
+            _focusPages: pages,
+            _timestamp: Date.now(),
+        })
+
+        await ctx.answerCbQuery().catch(() => {})
+        try {
+            await ctx.editMessageText(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch {
+            await ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        }
+    })
+
+    /* STREAK */
+    bot.action("STREAK", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        const uid = ctx.from.id
+        const streak = getStreak(uid)
+        const calendar = getStreakCalendar(uid)
+        const nextMilestone = getNextMilestone(streak.current)
+
+        if (!streak.current) {
+            return ctx.reply(
+                `🔥 ${safeBold("ยังไม่มีสถิติ Streak")}\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `เริ่มต้นด้วยการกด ✅ เสร็จจากการบ้านเลย!\n` +
+                `💪 ทำติดต่อกันทุกวันเพื่อรักษาไฟนี้ไว้`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+
+        let msg = `🔥 ${safeBold("สถิติการทำการบ้าน")}\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+        const fireEmojis = streak.current >= 30 ? "🔥🔥🔥" : streak.current >= 14 ? "🔥🔥" : "🔥"
+        msg += `${fireEmojis} Streak ปัจจุบัน: ${streak.current} วัน\n`
+        msg += `🏆 สูงสุดตลอดกาล: ${streak.best} วัน\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+
+        if (calendar.length) {
+            msg += `📅 7 วันล่าสุด:\n\n`
+            const dayNames = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."]
+            const today = new Date()
+            const weekMarks = []
+            const weekDays = []
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(today)
+                d.setDate(d.getDate() - i)
+                weekDays.push(dayNames[d.getDay()])
+                const dateStr = d.toISOString().slice(0, 10)
+                const cal = calendar.find(c => c.date === dateStr)
+                weekMarks.push(cal?.done ? "✅" : "❌")
+            }
+            msg += `${weekMarks.join(" ")}\n`
+            msg += `${weekDays.join("  ")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+        }
+
+        if (nextMilestone) {
+            const remaining = nextMilestone - streak.current
+            msg += `🎯 เป้าหมายต่อไป: ${nextMilestone} วัน (อีก ${remaining} วัน)\n`
+        }
+
+        msg += `💪 รักษาไฟนี้ไว้!`
+
+        const keyboard = [
+            [
+                Markup.button.callback("➕ เพิ่ม", "ADD"),
+                Markup.button.callback("🔥 Streak", "STREAK"),
+                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+            ],
+            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+        ]
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard(keyboard),
+        })
+    })
+
     /* STATUS helpers */
     async function setStatus(ctx, pageId, status, message) {
         try {
@@ -701,16 +1400,52 @@ export function registerActionHandlers(bot, userState) {
             state._lastAction = { type: "STATUS_CHANGE", pageId, from: oldStatus, to: status, _timestamp: Date.now() };
             userState.set(uid, state);
 
+            let streakMsg = ""
+            if (status === STATUS.DONE) {
+                try {
+                    const result = recordCompletion(uid)
+                    if (result.isNewMilestone) {
+                        streakMsg = `\n\n🎉🎉🎉 *ครบ ${result.current} วันติดแล้ว!* 🔥🔥🔥\n💪 รักษา streak ต่อไป!`
+                    }
+                    // award streak badges
+                    const newBadgeIds = checkBadges(uid)
+                    const awarded = awardBadges(uid, newBadgeIds)
+                    if (awarded.length) {
+                        streakMsg += `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
+                        for (const b of awarded) {
+                            streakMsg += `${b.icon} ${b.name} — ${b.desc}\n`
+                        }
+                    }
+                    // award task count badges
+                    try {
+                        const donePages = await fetchDone()
+                        const totalDone = donePages.length
+                        const taskBadgeIds = checkTaskBadges(uid, totalDone)
+                        const taskAwarded = awardBadges(uid, taskBadgeIds)
+                        if (taskAwarded.length) {
+                            for (const b of taskAwarded) {
+                                streakMsg += `\n\n🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!`
+                            }
+                        }
+                    } catch (e) {
+                        logger.debug("Task badge check error:", e?.message)
+                    }
+                } catch (e) {
+                    logger.debug("Streak record error:", e?.message)
+                }
+            }
+
             await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             const tip = showHintOnce(uid, "status_change",
                 `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
+            const fullMsg = message + streakMsg
             if (tip) {
-                await ctx.reply(`${message}\n\n━━━━\n${tip.text}`, {
+                await ctx.reply(`${fullMsg}\n\n━━━━\n${tip.text}`, {
                     parse_mode: "Markdown",
                     ...dashboardMenu(),
                 }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             } else {
-                await ctx.reply(message, {
+                await ctx.reply(fullMsg, {
                     parse_mode: "Markdown",
                     ...dashboardMenu(),
                 });
@@ -884,4 +1619,94 @@ export function registerActionHandlers(bot, userState) {
         await ctx.deleteMessage().catch(() => {});
         return showConfirm(ctx, state.pending);
     });
+
+    /* BADGES */
+    bot.action("BADGES", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        const uid = ctx.from.id
+        const msg = buildBadgeMessage(uid)
+        const keyboard = [
+            [
+                Markup.button.callback("🔥 Streak", "STREAK"),
+                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+            ],
+            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+        ]
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard(keyboard),
+        })
+    })
+
+    /* REVIEW */
+    bot.action("REVIEW", async (ctx) => {
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+        try {
+            const donePages = await fetchDone()
+            if (!donePages.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ยังไม่มีการบ้านที่ทำเสร็จ")}\n` +
+                    `ลองทำการบ้านให้เสร็จก่อน แล้วกลับมาดูสรุป!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const lineList = donePages.slice(0, 20).map((p, i) => {
+                const { title, subject, priority, completed } = getPageProps(p)
+                const doneDate = completed ? completed.slice(5).replace("-", "/") : "?"
+                return `${i + 1}. [${subject}] ${title} — เสร็จ ${doneDate} ${priority}`
+            }).join("\n")
+
+            const total = donePages.length
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const weekAgo = new Date(today)
+            weekAgo.setDate(today.getDate() - 7)
+            const weekCount = donePages.filter(p => {
+                const d = p.properties.Completed?.date?.start
+                return d && new Date(d + "T00:00:00") >= weekAgo
+            }).length
+
+            const bySubject = {}
+            for (const p of donePages) {
+                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
+                bySubject[sub] = (bySubject[sub] || 0) + 1
+            }
+            const topSubject = Object.entries(bySubject)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([s, c]) => `${subjectEmoji(s)} ${s} (${c})`)
+                .join(", ")
+
+            let msg = `📋 ${safeBold("สรุปการบ้านที่ทำเสร็จแล้ว")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
+            msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
+            if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
+            msg += `\n━━━━━━━━━━━━━━━━━━\n`
+            msg += `📌 ${safeBold("รายการล่าสุด (สูงสุด 20):")}\n\n`
+            msg += `${lineList}`
+
+            if (total > 20) {
+                msg += `\n\n… และอีก ${total - 20} รายการ`
+            }
+
+            msg += `\n\n💪 ${safeBold("เก่งมาก! ทำต่อไป!")}`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("REVIEW action:", err)
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_DONE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
 }
