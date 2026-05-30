@@ -12,11 +12,12 @@ import { recalcPriority } from "./src/utils/priority.js";
 import { STATUS } from "./src/utils/constants.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
-import { registerActionHandlers }  from "./src/handlers/actionHandlers.js";
+import { registerActionHandlers, cleanupPomoTimers }  from "./src/handlers/actionHandlers.js";
 import { startWebServer }      from "./src/web/server.js";
 import { flushCorrections }    from "./src/services/aiCache.js";
 import { flushStreaks }        from "./src/services/streakService.js";
 import { flushBadges }         from "./src/services/badgeService.js";
+import { flushPomodoros }       from "./src/services/pomodoroService.js";
 
 /* ── validate env ── */
 validateEnv();
@@ -49,6 +50,10 @@ bot.telegram.setMyCommands([
     { command: "focus", description: "🎯 โฟกัสงานทีละชิ้น" },
     { command: "badges", description: "🏅 เหรียญตราความสำเร็จ" },
     { command: "review", description: "📋 สรุปการบ้านที่ทำเสร็จแล้ว" },
+    { command: "collab", description: "👥 แชร์การบ้านกับเพื่อน" },
+    { command: "smartbook", description: "📚 AI จัดตารางอ่านหนังสือ" },
+    { command: "pomodoro", description: "🍅 ตัวจับเวลา Pomodoro" },
+    { command: "suggest", description: "💡 AI แนะนำว่าควรทำอะไรก่อน" },
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
     { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
@@ -281,11 +286,15 @@ launchBot().catch((err) => {
 });
 
 /* ── graceful shutdown ── */
+const cronTasks = cron.getTasks()
 const shutdown = async (sig) => {
     logger.info(`Received ${sig}, shutting down gracefully...`);
+    cronTasks.forEach(t => t.stop())
+    cleanupPomoTimers()
     bot.stop(sig);
-    await Promise.all([flushCorrections(), flushStreaks(), flushBadges()]);
-    setTimeout(() => process.exit(0), 2000).unref();
+    server.close(() => {})
+    await Promise.all([flushCorrections(), flushStreaks(), flushBadges(), flushPomodoros()]);
+    setTimeout(() => process.exit(0), 10000).unref();
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));

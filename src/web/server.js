@@ -7,16 +7,24 @@ import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/
 import { recalcPriority } from "../utils/priority.js";
 import { formatDate } from "../utils/dateParser.js";
 import { logger } from "../utils/logger.js";
+import { buildBadgeGrid, getBadgeCount, getRarestBadge } from "../services/badgeService.js";
 import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /* ── separate dashboard token (never expose TELEGRAM_TOKEN) ── */
-let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim();
-if (!DASHBOARD_TOKEN) {
-    DASHBOARD_TOKEN = crypto.createHash("sha256").update(process.env.NOTION_TOKEN || "fallback").digest("base64url").slice(0, 32);
+let DASHBOARD_TOKEN = null;
+
+function initDashboardToken() {
+    const envToken = process.env.DASHBOARD_TOKEN?.trim();
+    if (envToken) { DASHBOARD_TOKEN = envToken; return; }
+    const notionToken = process.env.NOTION_TOKEN?.trim();
+    if (!notionToken) {
+        logger.warn("DASHBOARD_TOKEN not set and NOTION_TOKEN missing — dashboard auth disabled (all requests allowed)");
+        return;
+    }
+    DASHBOARD_TOKEN = crypto.createHash("sha256").update(notionToken).digest("base64url").slice(0, 32);
     logger.info(`Dashboard token derived from NOTION_TOKEN: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
-    logger.info(`Set DASHBOARD_TOKEN env var to use a custom token`);
 }
 
 export function getDashboardToken() {
@@ -108,6 +116,7 @@ function computeWeeklyDone(donePages) {
 }
 
 export function startWebServer(port = 8080) {
+    initDashboardToken();
     const app = express();
 
     const apiLimiter = rateLimit({
@@ -124,6 +133,7 @@ export function startWebServer(port = 8080) {
     app.get("/health", (req, res) => res.json({ status: "ok" }));
 
     function requireAuth(req, res, next) {
+        if (!DASHBOARD_TOKEN) return next();
         const t = req.headers["authorization"]?.replace("Bearer ", "");
         if (t !== DASHBOARD_TOKEN) {
             return res.status(401).json({ error: "Unauthorized" });
@@ -242,6 +252,37 @@ export function startWebServer(port = 8080) {
             res.status(500).json({ error: "Internal server error" });
         }
     });
+
+    /* Badge API */
+    app.get("/api/badges", requireAuth, async (req, res) => {
+        try {
+            const userId = req.query.userId || "0"
+            const badges = buildBadgeGrid(userId)
+            res.json({
+                badges,
+                count: getBadgeCount(userId),
+                rarest: getRarestBadge(userId),
+            })
+        } catch (err) {
+            logger.error("API /api/badges:", err)
+            res.status(500).json({ error: "Internal server error" })
+        }
+    })
+
+    app.get("/api/badges/:userId", requireAuth, async (req, res) => {
+        try {
+            const userId = req.params.userId
+            const badges = buildBadgeGrid(userId)
+            res.json({
+                badges,
+                count: getBadgeCount(userId),
+                rarest: getRarestBadge(userId),
+            })
+        } catch (err) {
+            logger.error("API /api/badges/:userId:", err)
+            res.status(500).json({ error: "Internal server error" })
+        }
+    })
 
     app.post("/api/bulk-status", requireAuth, async (req, res) => {
         const { ids, status } = req.body;

@@ -42,7 +42,20 @@ import { setCorrection } from "../services/aiCache.js";
 import { recordCompletion, getStreak } from "../services/streakService.js";
 import { QUOTES } from "../utils/quotes.js";
 import { askHint } from "../services/hintService.js";
-import { checkBadges, checkTaskBadges, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
+import { checkBadges, checkTaskBadges, checkUsageBadgeOnAction, checkZeroOverdue, awardBadges, buildBadgeMessage, getBadgeCount } from "../services/badgeService.js";
+import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges } from "../services/pomodoroService.js";
+
+/* ── pomodoro timer tracking for graceful shutdown ── */
+const pomoTimers = new Set()
+export function cleanupPomoTimers() {
+    for (const t of pomoTimers) clearTimeout(t)
+    pomoTimers.clear()
+}
+function trackPomoTimer(t) {
+    pomoTimers.add(t)
+    t._pomoTimerId = Symbol()
+}
+import crypto from "crypto";
 
 const hintsShown = new Map();  // uid -> { keys: Set, ts: number }
 const deletedItems = new Map();
@@ -731,6 +744,18 @@ export function registerActionHandlers(bot, userState) {
             }
             msg += `💪 ${safeBold("เริ่มจากอันแรกเลย!")}`
 
+            // award PANIC_5 badge
+            try {
+                const uid = ctx.from.id
+                const newBadge = checkUsageBadgeOnAction(uid, "panic", "PANIC_5", 5)
+                if (newBadge.length) {
+                    const awarded = awardBadges(uid, newBadge)
+                    if (awarded.length) {
+                        msg += `\n\n🏅 ${awarded[0].icon} ${awarded[0].rarityEmoji} ${safeBold(awarded[0].name)} — ${awarded[0].desc}!`
+                    }
+                }
+            } catch {}
+
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard(keyboard),
@@ -1143,6 +1168,21 @@ export function registerActionHandlers(bot, userState) {
                 )
             }
 
+            // award HINT_10 badge
+            try {
+                const uid = ctx.from.id
+                const newBadge = checkUsageBadgeOnAction(uid, "hint", "HINT_10", 10)
+                if (newBadge.length) {
+                    const awarded = awardBadges(uid, newBadge)
+                    if (awarded.length) {
+                        await ctx.reply(
+                            `🏅 ${awarded[0].icon} ${awarded[0].rarityEmoji} ${safeBold(awarded[0].name)} — ${awarded[0].desc}!`,
+                            { parse_mode: "Markdown" },
+                        )
+                    }
+                }
+            } catch {}
+
             return ctx.reply(hint, { parse_mode: "Markdown", ...mainMenu })
         } catch (err) {
             logger.error("HINT action:", err)
@@ -1207,6 +1247,18 @@ export function registerActionHandlers(bot, userState) {
                 ],
                 [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
             ]
+            // award EXPORT_3 badge
+            try {
+                const uid = ctx.from.id
+                const newBadge = checkUsageBadgeOnAction(uid, "export", "EXPORT_3", 3)
+                if (newBadge.length) {
+                    const awarded = awardBadges(uid, newBadge)
+                    if (awarded.length) {
+                        msg += `\n\n🏅 ${awarded[0].icon} ${awarded[0].rarityEmoji} ${safeBold(awarded[0].name)} — ${awarded[0].desc}!`
+                    }
+                }
+            } catch {}
+
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard(keyboard),
@@ -1214,7 +1266,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("EXPORT action:", err)
             const errMsg = errorWithRetry("ส่งออกไม่ได้", "RETRY_FETCH_ACTIVE")
-            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errorWithRetry("ส่งออกไม่ได้", "RETRY_FETCH_ACTIVE").reply_markup })
         }
     })
 
@@ -1247,6 +1299,195 @@ export function registerActionHandlers(bot, userState) {
             logger.error("NOTED_SEL:", err)
             return ctx.answerCbQuery("❌ บันทึกไม่ได้").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         }
+    })
+
+    /* FOCUS_SEL — select task to focus from inline keyboard */
+    bot.action(/FOCUS_SEL_(\d+)/, async (ctx) => {
+        const pageId = ctx.match[1]
+        const uid = ctx.from.id
+        await ctx.answerCbQuery().catch(() => {})
+
+        try {
+            const pages = await fetchActive()
+            const page = pages.find(p => p.id === pageId)
+            if (!page) {
+                return ctx.reply(
+                    `❌ ${safeBold("ไม่พบงานนี้")}\nอาจถูกลบไปแล้ว`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const { title, status, due, subject, priority } = getPageProps(page)
+            userState.set(uid, {
+                _focusActive: true,
+                _focusHomeworkId: pageId,
+                _focusTitle: title,
+                _timestamp: Date.now(),
+            })
+
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const dt = due ? parseYMDToLocalDate(due) : null
+            const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+
+            let badge = ""
+            if (diff !== null && diff < 0) {
+                badge = ` 🚨 เลย ${Math.abs(diff)} วัน`
+            } else if (diff !== null && diff <= 3) {
+                badge = ` 🔥 เหลือ ${diff} วัน`
+            } else if (diff !== null && diff <= 7) {
+                badge = ` ⏰ เหลือ ${diff} วัน`
+            }
+
+            let msg = `🎯 ${safeBold("โฟกัสงานนี้!")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
+            msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `💡 พิมพ์คำสั่งอื่นไม่ได้ขณะโฟกัส\nพิมพ์ /focus เพื่อดู หรือ /focus exit เพื่อออก`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("✅ เสร็จ", "FOCUS_STATUS_DONE"),
+                    Markup.button.callback("🔄 กำลังทำ", "FOCUS_STATUS_PROGRESS"),
+                ],
+                [
+                    Markup.button.callback("❌ เลิกโฟกัส", "FOCUS_EXIT"),
+                    Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
+                ],
+            ]
+
+            try {
+                await ctx.editMessageText(msg, {
+                    parse_mode: "Markdown",
+                    ...Markup.inlineKeyboard(keyboard),
+                })
+            } catch {
+                return ctx.reply(msg, {
+                    parse_mode: "Markdown",
+                    ...Markup.inlineKeyboard(keyboard),
+                })
+            }
+        } catch (err) {
+            logger.error("FOCUS_SEL:", err)
+            return ctx.reply(
+                `❌ ${safeBold("เลือกงานไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* FOCUS_STATUS_DONE — mark focused task as done + exit focus */
+    bot.action("FOCUS_STATUS_DONE", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        const pageId = state?._focusHomeworkId
+
+        if (!pageId) {
+            await ctx.answerCbQuery("❌ ไม่มีงานในโฟกัส").catch(() => {})
+            return ctx.reply(
+                `❌ ${safeBold("ไม่มีงานในโฟกัส")}\nพิมพ์ /focus เพื่อเลือกงาน`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+
+        await ctx.answerCbQuery().catch(() => {})
+
+        try {
+            const oldStatus = await getPageStatus(pageId)
+            await updateStatus(pageId, STATUS.DONE)
+            state._lastAction = { type: "STATUS_CHANGE", pageId, from: oldStatus, to: STATUS.DONE, _timestamp: Date.now() }
+            userState.delete(uid)
+            await ctx.editMessageReplyMarkup(undefined).catch(() => {})
+
+            let streakMsg = ""
+            try {
+                const result = recordCompletion(uid)
+                if (result.isNewMilestone) {
+                    streakMsg = `\n\n🎉🎉🎉 *ครบ ${result.current} วันติดแล้ว!* 🔥🔥🔥`
+                }
+            } catch {}
+
+            try {
+                const newBadgeIds = checkBadges(uid)
+                const awarded = awardBadges(uid, newBadgeIds)
+                if (awarded.length) {
+                    streakMsg += `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
+                    for (const b of awarded) {
+                        streakMsg += `${b.icon} ${b.name} — ${b.desc}\n`
+                    }
+                }
+            } catch {}
+
+            try {
+                const donePages = await fetchDone()
+                const totalDone = donePages.length
+                const taskBadgeIds = checkTaskBadges(uid, totalDone)
+                const taskAwarded = awardBadges(uid, taskBadgeIds)
+                if (taskAwarded.length) {
+                    streakMsg += `\n\n`
+                    for (const b of taskAwarded) {
+                        streakMsg += `🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!\n`
+                    }
+                }
+            } catch {}
+
+            return ctx.reply(
+                `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `เก่งมาก! ออกจากโฟกัสแล้ว${streakMsg}`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        } catch (err) {
+            logger.error("FOCUS_STATUS_DONE:", err)
+            return ctx.reply(
+                `❌ ${safeBold("อัปเดตไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* FOCUS_STATUS_PROGRESS — set focused task to In Progress + update card */
+    bot.action("FOCUS_STATUS_PROGRESS", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        const pageId = state?._focusHomeworkId
+
+        if (!pageId) {
+            await ctx.answerCbQuery("❌ ไม่มีงานในโฟกัส").catch(() => {})
+            return
+        }
+
+        await ctx.answerCbQuery().catch(() => {})
+
+        try {
+            await updateStatus(pageId, STATUS.IN_PROGRESS)
+            return ctx.reply(
+                `✏️ ${safeBold("อัปเดตแล้ว")} — กำลังทำอยู่ 💪`,
+                { parse_mode: "Markdown" },
+            )
+        } catch (err) {
+            logger.error("FOCUS_STATUS_PROGRESS:", err)
+            await ctx.answerCbQuery("❌ อัปเดตไม่ได้").catch(() => {})
+        }
+    })
+
+    /* FOCUS_EXIT — exit focus mode */
+    bot.action("FOCUS_EXIT", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        const focusTitle = state?._focusTitle || ""
+        await ctx.answerCbQuery().catch(() => {})
+
+        userState.delete(uid)
+        await ctx.editMessageReplyMarkup(undefined).catch(() => {})
+
+        return ctx.reply(
+            `❌ ${safeBold("ยกเลิกโฟกัสแล้ว")}\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `${focusTitle ? `เลิกโฟกัส "${escapeMarkdown(focusTitle)}"` : "เลิกโฟกัสแล้ว"}\n` +
+            `กลับสู่หน้าหลัก`,
+            { parse_mode: "Markdown", ...mainMenu },
+        )
     })
 
     /* FOCUS_NEXT — skip to next task */
@@ -1543,7 +1784,7 @@ export function registerActionHandlers(bot, userState) {
                 ctx.telegram.editMessageReplyMarkup(
                     ctx.chat.id, recoveryMsg.message_id, undefined, { inline_keyboard: [] },
                 ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
-            }, 10000);
+            }, 10000).unref();
         } catch (err) {
             logger.error("DELETE confirm:", err);
             const errMsg = errorWithRetry("ลบไม่ได้", `RETRY_ARCHIVE_${pageId}`);
@@ -1651,48 +1892,37 @@ export function registerActionHandlers(bot, userState) {
                 )
             }
 
-            const lineList = donePages.slice(0, 20).map((p, i) => {
-                const { title, subject, priority, completed } = getPageProps(p)
-                const doneDate = completed ? completed.slice(5).replace("-", "/") : "?"
-                return `${i + 1}. [${subject}] ${title} — เสร็จ ${doneDate} ${priority}`
-            }).join("\n")
-
             const total = donePages.length
             const today = new Date(); today.setHours(0, 0, 0, 0)
             const weekAgo = new Date(today)
             weekAgo.setDate(today.getDate() - 7)
+            const monthAgo = new Date(today)
+            monthAgo.setDate(today.getDate() - 30)
+
             const weekCount = donePages.filter(p => {
                 const d = p.properties.Completed?.date?.start
                 return d && new Date(d + "T00:00:00") >= weekAgo
             }).length
 
-            const bySubject = {}
-            for (const p of donePages) {
-                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
-                bySubject[sub] = (bySubject[sub] || 0) + 1
-            }
-            const topSubject = Object.entries(bySubject)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3)
-                .map(([s, c]) => `${subjectEmoji(s)} ${s} (${c})`)
-                .join(", ")
+            const monthCount = donePages.filter(p => {
+                const d = p.properties.Completed?.date?.start
+                return d && new Date(d + "T00:00:00") >= monthAgo
+            }).length
 
             let msg = `📋 ${safeBold("สรุปการบ้านที่ทำเสร็จแล้ว")}\n`
             msg += `━━━━━━━━━━━━━━━━━━\n\n`
             msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
             msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
-            if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
+            msg += `📅 30 วัน: ${monthCount} รายการ\n`
             msg += `\n━━━━━━━━━━━━━━━━━━\n`
-            msg += `📌 ${safeBold("รายการล่าสุด (สูงสุด 20):")}\n\n`
-            msg += `${lineList}`
-
-            if (total > 20) {
-                msg += `\n\n… และอีก ${total - 20} รายการ`
-            }
-
-            msg += `\n\n💪 ${safeBold("เก่งมาก! ทำต่อไป!")}`
+            msg += `📊 ${safeBold("เลือกช่วงเวลาเพื่อดูรายละเอียด:")}`
 
             const keyboard = [
+                [
+                    Markup.button.callback("📅 วันนี้", "REVIEW_PERIOD_today"),
+                    Markup.button.callback("📅 7 วัน", "REVIEW_PERIOD_7d"),
+                    Markup.button.callback("📅 30 วัน", "REVIEW_PERIOD_30d"),
+                ],
                 [
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
                     Markup.button.callback("🏠 หน้าหลัก", "HOME"),
@@ -1707,6 +1937,503 @@ export function registerActionHandlers(bot, userState) {
             logger.error("REVIEW action:", err)
             const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_DONE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
+        }
+    })
+
+    /* REVIEW_PERIOD — show summary for selected period */
+    bot.action(/REVIEW_PERIOD_(.+)/, async (ctx) => {
+        const period = ctx.match[1]
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+
+        try {
+            const donePages = await fetchDone()
+            if (!donePages.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ไม่มีงานที่ทำเสร็จในช่วงนี้")}`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            let cutoff = new Date(today)
+            let periodLabel = ""
+
+            if (period === "today") {
+                periodLabel = "วันนี้"
+            } else if (period === "7d") {
+                cutoff.setDate(today.getDate() - 7)
+                periodLabel = "7 วันที่ผ่านมา"
+            } else if (period === "30d") {
+                cutoff.setDate(today.getDate() - 30)
+                periodLabel = "30 วันที่ผ่านมา"
+            }
+
+            const filtered = donePages.filter(p => {
+                const d = p.properties.Completed?.date?.start
+                return d && new Date(d + "T00:00:00") >= cutoff
+            })
+
+            if (!filtered.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ไม่มีงานที่ทำเสร็จในช่วง")} ${periodLabel}\n` +
+                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `ลองเพิ่มการบ้านและทำให้เสร็จก่อน!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const totalInPeriod = filtered.length
+            const bySubject = {}
+            let overdueCount = 0
+            for (const p of filtered) {
+                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
+                bySubject[sub] = (bySubject[sub] || 0) + 1
+                const due = p.properties.Due?.date?.start
+                if (due && new Date(due + "T00:00:00") < today) {
+                    overdueCount++
+                }
+            }
+
+            const topSubject = Object.entries(bySubject)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([s, c]) => `${subjectEmoji(s)} ${s} (${c})`)
+                .join(", ")
+
+            const completedPct = donePages.length > 0
+                ? Math.round((filtered.length / donePages.length) * 100)
+                : 0
+
+            // Sentiment emoji
+            let sentiment = "😊"
+            if (overdueCount > totalInPeriod * 0.5) {
+                sentiment = "😅"
+            } else if (overdueCount > totalInPeriod * 0.25) {
+                sentiment = "😐"
+            }
+
+            let msg = `📋 ${safeBold("สรุปการบ้าน — " + periodLabel)}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `✅ ทำเสร็จ: ${totalInPeriod} รายการ\n`
+            if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
+            msg += `📊 คิดเป็น ${completedPct}% ของทั้งหมด\n`
+            if (overdueCount > 0) {
+                msg += `⚠️ Overdue: ${overdueCount} รายการ\n`
+            }
+            msg += `\n━━━━━━━━━━━━━━━━━━\n`
+            msg += `${sentiment}`
+
+            const keyboard = [
+                [
+                    Markup.button.callback("📋 ดูรายละเอียด", "REVIEW_DETAIL_0"),
+                ],
+                [
+                    Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("REVIEW_PERIOD:", err)
+            return ctx.reply(
+                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* COLLAB_SEL — generate share token for selected task */
+    bot.action(/COLLAB_SEL_(\d+)/, async (ctx) => {
+        const pageId = ctx.match[1]
+        const uid = ctx.from.id
+        await ctx.answerCbQuery().catch(() => {})
+
+        try {
+            const pages = await fetchActive()
+            const page = pages.find(p => p.id === pageId)
+            if (!page) {
+                return ctx.reply(
+                    `❌ ${safeBold("ไม่พบงานนี้")}\nอาจถูกลบไปแล้ว`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const { title, subject, due, priority } = getPageProps(page)
+            const note = page.properties.Note?.rich_text?.[0]?.plain_text || ""
+            const tags = page.properties.Tags?.multi_select?.map(t => t.name) || []
+            const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)
+
+            const { shareTokens } = await import("./commandHandlers.js")
+            shareTokens.set(token, {
+                title,
+                subject,
+                due,
+                priority,
+                note,
+                tags,
+                ownerUid: uid,
+                _timestamp: Date.now(),
+            })
+
+            const botUsername = process.env.BOT_USERNAME || "homeworkbot"
+
+            return ctx.reply(
+                `👥 ${safeBold("แชร์งานนี้กับเพื่อน!")}\n` +
+                `━━━━━━━━━━━━━━━━━━\n\n` +
+                `${safeBold(title)}\n` +
+                `${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `📤 ส่งข้อความนี้ให้เพื่อน:\n\n` +
+                `${safeCode(`@${botUsername} /collab accept ${token}`)}\n\n` +
+                `⏱️ token มีอายุ 24 ชม.`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        } catch (err) {
+            logger.error("COLLAB_SEL:", err)
+            return ctx.reply(
+                `❌ ${safeBold("แชร์ไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* POMODORO START — begin a 25 min work session */
+    bot.action("POMODORO_START", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid) || {}
+        await ctx.answerCbQuery().catch(() => {})
+
+        // Clear any existing break state
+        if (state._pomoBreakTimeout) {
+            clearTimeout(state._pomoBreakTimeout)
+        }
+
+        const homeworkTitle = state._focusTitle || null
+        const session = pomoStartSession(uid, homeworkTitle)
+
+        const timeout = setTimeout(async () => {
+            pomoTimers.delete(timeout)
+            try {
+                const userStateNow = userState.get(uid) || {}
+                savePomodoro(uid)
+                const breakTimeout = setTimeout(() => {
+                    pomoTimers.delete(breakTimeout)
+                    const s = userState.get(uid) || {}
+                    userState.set(uid, {
+                        ...s,
+                        _pomoBreak: false,
+                        _pomoBreakTimeout: null,
+                    })
+                }, getBreakDuration()).unref()
+                trackPomoTimer(breakTimeout)
+                userState.set(uid, {
+                    ...userStateNow,
+                    _pomoActive: false,
+                    _pomoTimeout: null,
+                    _pomoBreak: true,
+                    _pomoBreakStartedAt: Date.now(),
+                    _pomoBreakDuration: getBreakDuration(),
+                    _pomoBreakTimeout: breakTimeout,
+                    _timestamp: Date.now(),
+                })
+
+                // Check badges
+                let badgeMsg = ""
+                try {
+                    const newBadgeIds = checkPomoBadges(uid)
+                    if (newBadgeIds.length) {
+                        const awarded = awardBadges(uid, newBadgeIds)
+                        if (awarded.length) {
+                            badgeMsg = `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
+                            for (const b of awarded) {
+                                badgeMsg += `${b.icon} ${b.name} — ${b.desc}\n`
+                            }
+                        }
+                    }
+                } catch {}
+
+                const title = state._pomoHomeworkTitle || ""
+                let msg = `☕ ${safeBold("พักเบรก 5 นาที!")}\n`
+                msg += `━━━━━━━━━━━━━━━━━━\n`
+                msg += `🍅 เซสชันเสร็จแล้ว!\n`
+                if (title) msg += `📌 งานที่ทำ: ${escapeMarkdown(title)}\n`
+                msg += `\nพักผ่อนสักครู่ แล้วกลับมาลุยต่อ!`
+                msg += badgeMsg
+
+                const keyboard = [
+                    [Markup.button.callback("⏭️ เริ่มรอบใหม่", "POMODORO_START")],
+                    [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+                ]
+                await bot.telegram.sendMessage(uid, msg, {
+                    parse_mode: "Markdown",
+                    ...Markup.inlineKeyboard(keyboard),
+                })
+            } catch (err) {
+                logger.error("POMODORO timeout:", err)
+            }
+        }, session.duration).unref()
+        trackPomoTimer(timeout)
+
+        userState.set(uid, {
+            ...state,
+            _pomoActive: true,
+            _pomoStartedAt: session.startedAt,
+            _pomoDuration: session.duration,
+            _pomoTimeout: timeout,
+            _pomoHomeworkTitle: homeworkTitle,
+            _pomoBreak: false,
+            _pomoBreakTimeout: null,
+            _timestamp: Date.now(),
+        })
+
+        const title = homeworkTitle || ""
+        let msg = `🍅 ${safeBold("เริ่ม Pomodoro!")}\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `⏱️ 25 นาที — เริ่มเลย!\n`
+        if (title) msg += `📌 งาน: ${escapeMarkdown(title)}\n`
+        msg += `\n💪 สู้ๆ ไฟighting!`
+
+        const keyboard = [
+            [Markup.button.callback("❌ ยกเลิก", "POMODORO_CANCEL")],
+        ]
+
+        try {
+            await ctx.editMessageText(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch {
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        }
+    })
+
+    /* POMODORO CANCEL — cancel current session */
+    bot.action("POMODORO_CANCEL", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid) || {}
+        await ctx.answerCbQuery().catch(() => {})
+
+        if (state._pomoTimeout) clearTimeout(state._pomoTimeout)
+        if (state._pomoBreakTimeout) clearTimeout(state._pomoBreakTimeout)
+
+        userState.set(uid, {
+            ...state,
+            _pomoActive: false,
+            _pomoTimeout: null,
+            _pomoBreak: false,
+            _pomoBreakTimeout: null,
+            _pomoHomeworkTitle: null,
+            _timestamp: Date.now(),
+        })
+
+        return ctx.reply(
+            `❌ ${safeBold("ยกเลิก Pomodoro แล้ว")}\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `พิมพ์ /pomodoro เพื่อเริ่มใหม่`,
+            { parse_mode: "Markdown", ...mainMenu },
+        )
+    })
+
+    /* POMODORO STATS — show pomodoro statistics */
+    bot.action("POMODORO_STATS", async (ctx) => {
+        const uid = ctx.from.id
+        await ctx.answerCbQuery().catch(() => {})
+
+        const stats = pomoGetStats(uid)
+        const streak = pomoGetStreak(uid)
+
+        let msg = `🍅 ${safeBold("สถิติ Pomodoro")}\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `📅 วันนี้: ${stats.today} เซสชัน\n`
+        msg += `📅 สัปดาห์: ${stats.week} เซสชัน\n`
+        msg += `🏆 รวม: ${stats.count} เซสชัน\n`
+        msg += `⏱️ เวลาทั้งหมด: ${stats.totalHours} ชั่วโมง\n`
+        if (streak > 0) msg += `🔥 Streak: ${streak} วัน\n`
+        msg += `━━━━━━━━━━━━━━━━━━`
+
+        const keyboard = [
+            [Markup.button.callback("🍅 เริ่มใหม่", "POMODORO_START")],
+            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+        ]
+
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard(keyboard),
+        })
+    })
+
+    /* SUGGEST_REFRESH — re-trigger suggest */
+    bot.action("SUGGEST_REFRESH", async (ctx) => {
+        await ctx.answerCbQuery().catch(() => {})
+        return ctx.reply(
+            `🔄 ${safeBold("กำลังแนะนำใหม่...")}\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `พิมพ์ /suggest เพื่อรับคำแนะนำใหม่`,
+            { parse_mode: "Markdown", ...mainMenu },
+        )
+    })
+
+    /* SMARTBOOK actions */
+    bot.action("SMARTBOOK_SAVE", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        await ctx.answerCbQuery("💾 บันทึกแผนแล้ว!").catch(() => {})
+        if (state) {
+            userState.set(uid, { ...state, _timestamp: Date.now() })
+        }
+        return ctx.reply(
+            `💾 ${safeBold("บันทึกแผนแล้ว!")}\n` +
+            `━━━━━━━━━━━━━━━━━━\n` +
+            `พิมพ์ /smartbook view เพื่อดูแผนที่บันทึกไว้`,
+            { parse_mode: "Markdown", ...mainMenu },
+        )
+    })
+
+    bot.action("SMARTBOOK_REFRESH", async (ctx) => {
+        await ctx.answerCbQuery().catch(() => {})
+        try {
+            // Re-trigger AI by sending /smartbook message
+            return ctx.reply(
+                `🔄 ${safeBold("กำลังรีเฟรชแผน...")}\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `พิมพ์ /smartbook เพื่อสร้างแผนใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        } catch (err) {
+            logger.error("SMARTBOOK_REFRESH:", err)
+            return ctx.reply(
+                `❌ ${safeBold("รีเฟรชไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    bot.action("SMARTBOOK_ICAL", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid)
+        await ctx.answerCbQuery().catch(() => {})
+
+        const plan = state?._smartbookPlan
+        if (!plan || !plan.plan || !plan.plan.length) {
+            return ctx.reply(
+                `❌ ${safeBold("ไม่มีแผนที่บันทึกไว้")}\n` +
+                `พิมพ์ /smartbook เพื่อสร้างแผนก่อน`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+
+        try {
+            let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HomeworkBot//Smartbook//EN\r\n"
+            for (const day of plan.plan) {
+                if (!day.date) continue
+                const startDate = day.date.replace(/-/g, "")
+                const endDate = startDate
+                const duration = day.duration_min || 120
+                const summary = `[${day.focus}] ${(day.tasks || []).join(", ")}`
+                ics += "BEGIN:VEVENT\r\n"
+                ics += `DTSTART;VALUE=DATE:${startDate}\r\n`
+                ics += `DTEND;VALUE=DATE:${endDate}\r\n`
+                ics += `SUMMARY:${summary.replace(/,/g, "\\,")}\r\n`
+                ics += `DESCRIPTION:${(day.tasks || []).join("\\n")}\r\n`
+                ics += "END:VEVENT\r\n"
+            }
+            ics += "END:VCALENDAR\r\n"
+
+            const buffer = Buffer.from(ics, "utf-8")
+            await ctx.replyWithDocument({
+                source: buffer,
+                filename: "smartbook_plan.ics",
+            })
+        } catch (err) {
+            logger.error("SMARTBOOK_ICAL:", err)
+            return ctx.reply(
+                `❌ ${safeBold("สร้าง iCal ไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* REVIEW_DETAIL — show paginated list of done tasks in period */
+    bot.action(/REVIEW_DETAIL_(\d+)/, async (ctx) => {
+        const pageNum = parseInt(ctx.match[1], 10) || 0
+        const uid = ctx.from.id
+        const state = userState.get(uid) || {}
+        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+
+        try {
+            const donePages = state._reviewPages || await fetchDone()
+            const today = new Date(); today.setHours(0, 0, 0, 0)
+            const cutoff = state._reviewCutoff
+                ? new Date(state._reviewCutoff)
+                : new Date(today.getTime() - 7 * 86400000)
+
+            const filtered = donePages.filter(p => {
+                const d = p.properties.Completed?.date?.start
+                return d && new Date(d + "T00:00:00") >= cutoff
+            })
+
+            if (!filtered.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ไม่มีงานในช่วงนี้")}`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const PAGE_SIZE = 10
+            const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+            const start = pageNum * PAGE_SIZE
+            const pageItems = filtered.slice(start, start + PAGE_SIZE)
+
+            if (!state._reviewPages) {
+                userState.set(uid, {
+                    ...state,
+                    _reviewPages: donePages,
+                    _reviewCutoff: cutoff.toISOString(),
+                    _timestamp: Date.now(),
+                })
+            }
+
+            let msg = `📋 ${safeBold("รายละเอียด (หน้า ${pageNum + 1}/${totalPages})")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (let i = 0; i < pageItems.length; i++) {
+                const p = pageItems[i]
+                const { title, subject, priority, completed } = getPageProps(p)
+                const doneDate = completed ? completed.slice(5).replace("-", "/") : "?"
+                msg += `${start + i + 1}. [${subject}] ${safeBold(title)}\n`
+                msg += `   ${priority} — เสร็จ ${doneDate}\n\n`
+            }
+
+            const keyboard = []
+            const row = []
+            if (pageNum > 0) {
+                row.push(Markup.button.callback("◀ ก่อนหน้า", `REVIEW_DETAIL_${pageNum - 1}`))
+            }
+            if (pageNum + 1 < totalPages) {
+                row.push(Markup.button.callback("ถัดไป ▶", `REVIEW_DETAIL_${pageNum + 1}`))
+            }
+            if (row.length) keyboard.push(row)
+            keyboard.push([
+                Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
+                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            ])
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("REVIEW_DETAIL:", err)
+            return ctx.reply(
+                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
         }
     })
 }

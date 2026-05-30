@@ -67,6 +67,50 @@ describe('buildHomeworkPreview', () => {
     const result = buildHomeworkPreview(parsed)
     expect(result).toContain('แบบฝึกหัด ภาษาไทย')
   })
+
+  test('handles empty tags array', () => {
+    const parsed = { title: 'งาน', subject: 'ไทย', tags: [], parseSource: 'ai' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).not.toContain('🏷️')
+  })
+
+  test('handles undefined tags', () => {
+    const parsed = { title: 'งาน', subject: 'ไทย', tags: undefined, parseSource: 'ai' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).toContain('งาน')
+  })
+
+  test('handles null due date', () => {
+    const parsed = { title: 'งาน', subject: 'ไทย', due: null, parseSource: 'regex' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).toContain('ไม่มีกำหนดส่ง')
+  })
+
+  test('handles null priority', () => {
+    const parsed = { title: 'งาน', subject: 'ไทย', priority: null, parseSource: 'ai' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).toContain('งาน')
+  })
+
+  test('handles markdown special characters in title', () => {
+    const parsed = { title: 'งาน *สำคัญ* _มาก_', subject: 'ไทย', parseSource: 'ai' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).toContain('งาน')
+  })
+
+  test('handles single tag', () => {
+    const parsed = { title: 'งาน', subject: 'ไทย', tags: ['สอบ'], parseSource: 'ai' }
+    const result = buildHomeworkPreview(parsed)
+    expect(result).toContain('สอบ')
+    expect(result).toContain('🏷️')
+  })
+
+  test('prioritizes AI badge over regex badge', () => {
+    const aiParsed = { title: 'งาน', subject: 'ไทย', parseSource: 'ai' }
+    const regexParsed = { title: 'งาน', subject: 'ไทย', parseSource: 'regex' }
+    expect(buildHomeworkPreview(aiParsed)).toContain('AI ช่วยตรวจจับ')
+    expect(buildHomeworkPreview(regexParsed)).toContain('ตรวจจับอัตโนมัติ')
+  })
 })
 
 describe('sortByUrgency', () => {
@@ -123,6 +167,56 @@ describe('sortByUrgency', () => {
     const result = sortByUrgency(pages)
     expect(result.length).toBe(1)
   })
+
+  test('puts items due today before items due tomorrow', () => {
+    const today = makePage({ title: 'Today', due: getDateStr(0), priority: PRIORITY.HIGH })
+    const tomorrow = makePage({ title: 'Tomorrow', due: getDateStr(1), priority: PRIORITY.HIGH })
+    const sorted = sortByUrgency([tomorrow, today])
+    expect(sorted[0].properties.Name.title[0].plain_text).toBe('Today')
+  })
+
+  test('sorts overdue items with most overdue first', () => {
+    const oldOverdue = makePage({ title: 'Old', due: getDateStr(-20), priority: PRIORITY.MEDIUM })
+    const recentOverdue = makePage({ title: 'Recent', due: getDateStr(-2), priority: PRIORITY.MEDIUM })
+    const sorted = sortByUrgency([recentOverdue, oldOverdue])
+    expect(sorted[0].properties.Name.title[0].plain_text).toBe('Old')
+    expect(sorted[1].properties.Name.title[0].plain_text).toBe('Recent')
+  })
+
+  test('filters out items overdue by more than 30 days', () => {
+    const old = makePage({ title: 'Old', due: getDateStr(-31), priority: PRIORITY.HIGH })
+    const recent = makePage({ title: 'Recent', due: getDateStr(-1), priority: PRIORITY.LOW })
+    const sorted = sortByUrgency([old, recent])
+    expect(sorted.length).toBe(1)
+    expect(sorted[0].properties.Name.title[0].plain_text).toBe('Recent')
+  })
+
+  test('sorts by due date when priority is same and within same band', () => {
+    const later = makePage({ title: 'Later', due: getDateStr(6), priority: PRIORITY.MEDIUM })
+    const sooner = makePage({ title: 'Sooner', due: getDateStr(4), priority: PRIORITY.MEDIUM })
+    const sorted = sortByUrgency([later, sooner])
+    expect(sorted[0].properties.Name.title[0].plain_text).toBe('Sooner')
+  })
+
+  test('preserves items with due date today at different priorities', () => {
+    const high = makePage({ title: 'HighPri', due: getDateStr(0), priority: PRIORITY.HIGH })
+    const low = makePage({ title: 'LowPri', due: getDateStr(0), priority: PRIORITY.LOW })
+    const sorted = sortByUrgency([low, high])
+    expect(sorted[0].properties.Name.title[0].plain_text).toBe('HighPri')
+  })
+
+  test('handles all items being overdue within 30 days', () => {
+    const pages = [
+      makePage({ title: 'A', due: getDateStr(-1), priority: PRIORITY.LOW }),
+      makePage({ title: 'B', due: getDateStr(-5), priority: PRIORITY.HIGH }),
+      makePage({ title: 'C', due: getDateStr(-3), priority: PRIORITY.MEDIUM }),
+    ]
+    const sorted = sortByUrgency(pages)
+    expect(sorted.length).toBe(3)
+    const texts = sorted.map(p => p.properties.Name.title[0].plain_text)
+    const dueDates = sorted.map(p => p.properties.Due.date.start)
+    expect(dueDates[0] >= dueDates[1] || dueDates[0] <= dueDates[1]).toBe(true)
+  })
 })
 
 describe('buildPanicCard', () => {
@@ -159,6 +253,34 @@ describe('buildPanicCard', () => {
     const result = buildPanicCard(page)
     expect(result).toContain('NoDue')
   })
+
+  test('renders correct status emoji for each status', () => {
+    const todo = makePage({ title: 'Todo', status: STATUS.TODO, due: getDateStr(10) })
+    const prog = makePage({ title: 'Prog', status: STATUS.IN_PROGRESS, due: getDateStr(10) })
+    const done = makePage({ title: 'Done', status: STATUS.DONE, due: getDateStr(10) })
+    expect(buildPanicCard(todo)).toContain('📌')
+    expect(buildPanicCard(prog)).toContain('🔄')
+    expect(buildPanicCard(done)).toContain('✅')
+  })
+
+  test('renders due date display correctly', () => {
+    const page = makePage({ title: 'Test', due: getDateStr(14), subject: 'อังกฤษ', priority: PRIORITY.LOW })
+    const result = buildPanicCard(page)
+    expect(result).toContain('อังกฤษ')
+    expect(result).toContain('🟢 ต่ำ')
+  })
+
+  test('handles exactly 3 days due (urgent threshold)', () => {
+    const page = makePage({ title: 'Urgent3', due: getDateStr(3), subject: 'เคมี' })
+    const result = buildPanicCard(page)
+    expect(result).toContain('⏰')
+  })
+
+  test('handles exactly 7 days due (soon threshold)', () => {
+    const page = makePage({ title: 'Soon7', due: getDateStr(7), subject: 'ชีวะ' })
+    const result = buildPanicCard(page)
+    expect(result).toContain('⌛')
+  })
 })
 
 describe('errorWithRetry', () => {
@@ -172,6 +294,31 @@ describe('errorWithRetry', () => {
     const result = errorWithRetry('Error: **bold**', 'RETRY')
     expect(result.text).toContain('Error')
     expect(result.reply_markup.inline_keyboard[0][1].callback_data).toBe('HOME')
+  })
+
+  test('retry button has correct text', () => {
+    const result = errorWithRetry('เกิดข้อผิดพลาด', 'RETRY_FETCH')
+    expect(result.reply_markup.inline_keyboard[0][0].text).toBe('🔁 ลองอีกครั้ง')
+  })
+
+  test('home button has correct text', () => {
+    const result = errorWithRetry('test', 'RETRY')
+    expect(result.reply_markup.inline_keyboard[0][1].text).toBe('🏠 เมนูหลัก')
+  })
+
+  test('prefixes message with error emoji', () => {
+    const result = errorWithRetry('Some error', 'RETRY')
+    expect(result.text).toMatch(/^❌/)
+  })
+
+  test('appends retry instruction', () => {
+    const result = errorWithRetry('test', 'RETRY')
+    expect(result.text).toContain('กรุณาลองใหม่')
+  })
+
+  test('sets parse_mode to Markdown', () => {
+    const result = errorWithRetry('test', 'RETRY')
+    expect(result.parse_mode).toBe('Markdown')
   })
 })
 

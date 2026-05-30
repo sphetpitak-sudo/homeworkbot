@@ -36,4 +36,8 @@ export const SUBJECT_DISPLAY_MAX = 6;
 export const PROGRESS_BAR_SLOTS = 10;
 
 // ── Notion pagination ──
-export const NOTION_PAGE_SIZE = 100;
+export const NOTION_PAGE_SIZE = 100
+
+// ── Pomodoro ──
+export const POMODORO_DURATION = 25 * 60 * 1000
+export const POMODORO_BREAK_DURATION = 5 * 60 * 1000;

@@ -50,7 +50,7 @@ function loadCorrections() {
 
 function debouncedSave() {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => { debounceTimer = null; doWrite(); }, DEBOUNCE_MS);
+    debounceTimer = setTimeout(() => { debounceTimer = null; doWrite(); }, DEBOUNCE_MS).unref();
 }
 
 export async function flushCorrections() {

@@ -33,6 +33,18 @@ jest.unstable_mockModule('../src/services/notionService.js', () => ({
   archivePage: mockArchivePage,
 }));
 
+/* ── mock badgeService ── */
+
+const mockBuildBadgeGrid = jest.fn(() => []);
+const mockGetBadgeCount = jest.fn(() => 0);
+const mockGetRarestBadge = jest.fn(() => null);
+
+jest.unstable_mockModule('../src/services/badgeService.js', () => ({
+  buildBadgeGrid: mockBuildBadgeGrid,
+  getBadgeCount: mockGetBadgeCount,
+  getRarestBadge: mockGetRarestBadge,
+}));
+
 /* ── helpers ── */
 
 function makePage(id, overrides = {}) {
@@ -568,6 +580,59 @@ describe('Web Dashboard API E2E', () => {
         body: JSON.stringify({ id: '', status: 'Done' }),
       });
       expect(res.status).toBe(400);
+    });
+  });
+
+  /* ── GET /api/badges ── */
+
+  describe('GET /api/badges', () => {
+    test('returns badge data with count and rarest', async () => {
+      mockBuildBadgeGrid.mockReturnValueOnce([
+        { id: 'STREAK_3', icon: '🔥', name: 'ไฟเริ่มติด', desc: 'ทำติดต่อ 3 วัน', rarity: 'Common' },
+      ]);
+      mockGetBadgeCount.mockReturnValueOnce(1);
+      mockGetRarestBadge.mockReturnValueOnce({ id: 'STREAK_3', rarity: 'Common' });
+
+      const res = await fetch(`${baseUrl}/api/badges`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data).toHaveProperty('badges');
+      expect(data).toHaveProperty('count', 1);
+      expect(data).toHaveProperty('rarest');
+      expect(data.rarest.id).toBe('STREAK_3');
+      expect(Array.isArray(data.badges)).toBe(true);
+    });
+
+    test('uses userId from query param', async () => {
+      mockBuildBadgeGrid.mockClear();
+      const res = await fetch(`${baseUrl}/api/badges?userId=user123`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      expect(mockBuildBadgeGrid).toHaveBeenCalledWith('user123');
+    });
+
+    test('uses default userId "0" when not provided', async () => {
+      mockBuildBadgeGrid.mockClear();
+      const res = await fetch(`${baseUrl}/api/badges`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      expect(mockBuildBadgeGrid).toHaveBeenCalledWith('0');
+    });
+  });
+
+  /* ── GET /api/badges/:userId ── */
+
+  describe('GET /api/badges/:userId', () => {
+    test('returns badges for specific user', async () => {
+      mockBuildBadgeGrid.mockClear();
+      mockBuildBadgeGrid.mockReturnValueOnce([]);
+      mockGetBadgeCount.mockReturnValueOnce(0);
+      mockGetRarestBadge.mockReturnValueOnce(null);
+
+      const res = await fetch(`${baseUrl}/api/badges/specific-user-id`, { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data).toHaveProperty('badges');
+      expect(data).toHaveProperty('count', 0);
+      expect(mockBuildBadgeGrid).toHaveBeenCalledWith('specific-user-id');
     });
   });
 

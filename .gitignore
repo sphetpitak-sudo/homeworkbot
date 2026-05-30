@@ -5,6 +5,9 @@ logs.txt
 credentials.json
 homebot.json
 .corrections.json
+.badges.json
+.pomodoros.json
+.streaks.json
 *.tmp
 .opencode/
 .DS_Store

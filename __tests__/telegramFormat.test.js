@@ -292,4 +292,28 @@ describe('combined formatting', () => {
         const result = safeBold(safeItalic(t));
         expect(result).toBe('*\\_user\\\\_input\\\\_123\\_*');
     });
+
+    test('safeBold with emoji', () => {
+        expect(safeBold('🔥🔥🔥 fire')).toBe('*🔥🔥🔥 fire*');
+    });
+
+    test('safeItalic with Thai text containing special chars', () => {
+        expect(safeItalic('ภาษาไทย_123*')).toBe('_ภาษาไทย\\_123\\*_');
+    });
+
+    test('safeCode with backtick inside', () => {
+        expect(safeCode('code with ` backtick')).toBe("`code with ' backtick`");
+    });
+
+    test('escapeMarkdown with multiple backticks', () => {
+        expect(escapeMarkdown('```code```')).toBe('\\`\\`\\`code\\`\\`\\`');
+    });
+
+    test('escapeMarkdown with strikethrough ~ not escaped (V1 compatible)', () => {
+        expect(escapeMarkdown('~strikethrough~')).toBe('~strikethrough~');
+    });
+
+    test('safeBold with only special chars', () => {
+        expect(safeBold('_*`')).toBe('*\\_\\*\\`*');
+    });
 });

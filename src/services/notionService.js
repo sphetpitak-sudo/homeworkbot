@@ -20,7 +20,7 @@ async function notionWithRetry(fn, retries = NOTION_MAX_RETRIES) {
             if (!isRetryable || attempt === retries) throw err;
             const delay = NOTION_RETRY_BASE_MS * Math.pow(2, attempt) + Math.random() * 200;
             logger.warn(`Notion retry ${attempt + 1}/${retries} after ${Math.round(delay)}ms`);
-            await new Promise(r => setTimeout(r, delay));
+            await new Promise(r => setTimeout(r, delay).unref());
         }
     }
 }

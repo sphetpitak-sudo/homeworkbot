@@ -36,7 +36,7 @@ export function isAIReady() {
 }
 
 function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
+    return new Promise((r) => setTimeout(r, ms).unref());
 }
 
 async function completeWithRetry(systemMsg, userMsg) {

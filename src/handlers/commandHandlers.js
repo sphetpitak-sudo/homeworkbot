@@ -1,6 +1,6 @@
 import { Markup } from "telegraf";
 import { parseThaiDate, formatDate, formatDateLabel, formatDueDisplay, isPossiblyLastMonth, parseYMDToLocalDate, THAI_DAYS } from "../utils/dateParser.js";
-import { getHomeworkStats, fetchActive, fetchDone, getPageProps, updateStatus, updateHomework } from "../services/notionService.js";
+import { getHomeworkStats, fetchActive, fetchDone, getPageProps, updateStatus, updateHomework, createHomework } from "../services/notionService.js";
 import {
     detectSubject,
     cleanTitle,
@@ -15,7 +15,8 @@ import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
 import { getStreak, getNextMilestone, getStreakCalendar } from "../services/streakService.js";
 import { askHint } from "../services/hintService.js";
-import { buildBadgeMessage, getAllBadges } from "../services/badgeService.js";
+import { buildBadgeMessage, getAllBadges, awardBadges } from "../services/badgeService.js";
+import { startSession as pomoStartSession, getStats as pomoGetStats, getSessionDuration } from "../services/pomodoroService.js";
 import {
     escapeMarkdown,
     safeBold,
@@ -26,6 +27,21 @@ import { STATUS, PRIORITY, priorityWeight } from "../utils/constants.js";
 
 
 const WEB_URL = process.env.WEB_URL || "";
+const BOT_USERNAME = process.env.BOT_USERNAME || "homeworkbot";
+
+// ── Collab share tokens ──
+export const shareTokens = new Map()
+const COLLAB_TOKEN_TTL = 24 * 3600_000 // 24h
+
+function pruneShareTokens() {
+    const now = Date.now()
+    for (const [token, data] of shareTokens) {
+        if (now - data._timestamp > COLLAB_TOKEN_TTL) {
+            shareTokens.delete(token)
+        }
+    }
+}
+setInterval(pruneShareTokens, 30 * 60_000).unref()
 
 export const mainMenu = Markup.inlineKeyboard([
     [
@@ -1169,6 +1185,68 @@ export function registerCommandHandlers(bot, userState) {
     /* ── /focus ── */
     bot.command("focus", async (ctx) => {
         try {
+            const uid = ctx.from.id
+            const state = userState.get(uid) || {}
+
+            // Handle /focus exit
+            const args = ctx.message.text.split(/\s+/)
+            if (args[1] === "exit") {
+                if (state._focusActive) {
+                    const focusTitle = state._focusTitle || ""
+                    userState.delete(uid)
+                    return ctx.reply(
+                        `❌ ${safeBold("ยกเลิกโฟกัสแล้ว")}\n` +
+                        `━━━━━━━━━━━━━━━━━━\n` +
+                        `${focusTitle ? `เลิกโฟกัส "${escapeMarkdown(focusTitle)}"` : "เลิกโฟกัสแล้ว"}`,
+                        { parse_mode: "Markdown", ...mainMenu },
+                    )
+                }
+                return ctx.reply(
+                    `❌ ${safeBold("ไม่มีงานที่กำลังโฟกัส")}\nพิมพ์ /focus เพื่อเลือกงาน`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            // If already in focus mode, show current focus card
+            if (state._focusActive && state._focusHomeworkId) {
+                const pages = await fetchActive()
+                const page = pages.find(p => p.id === state._focusHomeworkId)
+                if (page) {
+                    const { title, status, due, subject, priority } = getPageProps(page)
+                    const today = new Date(); today.setHours(0, 0, 0, 0)
+                    const dt = due ? parseYMDToLocalDate(due) : null
+                    const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+
+                    let badge = ""
+                    if (diff !== null && diff < 0) badge = ` 🚨 เลย ${Math.abs(diff)} วัน`
+                    else if (diff !== null && diff <= 3) badge = ` 🔥 เหลือ ${diff} วัน`
+                    else if (diff !== null && diff <= 7) badge = ` ⏰ เหลือ ${diff} วัน`
+
+                    let msg = `🎯 ${safeBold("กำลังโฟกัส:")}\n`
+                    msg += `━━━━━━━━━━━━━━━━━━\n\n`
+                    msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
+                    msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
+                    msg += `━━━━━━━━━━━━━━━━━━\n`
+                    msg += `💡 พิมพ์ /focus exit เพื่อออกจากโฟกัส`
+
+                    const keyboard = [
+                        [
+                            Markup.button.callback("✅ เสร็จ", "FOCUS_STATUS_DONE"),
+                            Markup.button.callback("🔄 กำลังทำ", "FOCUS_STATUS_PROGRESS"),
+                        ],
+                        [
+                            Markup.button.callback("❌ เลิกโฟกัส", "FOCUS_EXIT"),
+                        ],
+                    ]
+
+                    return ctx.reply(msg, {
+                        parse_mode: "Markdown",
+                        ...Markup.inlineKeyboard(keyboard),
+                    })
+                }
+            }
+
+            // No active focus — pick a task
             const pages = await fetchActive()
             if (!pages.length) {
                 return ctx.reply(
@@ -1178,55 +1256,28 @@ export function registerCommandHandlers(bot, userState) {
             }
 
             const sorted = sortByUrgency(pages)
-            const total = sorted.length
-            const uid = ctx.from.id
-            const state = userState.get(uid) || {}
-            const focusIndex = state._focusIndex || 0
-            const idx = focusIndex < sorted.length ? focusIndex : 0
-            const page = sorted[idx]
-
-            const { title, status, due, subject, priority } = getPageProps(page)
-            const today = new Date(); today.setHours(0, 0, 0, 0)
-            const dt = due ? parseYMDToLocalDate(due) : null
-            const diff = dt ? Math.ceil((dt - today) / 86400000) : null
-
-            let badge = ""
-            if (diff !== null && diff < 0) {
-                badge = ` 🚨 เลย ${Math.abs(diff)} วัน`
-            } else if (diff !== null && diff <= 3) {
-                badge = ` 🔥 เหลือ ${diff} วัน`
-            } else if (diff !== null && diff <= 7) {
-                badge = ` ⏰ เหลือ ${diff} วัน`
+            let msg = `🎯 ${safeBold("เลือกงานที่ต้องการโฟกัส")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (let i = 0; i < Math.min(sorted.length, 10); i++) {
+                const p = sorted[i]
+                const { title, subject, priority, due } = getPageProps(p)
+                msg += `${i + 1}. ${safeBold(title)}\n`
+                msg += `   ${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n`
+            }
+            if (sorted.length > 10) {
+                msg += `… และอีก ${sorted.length - 10} รายการ`
             }
 
-            let msg = `🎯 ${safeBold("โฟกัสงานนี้!")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
-            msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
-            msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
-            msg += `📊 งาน ${idx + 1} จาก ${total} รายการ`
-
-            const hasNext = idx + 1 < sorted.length
-            const keyboard = [
-                [
-                    Markup.button.callback("✅ เสร็จ", `done_${page.id}`),
-                    Markup.button.callback("🔄 กำลังทำ", `prog_${page.id}`),
-                ],
-            ]
-            if (hasNext) {
-                keyboard.push([Markup.button.callback("⏩ ข้ามไปข้อถัดไป", "FOCUS_NEXT")])
+            const keyboard = []
+            for (let i = 0; i < Math.min(sorted.length, 10); i++) {
+                keyboard.push([
+                    Markup.button.callback(`${i + 1}. ${getPageProps(sorted[i]).title.slice(0, 30)}`, `FOCUS_SEL_${sorted[i].id}`),
+                ])
             }
             keyboard.push([
                 Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
                 Markup.button.callback("🏠 หน้าหลัก", "HOME"),
             ])
-
-            userState.set(uid, {
-                ...state,
-                _focusIndex: idx,
-                _focusPages: sorted,
-                _timestamp: Date.now(),
-            })
 
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
@@ -1270,48 +1321,37 @@ export function registerCommandHandlers(bot, userState) {
                 )
             }
 
-            const lineList = donePages.slice(0, 20).map((p, i) => {
-                const { title, subject, priority, completed } = getPageProps(p)
-                const doneDate = completed ? completed.slice(5).replace("-", "/") : "?"
-                return `${i + 1}. [${subject}] ${title} — เสร็จ ${doneDate} ${priority}`
-            }).join("\n")
-
             const total = donePages.length
             const today = new Date(); today.setHours(0, 0, 0, 0)
             const weekAgo = new Date(today)
             weekAgo.setDate(today.getDate() - 7)
+            const monthAgo = new Date(today)
+            monthAgo.setDate(today.getDate() - 30)
+
             const weekCount = donePages.filter(p => {
                 const d = p.properties.Completed?.date?.start
                 return d && new Date(d + "T00:00:00") >= weekAgo
             }).length
 
-            const bySubject = {}
-            for (const p of donePages) {
-                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
-                bySubject[sub] = (bySubject[sub] || 0) + 1
-            }
-            const topSubject = Object.entries(bySubject)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3)
-                .map(([s, c]) => `${subjectEmoji(s)} ${s} (${c})`)
-                .join(", ")
+            const monthCount = donePages.filter(p => {
+                const d = p.properties.Completed?.date?.start
+                return d && new Date(d + "T00:00:00") >= monthAgo
+            }).length
 
             let msg = `📋 ${safeBold("สรุปการบ้านที่ทำเสร็จแล้ว")}\n`
             msg += `━━━━━━━━━━━━━━━━━━\n\n`
             msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
             msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
-            if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
+            msg += `📅 30 วัน: ${monthCount} รายการ\n`
             msg += `\n━━━━━━━━━━━━━━━━━━\n`
-            msg += `📌 ${safeBold("รายการล่าสุด (สูงสุด 20):")}\n\n`
-            msg += `${lineList}`
-
-            if (total > 20) {
-                msg += `\n\n… และอีก ${total - 20} รายการ`
-            }
-
-            msg += `\n\n💪 ${safeBold("เก่งมาก! ทำต่อไป!")}`
+            msg += `📊 ${safeBold("เลือกช่วงเวลาเพื่อดูรายละเอียด:")}`
 
             const keyboard = [
+                [
+                    Markup.button.callback("📅 วันนี้", "REVIEW_PERIOD_today"),
+                    Markup.button.callback("📅 7 วัน", "REVIEW_PERIOD_7d"),
+                    Markup.button.callback("📅 30 วัน", "REVIEW_PERIOD_30d"),
+                ],
                 [
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
                     Markup.button.callback("🏠 หน้าหลัก", "HOME"),
@@ -1326,6 +1366,454 @@ export function registerCommandHandlers(bot, userState) {
             logger.error("/review:", err)
             return ctx.reply(
                 `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* ── /collab — แชร์การบ้านกับเพื่อน ── */
+    bot.command("collab", async (ctx) => {
+        const uid = ctx.from.id
+        const text = ctx.message.text.trim()
+
+        // /collab accept <token>
+        const parts = text.split(/\s+/)
+        if (parts[1] === "accept" && parts[2]) {
+            const token = parts[2]
+            const shareData = shareTokens.get(token)
+            if (!shareData) {
+                return ctx.reply(
+                    `❌ ${safeBold("token ไม่ถูกต้องหรือหมดอายุ")}\n` +
+                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `ให้เพื่อนส่ง token ใหม่ให้คุณ`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+            if (Date.now() - shareData._timestamp > COLLAB_TOKEN_TTL) {
+                shareTokens.delete(token)
+                return ctx.reply(
+                    `⏱️ ${safeBold("token หมดอายุแล้ว")}\n` +
+                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `ขอให้เจ้าของงานส่ง token ใหม่ให้คุณ`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            try {
+                await createHomework({
+                    title: shareData.title,
+                    subject: shareData.subject,
+                    due: shareData.due,
+                    priority: shareData.priority,
+                    note: shareData.note || "",
+                    tags: shareData.tags,
+                })
+                shareTokens.delete(token)
+                return ctx.reply(
+                    `✅ ${safeBold("รับงานแชร์สำเร็จ!")}\n` +
+                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `"${escapeMarkdown(shareData.title)}" ถูกเพิ่มเข้าในระบบแล้ว\n` +
+                    `ไปดูที่ /list หรือ /menu`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            } catch (err) {
+                logger.error("COLLAB accept:", err)
+                return ctx.reply(
+                    `❌ ${safeBold("บันทึกไม่ได้")}\nกรุณาลองใหม่`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+        }
+
+        // /collab — show active list to pick
+        try {
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(
+                    `📭 ${safeBold("ไม่มีการบ้านที่จะแชร์")}\n` +
+                    `━เพิ่มการบ้านก่อน แล้วค่อยแชร์กับเพื่อน!`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const sorted = sortByUrgency(pages)
+            let msg = `👥 ${safeBold("เลือกงานที่จะแชร์")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (let i = 0; i < Math.min(sorted.length, 8); i++) {
+                const p = sorted[i]
+                const { title, subject, priority, due } = getPageProps(p)
+                msg += `${i + 1}. ${safeBold(title)}\n`
+                msg += `   ${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n`
+            }
+
+            const keyboard = sorted.slice(0, 8).map((p, i) => {
+                const props = getPageProps(p)
+                return [Markup.button.callback(`${i + 1}. ${props.title.slice(0, 25)}`, `COLLAB_SEL_${p.id}`)]
+            })
+            keyboard.push([
+                Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
+                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            ])
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("/collab:", err)
+            return ctx.reply(
+                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* ── /smartbook — AI จัดตารางอ่านหนังสือ ── */
+    bot.command("smartbook", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid) || {}
+        const text = ctx.message.text.trim()
+        const parts = text.split(/\s+/)
+
+        // /smartbook view — show saved plan
+        if (parts[1] === "view" && state._smartbookPlan) {
+            const plan = state._smartbookPlan
+            let msg = `📚 ${safeBold("แผนอ่านหนังสือ (ที่บันทึกไว้)")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (const day of plan.plan || []) {
+                msg += `${safeBold(day.day)} (${day.date || ""})\n`
+                msg += `🎯 โฟกัส: ${day.focus}\n`
+                msg += `⏱️ ${day.duration_min || 0} นาที\n`
+                for (const t of day.tasks || []) {
+                    msg += `  • ${t}\n`
+                }
+                msg += `\n`
+            }
+            if (plan.summary) {
+                msg += `━━━━━━━━━━━━━━━━━━\n💡 ${plan.summary}`
+            }
+            const keyboard = [
+                [
+                    Markup.button.callback("🔄 รีเฟรช", "SMARTBOOK_REFRESH"),
+                    Markup.button.callback("📅 iCal", "SMARTBOOK_ICAL"),
+                ],
+                [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            ]
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        }
+
+        // /smartbook — generate new plan via AI
+        try {
+            await ctx.reply("⏳ *กำลังวิเคราห์การบ้านและสร้างตารางอ่านหนังสือ...*", { parse_mode: "Markdown" })
+
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มีการบ้านค้าง!")}\nพักผ่อนได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const contextLines = pages.map((p, i) => {
+                const { title, subject, due, priority } = getPageProps(p)
+                return `${i + 1}. [${subject}] ${title} — ส่ง ${due || "ไม่มีกำหนด"} (${priority})`
+            }).join("\n")
+
+            const prompt = `สร้างตารางอ่านหนังสือ 7 วันจากนี้ ตามการบ้านที่มี deadline เรียงตาม priority\n\nการบ้าน:\n${contextLines}\n\nตอบเป็น JSON:\n{ "plan": [{ "day": "วันXX", "date": "YYYY-MM-DD", "focus": "วิชา", "tasks": ["task1", "task2"], "duration_min": 120 }], "summary": "..." }`
+
+            let planData = null
+            try {
+                const aiText = await askAI(prompt)
+                if (aiText) {
+                    const cleaned = aiText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim()
+                    const jsonStart = cleaned.indexOf("{")
+                    const jsonEnd = cleaned.lastIndexOf("}")
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        planData = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
+                    }
+                }
+            } catch {
+                logger.debug("AI smartbook failed, using static fallback")
+            }
+
+            if (!planData || !planData.plan) {
+                // Static fallback
+                const bySubject = {}
+                for (const p of pages) {
+                    const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
+                    bySubject[sub] = (bySubject[sub] || 0) + 1
+                }
+                const today = new Date()
+                planData = {
+                    plan: Object.entries(bySubject).slice(0, 7).map(([sub, count], i) => {
+                        const d = new Date(today)
+                        d.setDate(d.getDate() + i)
+                        const dayNames = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"]
+                        return {
+                            day: "วัน" + dayNames[d.getDay()],
+                            date: d.toISOString().slice(0, 10),
+                            focus: sub,
+                            tasks: [`ทบทวน${sub}`, `ทำการบ้าน${sub}ให้เสร็จ (${count} รายการ)`],
+                            duration_min: 90,
+                        }
+                    }),
+                    summary: `โฟกัส ${Object.keys(bySubject).length} วิชา — ลองปรับตามความเหมาะสม`,
+                }
+            }
+
+            let msg = `📚 ${safeBold("แผนอ่านหนังสือ 7 วัน")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            for (const day of planData.plan) {
+                msg += `${safeBold(day.day)} (${day.date || ""})\n`
+                msg += `🎯 โฟกัส: ${day.focus}\n`
+                msg += `⏱️ ${day.duration_min || 0} นาที\n`
+                for (const t of day.tasks || []) {
+                    msg += `  • ${t}\n`
+                }
+                msg += `\n`
+            }
+            if (planData.summary) {
+                msg += `━━━━━━━━━━━━━━━━━━\n💡 ${planData.summary}`
+            }
+
+            userState.set(uid, {
+                ...state,
+                _smartbookPlan: planData,
+                _timestamp: Date.now(),
+            })
+
+            const keyboard = [
+                [
+                    Markup.button.callback("💾 บันทึก", "SMARTBOOK_SAVE"),
+                    Markup.button.callback("🔄 รีเฟรช", "SMARTBOOK_REFRESH"),
+                ],
+                [
+                    Markup.button.callback("📅 iCal", "SMARTBOOK_ICAL"),
+                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                ],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("/smartbook:", err)
+            return ctx.reply(
+                `❌ ${safeBold("สร้างแผนไม่ได้")}\nกรุณาลองใหม่`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
+    })
+
+    /* ── /pomodoro — ตัวจับเวลา Pomodoro ── */
+    bot.command("pomodoro", async (ctx) => {
+        const uid = ctx.from.id
+        const state = userState.get(uid) || {}
+
+        // If already in a pomodoro session, show remaining time
+        if (state._pomoActive && state._pomoTimeout) {
+            const elapsed = Date.now() - state._pomoStartedAt
+            const remaining = Math.max(0, state._pomoDuration - elapsed)
+            const mins = Math.floor(remaining / 60000)
+            const secs = Math.floor((remaining % 60000) / 1000)
+            const title = state._pomoHomeworkTitle || ""
+            let msg = `🍅 ${safeBold("Pomodoro กำลังทำงาน!")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `⏱️ เหลือ ${mins}:${String(secs).padStart(2, "0")} นาที\n`
+            if (title) msg += `📌 งาน: ${escapeMarkdown(title)}\n`
+            msg += `\n💪 สู้ๆ ไฟighting!`
+
+            const keyboard = [
+                [Markup.button.callback("❌ ยกเลิก", "POMODORO_CANCEL")],
+            ]
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        }
+
+        // If in break mode
+        if (state._pomoBreak && state._pomoBreakTimeout) {
+            const elapsed = Date.now() - state._pomoBreakStartedAt
+            const remaining = Math.max(0, state._pomoBreakDuration - elapsed)
+            const mins = Math.floor(remaining / 60000)
+            const secs = Math.floor((remaining % 60000) / 1000)
+            let msg = `☕ ${safeBold("พักเบรก!")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `⏱️ เหลือ ${mins}:${String(secs).padStart(2, "0")} นาที\n`
+            msg += `พักผ่อนสักครู่ แล้วกลับมาลุยต่อ!`
+
+            const keyboard = [
+                [Markup.button.callback("⏭️ เริ่มรอบใหม่", "POMODORO_START")],
+                [Markup.button.callback("❌ ยกเลิก", "POMODORO_CANCEL")],
+            ]
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        }
+
+        // No active session — show main menu
+        const stats = pomoGetStats(uid)
+        let msg = `🍅 ${safeBold("Pomodoro Timer")}\n`
+        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `⏱️ 25 นาทีทำงาน + 5 นาทีพัก\n\n`
+        msg += `📊 ${safeBold("สถิติวันนี้")}\n`
+        msg += `  🍅 เซสชันวันนี้: ${stats.today}\n`
+        msg += `  📅 เซสชันสัปดาห์: ${stats.week}\n`
+        msg += `  🏆 รวมทั้งหมด: ${stats.count} เซสชัน (${stats.totalHours} ชม.)\n`
+
+        const keyboard = [
+            [Markup.button.callback("🍅 เริ่ม 25 นาที", "POMODORO_START")],
+            [
+                Markup.button.callback("📊 สถิติวันนี้", "POMODORO_STATS"),
+                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            ],
+        ]
+
+        return ctx.reply(msg, {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard(keyboard),
+        })
+    })
+
+    /* ── /suggest — AI แนะนำว่าควรทำการบ้านไหน ── */
+    bot.command("suggest", async (ctx) => {
+        try {
+            await ctx.reply("⏳ *กำลังวิเคราะห์และวางแผน...*", { parse_mode: "Markdown" })
+
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(
+                    `🎉 ${safeBold("ไม่มีการบ้านที่ค้างอยู่!")}\nไปพักผ่อนได้เลย 🏆`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
+
+            const sorted = sortByUrgency(pages)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+
+            const bySubject = {}
+            let overdueCount = 0
+            const contextLines = sorted.map((p, i) => {
+                const { title, subject, due, priority } = getPageProps(p)
+                bySubject[subject] = (bySubject[subject] || 0) + 1
+                const dt = due ? new Date(due + "T00:00:00") : null
+                const isOverdue = dt && dt < today
+                if (isOverdue) overdueCount++
+                const daysLeft = dt ? Math.ceil((dt - today) / 86400000) : null
+                const urgencyLabel = isOverdue
+                    ? `เลย ${Math.abs(daysLeft)} วัน`
+                    : daysLeft !== null
+                        ? `อีก ${daysLeft} วัน`
+                        : "ไม่มีกำหนด"
+                return `${i + 1}. [${subject}] ${title} — due: ${due || "N/A"} (${urgencyLabel}) — priority: ${priority}`
+            }).join("\n")
+
+            const subjectBreakdown = Object.entries(bySubject)
+                .map(([s, c]) => `- ${s}: ${c} ชิ้น`)
+                .join("\n")
+
+            const { getStreak } = await import("../services/streakService.js")
+            const streakData = getStreak(ctx.from.id)
+
+            const thaiDate = today.toLocaleDateString("th-TH", {
+                weekday: "long", year: "numeric", month: "long", day: "numeric",
+            })
+
+            const prompt = `คุณคือโค้ชการบ้าน ให้คำแนะนำว่านักเรียนควรทำอะไรก่อน
+วันนี้: ${thaiDate}
+การบ้านที่ค้าง (เรียงตาม deadline):
+${contextLines}
+
+จำนวนแยกวิชา:
+${subjectBreakdown}
+
+Streak ปัจจุบัน: ${streakData.current} วัน
+Overdue: ${overdueCount} ชิ้น
+
+ตอบสั้นๆ ภาษาไทย ไม่เกิน 150 ตัวอักษร ให้เหตุผลสั้นๆ 1-2 บรรทัด
+ลงท้ายด้วย emoji ตามความรู้สึก: 😊 (ดี) 😐 (ปานกลาง) 😅 (ต้องปรับ)`
+
+            let suggestion = null
+            try {
+                const { askAI } = await import("../services/qaService.js")
+                suggestion = await askAI(prompt)
+            } catch {
+                logger.debug("AI suggest failed, using rule-based fallback")
+            }
+
+            if (!suggestion) {
+                // Rule-based fallback
+                const overdueItems = sorted.filter(p => {
+                    const due = p.properties.Due?.date?.start
+                    return due && new Date(due + "T00:00:00") < today
+                })
+                const urgentItems = sorted.filter(p => {
+                    const due = p.properties.Due?.date?.start
+                    if (!due) return false
+                    const dt = new Date(due + "T00:00:00")
+                    const diff = Math.ceil((dt - today) / 86400000)
+                    return diff >= 0 && diff <= 3
+                })
+                const laterItems = sorted.filter(p => {
+                    const due = p.properties.Due?.date?.start
+                    if (!due) return false
+                    const dt = new Date(due + "T00:00:00")
+                    const diff = Math.ceil((dt - today) / 86400000)
+                    return diff > 3
+                })
+
+                suggestion = ""
+                if (overdueItems.length) {
+                    suggestion += `🔥 ด่วน! เกินกำหนด ${overdueItems.length} ชิ้น!\n`
+                    for (const p of overdueItems.slice(0, 3)) {
+                        const { title, subject } = getPageProps(p)
+                        suggestion += `  • ${title} (${subject})\n`
+                    }
+                }
+                if (urgentItems.length) {
+                    suggestion += `⚠️ ใกล้ deadline ${urgentItems.length} ชิ้น:\n`
+                    for (const p of urgentItems.slice(0, 3)) {
+                        const { title, subject } = getPageProps(p)
+                        suggestion += `  • ${title} (${subject})\n`
+                    }
+                }
+                if (laterItems.length) {
+                    suggestion += `✅ มีเวลาเหลือ ${laterItems.length} ชิ้น\n`
+                }
+                if (!suggestion) suggestion = "🎉 ลองเพิ่มการบ้านแล้วกลับมาใหม่นะ!"
+            }
+
+            let msg = `💡 ${safeBold("คำแนะนำวันนี้")}\n`
+            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `${suggestion}\n`
+            msg += `\n━━━━━━━━━━━━━━━━━━`
+            msg += `\n📊 งานที่ค้าง: ${sorted.length} ชิ้น`
+            if (overdueCount > 0) msg += ` (🚨 ${overdueCount} เลยกำหนด)`
+
+            const keyboard = [
+                [Markup.button.callback("🔄 แนะนำใหม่", "SUGGEST_REFRESH")],
+                [
+                    Markup.button.callback("🎯 โฟกัส", "FOCUS"),
+                    Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
+                ],
+                [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            ]
+
+            return ctx.reply(msg, {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard(keyboard),
+            })
+        } catch (err) {
+            logger.error("/suggest:", err)
+            return ctx.reply(
+                `❌ ${safeBold("วิเคราะห์ไม่ได้")}\nกรุณาลองใหม่`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1370,6 +1858,17 @@ export function registerCommandHandlers(bot, userState) {
 
         const uid = ctx.from.id;
         const state = userState.get(uid);
+
+        // Block non-command text while in focus mode
+        if (state?._focusActive && !text.startsWith("/")) {
+            const ft = state._focusTitle || ""
+            return ctx.reply(
+                `🎯 ${safeBold("คุณกำลังโฟกัสงาน")} "${escapeMarkdown(ft)}" อยู่\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `พิมพ์ /focus เพื่อดู หรือ /focus exit เพื่อออกจากโฟกัส`,
+                { parse_mode: "Markdown" },
+            );
+        }
 
         if (state?.mode === "EDIT_TITLE") {
             if (text.length > MAX_TEXT_LENGTH) {
