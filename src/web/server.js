@@ -27,6 +27,8 @@ function initDashboardToken() {
     logger.info(`Dashboard token derived from NOTION_TOKEN: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
 }
 
+initDashboardToken();
+
 export function getDashboardToken() {
     return DASHBOARD_TOKEN;
 }
@@ -116,7 +118,6 @@ function computeWeeklyDone(donePages) {
 }
 
 export function startWebServer(port = 8080) {
-    initDashboardToken();
     const app = express();
 
     const apiLimiter = rateLimit({
