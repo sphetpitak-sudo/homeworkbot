@@ -18,7 +18,7 @@ import {
     getPageStatus,
 } from "../services/notionService.js";
 
-import { mainMenu, cancelMenu, showConfirm, compactConfirmMenu, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard } from "./commandHandlers.js";
+import { mainMenu, cancelMenu, showConfirm, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard } from "./commandHandlers.js";
 import {
     escapeMarkdown,
     safeBold,
@@ -42,7 +42,7 @@ import { setCorrection } from "../services/aiCache.js";
 import { recordCompletion, getStreak } from "../services/streakService.js";
 import { QUOTES } from "../utils/quotes.js";
 import { askHint } from "../services/hintService.js";
-import { checkBadges, checkTaskBadges, checkUsageBadgeOnAction, checkZeroOverdue, awardBadges, buildBadgeMessage, getBadgeCount } from "../services/badgeService.js";
+import { checkBadges, checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
 import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges } from "../services/pomodoroService.js";
 
 /* ── pomodoro timer tracking for graceful shutdown ── */
@@ -517,7 +517,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
-        } catch {}
+        } catch { logger.debug("Non-critical: delete confirm message failed") }
         return showConfirm(ctx, pending);
     });
 
@@ -754,7 +754,7 @@ export function registerActionHandlers(bot, userState) {
                         msg += `\n\n🏅 ${awarded[0].icon} ${awarded[0].rarityEmoji} ${safeBold(awarded[0].name)} — ${awarded[0].desc}!`
                     }
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: panic badge check failed") }
 
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
@@ -1181,7 +1181,7 @@ export function registerActionHandlers(bot, userState) {
                         )
                     }
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: HINT badge check failed") }
 
             return ctx.reply(hint, { parse_mode: "Markdown", ...mainMenu })
         } catch (err) {
@@ -1257,7 +1257,7 @@ export function registerActionHandlers(bot, userState) {
                         msg += `\n\n🏅 ${awarded[0].icon} ${awarded[0].rarityEmoji} ${safeBold(awarded[0].name)} — ${awarded[0].desc}!`
                     }
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: EXPORT badge check failed") }
 
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
@@ -1405,7 +1405,7 @@ export function registerActionHandlers(bot, userState) {
                 if (result.isNewMilestone) {
                     streakMsg = `\n\n🎉🎉🎉 *ครบ ${result.current} วันติดแล้ว!* 🔥🔥🔥`
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: streak record failed in focus done") }
 
             try {
                 const newBadgeIds = checkBadges(uid)
@@ -1416,7 +1416,7 @@ export function registerActionHandlers(bot, userState) {
                         streakMsg += `${b.icon} ${b.name} — ${b.desc}\n`
                     }
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: streak badge check failed in focus done") }
 
             try {
                 const donePages = await fetchDone()
@@ -1429,7 +1429,7 @@ export function registerActionHandlers(bot, userState) {
                         streakMsg += `🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!\n`
                     }
                 }
-            } catch {}
+            } catch { logger.debug("Non-critical: task badge check failed in focus done") }
 
             return ctx.reply(
                 `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
@@ -1797,7 +1797,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery("✅ ยกเลิกการลบ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
-        } catch {}
+        } catch { logger.debug("Non-critical: cancel delete message failed") }
     });
 
     /* RECOVER DELETE — restore archived page */
@@ -2154,7 +2154,7 @@ export function registerActionHandlers(bot, userState) {
                             }
                         }
                     }
-                } catch {}
+                } catch { logger.debug("Non-critical: pomo badge check failed") }
 
                 const title = state._pomoHomeworkTitle || ""
                 let msg = `☕ ${safeBold("พักเบรก 5 นาที!")}\n`

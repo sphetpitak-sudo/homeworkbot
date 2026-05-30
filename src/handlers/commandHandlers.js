@@ -15,8 +15,8 @@ import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
 import { getStreak, getNextMilestone, getStreakCalendar } from "../services/streakService.js";
 import { askHint } from "../services/hintService.js";
-import { buildBadgeMessage, getAllBadges, awardBadges } from "../services/badgeService.js";
-import { startSession as pomoStartSession, getStats as pomoGetStats, getSessionDuration } from "../services/pomodoroService.js";
+import { buildBadgeMessage } from "../services/badgeService.js";
+import { getStats as pomoGetStats } from "../services/pomodoroService.js";
 import {
     escapeMarkdown,
     safeBold,

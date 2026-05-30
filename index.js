@@ -247,7 +247,7 @@ cron.schedule("0 2 * * *", autoArchive, { timezone: "Asia/Bangkok" });
 cron.schedule("0 7 * * 1", sendWeeklySummary, { timezone: "Asia/Bangkok" });
 
 /* ── clean stale user states + expired cache every 30 min ── */
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
     const TTL = 3_600_000;
     const now = Date.now();
     let cleaned = 0;
@@ -259,7 +259,8 @@ setInterval(() => {
     }
     cacheCleanup();
     if (cleaned) logger.debug(`Cleaned ${cleaned} stale user states`);
-}, 30 * 60 * 1000);
+}, 30 * 60 * 1000)
+cleanupInterval.unref()
 
 /* ── launch with retry on 409 conflict ── */
 async function launchBot(retries = 5, delay = 3000) {

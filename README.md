@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/telegraf-4.x-009B77?logo=telegram" alt="Telegraf">
     <img src="https://img.shields.io/badge/express-5.x-000000?logo=express" alt="Express">
     <img src="https://img.shields.io/badge/notion_api-2.x-000000?logo=notion" alt="Notion API">
-    <img src="https://img.shields.io/badge/tests-1025%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-1313%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/license-ISC-blue" alt="License">
   </p>
   <p>
@@ -29,9 +29,28 @@
 | Feature | Description |
 |---------|-------------|
 | **AI Parse Homework** | Type "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้" → AI (Typhoon) extracts subject, due date, priority, tags automatically |
-| **AI Q&A** | `/ask` command — ask about your homework in natural language, AI answers from your Notion data |
-| **Priority System** | 🔴 High / 🟡 Medium / 🟢 Low — auto-detect, manual override, auto-recalc daily at 06:00 |
-| **Tag Inference** | Auto-tagged from keywords (สอบ=exam, โครงการ=project, กลุ่ม=group, ด่วน=urgent, อ่าน=reading, ใบงาน=worksheet) + `#hashtag` support |
+| **AI Q&A** | `/ask` — ask about homework in natural language, AI answers from Notion |
+| **AI Suggest** | `/suggest` — AI analyzes all active homework + streak + overdue → suggests what to do first |
+| **AI Smartbook** | `/smartbook` — AI generates a 7-day study plan from active homework, export as iCal |
+| **Pomodoro Timer** | `/pomodoro` — 🍅 25-min work + 5-min break timer, links with /focus, badges, persistent stats |
+| **Focus Mode** | `/focus` — pick one task, block distractions, change status without leaving focus |
+| **Emergency Mode** | `/panic` — shows top 3 most urgent tasks with action buttons |
+| **Deadline Countdown** | `/deadline` — visual countdown bar for the closest deadline |
+| **Weekly Timeline** | `/week` — 7-day timeline view of homework due dates |
+| **Tomorrow** | `/tomorrow` — see everything due tomorrow |
+| **Progress by Subject** | `/progress` — % complete per subject with progress bars |
+| **Search** | `/search` — search homework by keyword |
+| **Export** | `/export` — shareable plain-text summary of all homework |
+| **Stats** | `/stats` — quick stats overview |
+| **Streak** | `/streak` — 🔥 consecutive days of completing homework |
+| **Badges** | `/badges` — 🏅 23 achievement badges (streak, tasks, pomodoro, hint, panic, export) |
+| **Review** | `/review` — completed homework summary with period picker + sentiment |
+| **Collab** | `/collab` — share a homework item with a friend via token |
+| **Noted** | `/noted` — attach a short note to any homework |
+| **Hint** | `/hint` — AI tips for how to start each subject |
+| **Quote** | `/quote` — random motivational quote |
+| **Priority System** | 🔴 High / 🟡 Medium / 🟢 Low — auto-detect based on due date, auto-recalc daily at 06:00 |
+| **Tag Inference** | Auto-tagged from keywords (สอบ=exam, ด่วน=urgent, ใบงาน=worksheet) + `#hashtag` support |
 | **Edit Before Save** | Preview + edit (title, subject, date, priority, tags) before saving |
 | **Pagination** | Active/completed lists: 10 items/page with previous/next navigation |
 | **Delete Recovery** | 10-second window to restore accidentally deleted items |
@@ -39,8 +58,9 @@
 | **Reminders** | Auto-notification for homework due in the next 7 days, daily at 08:00 |
 | **Weekly Summary** | Weekly completion stats every Monday at 07:00 |
 | **Auto-Archive** | Archives Done homework older than 7 days, daily at 02:00 |
+| **Auto-Priority** | Recalculates priority daily at 06:00 based on remaining days |
 | **Hint System** | One-time contextual tips (post-save, status change, priority legend) |
-| **AI Confident Skip** | Skips preview when AI is confident and matches regex → goes straight to confirm |
+| **AI Confident Skip** | Skips preview when AI is confident and matches regex → straight to confirm |
 
 ### 🌐 Web Dashboard
 
@@ -154,8 +174,8 @@ npm test
 ```
 
 ```
-Test Suites: 7 passed, 7 total
-Tests:       1025 passed, 1025 total
+Test Suites: 16 passed, 16 total
+Tests:       1313 passed, 1313 total
 ```
 
 #### 6️⃣ Run
@@ -180,8 +200,27 @@ Open Telegram → find your bot → type `/start` or just type homework directly
 | `/start` | Welcome message + main menu |
 | `/menu` | Open main menu |
 | `/help` | Quick usage guide |
-| `/ask` | Ask AI about your homework |
-| `/undo` | Undo last status change (within 30 seconds) |
+| `/stats` | 📊 Homework statistics overview |
+| `/ask` | 🤖 Ask AI about your homework |
+| `/panic` | 🚨 Show top 3 most urgent tasks |
+| `/tomorrow` | 📅 Homework due tomorrow |
+| `/week` | 📅 7-day timeline view |
+| `/deadline` | ⏰ Visual countdown for closest deadline |
+| `/progress` | 📊 % completion per subject |
+| `/focus` | 🎯 Focus on one task at a time |
+| `/pomodoro` | 🍅 25-min work + 5-min break timer |
+| `/suggest` | 💡 AI suggests what to do first |
+| `/badges` | 🏅 View achievement badges |
+| `/hint` | 🧠 AI tips to start each subject |
+| `/streak` | 🔥 Consecutive day streak |
+| `/review` | 📋 Completed homework summary |
+| `/collab` | 👥 Share homework with friends |
+| `/smartbook` | 📚 AI generates 7-day study plan |
+| `/search` | 🔍 Search homework by keyword |
+| `/export` | 📋 Export all homework as text |
+| `/quote` | 💬 Random motivational quote |
+| `/noted` | 📝 Attach a note to homework |
+| `/undo` | ↩️ Undo last status change (30s) |
 
 ### Quick Start Examples
 
@@ -223,7 +262,7 @@ User Input → .corrections.json → in-memory cache (1h) → Typhoon v2.5 → T
 ### Data Flow
 
 ```
-Telegram ←→ Telegraf Bot ←→ userState (Map)
+Telegram ←→ Telegraf Bot ←→ userState (Map) ←→ focus/pomo timers
                               ↕
 Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
                                    ↕
@@ -234,6 +273,12 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
                               ├─ 06:00 → autoUpdatePriority
                               ├─ 07:00 Mon → weeklySummary
                               └─ 08:00 → sendReminders
+                                   ↕
+                              Persistent Stores
+                              ├─ .streaks.json (streakService)
+                              ├─ .badges.json  (badgeService)
+                              ├─ .pomodoros.json (pomodoroService)
+                              └─ .corrections.json (aiCache)
 ```
 
 ---
@@ -245,14 +290,18 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, shutdown
  ┣ 📦 src
  ┃ ┣ 📂 handlers
- ┃ ┃ ┣ 📄 commandHandlers.js          ← /start, /menu, /help, /ask, /undo, text router, confirm/preview
- ┃ ┃ ┗ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD)
+ ┃ ┃ ┣ 📄 commandHandlers.js          ← /start, /menu, /help, /ask, /undo, /focus, /badges, /review, /collab, /smartbook, /pomodoro, /suggest, text router, confirm/preview
+ ┃ ┃ ┗ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST)
  ┃ ┣ 📂 services
  ┃ ┃ ┣ 📄 aiService.js                ← Typhoon AI via OpenAI SDK (2-model chain + regex fallback)
  ┃ ┃ ┣ 📄 aiCache.js                  ← .corrections.json persistence + in-memory AI cache
  ┃ ┃ ┣ 📄 qaService.js                ← AI Q&A with homework context
  ┃ ┃ ┣ 📄 notionService.js            ← Notion SDK wrapper (TTL cache, retry, auto-invalidate)
- ┃ ┃ ┗ 📄 cache.js                    ← Generic in-memory TTL Map with pattern-based invalidation
+ ┃ ┃ ┣ 📄 cache.js                    ← Generic in-memory TTL Map with pattern-based invalidation
+ ┃ ┃ ┣ 📄 streakService.js            ← 🔥 Streak tracking (.streaks.json, milestones, calendar)
+ ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, 23 badges, rarities)
+ ┃ ┃ ┣ 📄 pomodoroService.js          ← 🍅 Pomodoro timer (.pomodoros.json, stats, streaks)
+ ┃ ┃ ┗ 📄 hintService.js              ← 💡 AI hint generation per subject
  ┃ ┣ 📂 web
  ┃ ┃ ┣ 📄 server.js                   ← Express (REST API + static files, rate-limited, Bearer auth)
  ┃ ┃ ┗ 📂 public
@@ -264,13 +313,15 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃    ┣ 📄 subjectDetector.js         ← 50+ keywords → 10 subjects (ไทย→สุขศึกษา)
  ┃    ┣ 📄 tagDetector.js             ← Tag inference + #hashtag parsing
  ┃    ┣ 📄 telegramFormat.js          ← Markdown escape helpers
- ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, dashboard limits
+ ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, dashboard limits, pomodoro durations
  ┃    ┣ 📄 priority.js                ← recalcPriority(due): ≤3d HIGH, ≤14d MEDIUM, >14d LOW
  ┃    ┣ 📄 logger.js                  ← Console wrapper with Thai timestamps + emoji levels
  ┃    ┗ 📄 validateEnv.js             ← Environment variable validation
  ┣ 📄 Dockerfile                      ← node:20-alpine, port 8080
+ ┣ 📄 .gitignore
  ┣ 📄 package.json
- ┗ 📄 .env.example
+ ┣ 📄 .env.example
+ ┗ 📄 AGENTS.md
 ```
 
 ---
@@ -335,7 +386,7 @@ Rate Limit: 60 req/min
 | **Rate Limiting** | [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) 8.x | 60 req/min |
 | **Cron** | [node-cron](https://github.com/node-cron/node-cron) | 4 cron jobs, overlap guards |
 | **Container** | Docker | `node:20-alpine`, ~150 MB |
-| **Testing** | [Jest](https://jestjs.io/) 29.x | 1025 tests (7 suites) |
+| **Testing** | [Jest](https://jestjs.io/) 29.x | 1239 tests (14 suites) |
 
 ---
 
@@ -459,8 +510,15 @@ npm run test:watch       # Watch mode
 | `telegramFormat` | ~50 | `safeBold()`, `safeItalic()`, `safeCode()`, `escapeMarkdown()` |
 | `cache` | ~75 | `cacheGet/Set/Invalidate/Cleanup`, TTL, pattern-based |
 | `api.e2e` | ~200 | Express API endpoints, auth, error handling |
+| `badgeService` | ~65 | `checkBadges()`, `checkTaskBadges()`, `awardBadges()`, `getAllBadges()`, rarity, grid, usage, persistence |
+| `streakService` | ~20 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence |
+| `commandHandlers` | ~30 | Focus, panic, preview, review edge cases |
+| `hintService` | ~15 | Hint generation, subject matching |
+| `collabSmartbook` | ~15 | Collab token flow, smartbook plan rendering |
+| `quotes` | ~10 | Quote selection, no duplicates |
+| `notionStats` | ~10 | `getHomeworkStats()`, URGENT_DAYS import fix |
 
-**Total: 1025+ tests, 7 suites, 0 failures**
+**Total: 1313+ tests, 16 suites, 0 failures**
 
 ---
 
