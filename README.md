@@ -42,13 +42,13 @@
 | **Search** | `/search` — search homework by keyword |
 | **Export** | `/export` — shareable plain-text summary of all homework |
 | **Stats** | `/stats` — quick stats overview |
-| **Streak** | `/streak` — 🔥 consecutive days of completing homework |
+| **Streak** | `/streak` — 🔥 consecutive days of completing homework, milestones (3/7/14/30/60/100/365) |
 | **Badges** | `/badges` — 🏅 23 achievement badges (streak, tasks, pomodoro, hint, panic, export) |
 | **Review** | `/review` — completed homework summary with period picker + sentiment |
-| **Collab** | `/collab` — share a homework item with a friend via token |
+| **Collab** | `/collab` — share a homework item with a friend via token (24h TTL) |
 | **Noted** | `/noted` — attach a short note to any homework |
-| **Hint** | `/hint` — AI tips for how to start each subject |
-| **Quote** | `/quote` — random motivational quote |
+| **Hint** | `/hint` — Thai tips for how to start each subject |
+| **Quote** | `/quote` — random motivational quote (36 Thai quotes) |
 | **Priority System** | 🔴 High / 🟡 Medium / 🟢 Low — auto-detect based on due date, auto-recalc daily at 06:00 |
 | **Tag Inference** | Auto-tagged from keywords (สอบ=exam, ด่วน=urgent, ใบงาน=worksheet) + `#hashtag` support |
 | **Edit Before Save** | Preview + edit (title, subject, date, priority, tags) before saving |
@@ -61,6 +61,8 @@
 | **Auto-Priority** | Recalculates priority daily at 06:00 based on remaining days |
 | **Hint System** | One-time contextual tips (post-save, status change, priority legend) |
 | **AI Confident Skip** | Skips preview when AI is confident and matches regex → straight to confirm |
+| **Dashboard Link** | `🌐 เปิด Dashboard` button in menu → ticket-based login to web UI |
+| **Notion Schema Check** | On boot, validates your Notion DB has all required properties |
 
 ### 🌐 Web Dashboard
 
@@ -77,8 +79,9 @@
 | **Bulk Actions** | Checkboxes + select all + bulk status update |
 | **CSV Export** | CSV export with BOM for Excel |
 | **Dark Mode** | Auto-detect `prefers-color-scheme` + manual toggle, persisted in localStorage |
-| **PWA** | Installable on mobile (manifest.json + service worker) |
+| **PWA** | Installable on mobile (manifest.json + service worker with auto-versioning) |
 | **Responsive** | Sidebar → bottom nav on mobile (≤768px) |
+| **One-tap Login** | Bot menu → `🌐 เปิด Dashboard` → ticket exchange (60s TTL) → `httpOnly` cookie |
 
 ### 🔒 Security
 
@@ -187,6 +190,12 @@ Tests:       1332 passed, 1332 total
 node index.js
 ```
 
+On boot, the bot will:
+- Print a startup banner: `🏠 Homework Bot v1.0.0 starting (node v20.x.x, TZ Asia/Bangkok)`
+- Validate your Notion database schema (warns but doesn't exit if properties are missing)
+- Start the web dashboard on `PORT` (default `8080`)
+- Register all 23 commands with Telegram
+
 Open Telegram → find your bot → type `/start` or just type homework directly, e.g.:
 - `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้` (Math worksheet page 20, due tomorrow)
 - `รายงานอังกฤษส่งวันศุกร์` (English report due Friday)
@@ -200,9 +209,8 @@ Open Telegram → find your bot → type `/start` or just type homework directly
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Welcome message + main menu |
-| `/menu` | Open main menu |
-| `/help` | Quick usage guide |
+| `/menu` | 📋 Open main menu |
+| `/help` | 🆘 Quick usage guide |
 | `/stats` | 📊 Homework statistics overview |
 | `/ask` | 🤖 Ask AI about your homework |
 | `/panic` | 🚨 Show top 3 most urgent tasks |
@@ -214,14 +222,14 @@ Open Telegram → find your bot → type `/start` or just type homework directly
 | `/pomodoro` | 🍅 25-min work + 5-min break timer |
 | `/suggest` | 💡 AI suggests what to do first |
 | `/badges` | 🏅 View achievement badges |
-| `/hint` | 🧠 AI tips to start each subject |
-| `/streak` | 🔥 Consecutive day streak |
+| `/hint` | 🧠 Thai tips to start each subject |
+| `/streak` | 🔥 Consecutive day streak (with milestones) |
 | `/review` | 📋 Completed homework summary |
-| `/collab` | 👥 Share homework with friends |
+| `/collab` | 👥 Share homework with friends (24h token) |
 | `/smartbook` | 📚 AI generates 7-day study plan |
 | `/search` | 🔍 Search homework by keyword |
 | `/export` | 📋 Export all homework as text |
-| `/quote` | 💬 Random motivational quote |
+| `/quote` | 💬 Random motivational quote (36 Thai quotes) |
 | `/noted` | 📝 Attach a note to homework |
 | `/undo` | ↩️ Undo last status change (30s) |
 
@@ -297,8 +305,8 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
  ┣ 📦 src
  ┃ ┣ 📂 handlers
- ┃ ┃ ┣ 📄 commandHandlers.js          ← /start, /menu, /help, /ask, /undo, /focus, /badges, /review, /collab, /smartbook, /pomodoro, /suggest, text router, confirm/preview
- ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST)
+ ┃ ┃ ┣ 📄 commandHandlers.js          ← 23 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /streak /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
+ ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
  ┃ ┃ ┗ 📄 viewBuilders.js             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
  ┃ ┣ 📂 services
  ┃ ┃ ┣ 📄 aiService.js                ← Typhoon AI via OpenAI SDK (2-model chain + regex fallback)
@@ -309,8 +317,8 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃ ┃ ┣ 📄 streakService.js            ← 🔥 Streak tracking (.streaks.json, milestones, calendar)
  ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, 23 badges, rarities)
  ┃ ┃ ┣ 📄 pomodoroService.js          ← 🍅 Pomodoro timer (.pomodoros.json, stats, streaks)
- ┃ ┃ ┣ 📄 hintService.js              ← 💡 AI hint generation per subject (getStudyTip / askHint)
- ┃ ┃ ┗ 📄 shareTokenService.js        ← 🔗 Collab share-link tokens (.share_tokens.json)
+ ┃ ┃ ┣ 📄 hintService.js              ← 💡 Thai hint generation per subject (getStudyTip / askHint)
+ ┃ ┃ ┗ 📄 shareTokenService.js        ← 🔗 Collab share-link tokens (.share_tokens.json, 24h TTL)
  ┃ ┣ 📂 web
  ┃ ┃ ┣ 📄 server.js                   ← Express (REST API + static, rate-limited, ticket auth, security headers, SW versioning)
  ┃ ┃ ┗ 📂 public
@@ -321,12 +329,13 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃    ┣ 📄 dateParser.js              ← Thai date regex parsing (วันนี้/พรุ่งนี้/มะรืน/อีก X วัน/dd/mm/yy)
  ┃    ┣ 📄 subjectDetector.js         ← 50+ keywords → 10 subjects (ไทย→สุขศึกษา)
  ┃    ┣ 📄 tagDetector.js             ← Tag inference + #hashtag parsing
- ┃    ┣ 📄 telegramFormat.js          ← Markdown escape helpers
- ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, dashboard limits, pomodoro durations
+ ┃    ┣ 📄 telegramFormat.js          ← Markdown escape helpers (safeBold, safeItalic, safeCode, escapeMarkdown)
+ ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS, dashboard limits
  ┃    ┣ 📄 priority.js                ← recalcPriority(due): ≤3d HIGH, ≤14d MEDIUM, >14d LOW
+ ┃    ┣ 📄 quotes.js                  ← 36 motivational Thai quotes
  ┃    ┣ 📄 logger.js                  ← Console wrapper with Thai timestamps + emoji levels
  ┃    ┣ 📄 validateEnv.js             ← Environment variable validation
- ┃    ┗ 📄 jsonStore.js               ← Atomic JSON-file persistence (tmp + rename, per-file generation sidecar)
+ ┃    ┗ 📄 jsonStore.js               ← Atomic JSON-file persistence (tmp + rename, per-file generation sidecar, setImmediate-deferred writes)
  ┣ 📄 Dockerfile                      ← node:20-alpine, port 8080
  ┣ 📄 .gitignore
  ┣ 📄 package.json
@@ -341,6 +350,7 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
 ```
 Base URL: http://localhost:8080
 Auth: Authorization: Bearer <DASHBOARD_TOKEN>
+       OR  Cookie: hb_session=<DASHBOARD_TOKEN>  (set by /api/exchange)
 Rate Limit: 60 req/min
 ```
 
@@ -366,9 +376,11 @@ Rate Limit: 60 req/min
 |--------|------|-------------|
 | `GET` | `/api/all` | stats + homework + trend + weeklyDone |
 | `GET` | `/api/stats` | Stats summary only |
-| `GET` | `/api/exchange?ticket=X` | Exchange one-time ticket (60s TTL) for `hb_session` cookie, then 302 to dashboard |
+| `GET` | `/api/badges` | Badge grid + count + rarest (uses `?userId=` if provided) |
+| `GET` | `/api/badges/:userId` | Same as above for specific user |
+| `GET` | `/api/exchange?ticket=X` | Exchange one-time ticket (60s TTL) for `hb_session` cookie, then 302 to `/` |
 
-### Health
+### Health & Service Worker
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -398,7 +410,8 @@ Rate Limit: 60 req/min
 | **Rate Limiting** | [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) 8.x | 60 req/min |
 | **Cron** | [node-cron](https://github.com/node-cron/node-cron) | 4 cron jobs, overlap guards |
 | **Container** | Docker | `node:20-alpine`, ~150 MB |
-| **Testing** | [Jest](https://jestjs.io/) 29.x | 1332 tests (18 suites) |
+| **Testing** | [Jest](https://jestjs.io/) 29.x | 1332 tests across 18 suites, ESM `--experimental-vm-modules` |
+| **Persistence** | Atomic JSON files | `createJsonStore` (tmp + rename, per-file generation sidecar, setImmediate-deferred writes) |
 
 ---
 
@@ -521,14 +534,16 @@ npm run test:watch       # Watch mode
 | `priority` | ~100 | `recalcPriority()`, boundary conditions, edge cases |
 | `telegramFormat` | ~50 | `safeBold()`, `safeItalic()`, `safeCode()`, `escapeMarkdown()` |
 | `cache` | ~75 | `cacheGet/Set/Invalidate/Cleanup`, TTL, pattern-based |
-| `api.e2e` | ~200 | Express API endpoints, auth, error handling |
+| `api.e2e` | ~200 | Express API endpoints, auth (Bearer + cookie), error handling |
 | `badgeService` | ~65 | `checkBadges()`, `checkTaskBadges()`, `awardBadges()`, `getAllBadges()`, rarity, grid, usage, persistence |
-| `streakService` | ~22 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence, MAX_ENTRIES, race-safety |
-| `commandHandlers` | ~33 | Focus, panic, preview, review, `errorWithRetry` allowlist |
+| `streakService` | 22 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence, MAX_ENTRIES, race-safety across `jest.resetModules` |
+| `commandHandlers` | 33 | Focus, panic, preview, review, `errorWithRetry` allowlist |
 | `hintService` | ~15 | Hint generation, subject matching |
 | `collabSmartbook` | ~15 | Collab token flow, smartbook plan rendering |
 | `quotes` | ~10 | Quote selection, no duplicates |
 | `notionStats` | ~10 | `getHomeworkStats()`, URGENT_DAYS import fix |
+| `pomodoroService` | ~30 | Pomodoro session lifecycle, getStreak edge cases |
+| `qaService` | ~20 | AI Q&A fallback chain, error handling |
 | `notionSchema` | 5 | `validateNotionSchema()`: missing props, type mismatches, unreachable Notion, per-call cache |
 | `dashboardSecurity` | 5 | Security headers, CSP, ticket exchange, cookie auth, SW versioning |
 
