@@ -34,10 +34,65 @@ export function getDashboardToken() {
     return DASHBOARD_TOKEN;
 }
 
-/* ── one-time access tickets ── */
-const TICKET_TTL_MS = 60_000 // 60 seconds
+/* ── one-time access tickets ──
+   Tickets are self-contained (HMAC-signed) so they survive process
+   restarts — the user can open a ticket URL even after a deploy
+   without getting 'Invalid or expired ticket'. The HMAC key is
+   derived from DASHBOARD_TOKEN so it's deterministic across restarts
+   (same process.env → same key → same signature). A consumed-ticket
+   Set prevents replay within the same process lifetime. */
+const TICKET_TTL_MS = 300_000 // 5 minutes (up from 60s to give users time)
 const SESSION_COOKIE = "hb_session"
-const tickets = new Map()
+const consumedTickets = new Set()
+
+/* Derive a deterministic HMAC key from DASHBOARD_TOKEN so signed
+   tickets survive restarts. If auth is disabled (no token), fall
+   back to a random key — tickets won't be used anyway. */
+const TICKET_HMAC_KEY = crypto.createHash("sha256")
+    .update(DASHBOARD_TOKEN || String(Date.now()))
+    .digest()
+
+function createSignedTicket(ttl) {
+    const id = crypto.randomBytes(16).toString("base64url")
+    const payload = JSON.stringify({ id, exp: Date.now() + (ttl || TICKET_TTL_MS) })
+    const data = Buffer.from(payload).toString("base64url")
+    const sig = crypto.createHmac("sha256", TICKET_HMAC_KEY).update(data).digest("base64url").slice(0, 12)
+    return `${data}.${sig}`
+}
+
+function consumeTicket(token) {
+    if (!token) return false
+    const parts = token.split(".")
+    if (parts.length !== 2) return false
+    const [data, sig] = parts
+    /* Verify HMAC — uses timingSafeEqual to prevent timing attacks */
+    const expected = crypto.createHmac("sha256", TICKET_HMAC_KEY).update(data).digest("base64url").slice(0, 12)
+    if (sig.length !== expected.length) return false
+    const sigBuf = Buffer.from(sig, "utf-8")
+    const expBuf = Buffer.from(expected, "utf-8")
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return false
+    /* Parse & check expiry */
+    let payload
+    try {
+        payload = JSON.parse(Buffer.from(data, "base64url").toString("utf-8"))
+    } catch { return false }
+    if (Date.now() > payload.exp) return false
+    /* Replay protection (in-memory only — reset on restart, acceptable) */
+    if (consumedTickets.has(payload.id)) return false
+    consumedTickets.add(payload.id)
+    return true
+}
+
+/* Periodic prune of the consumed-ticket set to prevent unbounded growth */
+if (!globalThis.__hbTicketIntervalStarted) {
+    globalThis.__hbTicketIntervalStarted = true
+    setInterval(() => {
+        /* HMAC-signed tickets carry their own expiry, so we only need
+           to cap the in-memory consumed set. Any ticket not consumed
+           within TTL will fail the exp check regardless. */
+        if (consumedTickets.size > 10_000) consumedTickets.clear()
+    }, 60_000).unref()
+}
 
 /* ── bot readiness flag (toggled by index.js after bot.launch()) ── */
 let botReady = false
@@ -46,36 +101,10 @@ export function setBotReady(ready) {
     botReady = !!ready
 }
 
-function issueTicket() {
-    const ticket = crypto.randomBytes(24).toString("base64url")
-    tickets.set(ticket, { _timestamp: Date.now() })
-    return ticket
-}
-
-function consumeTicket(ticket) {
-    if (!ticket) return false
-    const entry = tickets.get(ticket)
-    if (!entry) return false
-    tickets.delete(ticket)
-    return Date.now() - (entry._timestamp || 0) <= TICKET_TTL_MS
-}
-
-function pruneTickets() {
-    const now = Date.now()
-    for (const [k, v] of tickets) {
-        if (now - (v._timestamp || 0) > TICKET_TTL_MS) tickets.delete(k)
-    }
-}
-
-if (!globalThis.__hbTicketIntervalStarted) {
-    globalThis.__hbTicketIntervalStarted = true
-    setInterval(pruneTickets, 30_000).unref()
-}
-
 export function createDashboardUrl(baseUrl) {
     if (!DASHBOARD_TOKEN) return baseUrl || ""
     if (!baseUrl) return ""
-    const ticket = issueTicket()
+    const ticket = createSignedTicket()
     return `${baseUrl}/api/exchange?ticket=${ticket}`
 }
 
