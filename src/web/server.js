@@ -221,14 +221,15 @@ export function startWebServer(port = 8080) {
     })
 
     app.get("/health", (_req, res) => {
-        /* /health doubles as the deploy-platform readiness probe. Return
-           503 until bot.launch() has succeeded so the platform keeps the
-           old container alive (and its Telegram long-polling session)
-           until the new container is actually ready to take over. */
-        if (!botReady) {
-            return res.status(503).json({ status: "starting", bot: "not_ready" });
-        }
-        res.json({ status: "ok", bot: "ready" });
+        /* /health reports that the web server (and therefore the
+           dashboard) is up and serving. The bot may still be launching
+           (Telegram long-polling can take a few seconds during a
+           rolling deploy) but the dashboard is independently useful,
+           so we don't gate /health on bot readiness. */
+        res.json({
+            status: "ok",
+            bot: botReady ? "ready" : "starting",
+        });
     });
 
     function parseCookie(header) {

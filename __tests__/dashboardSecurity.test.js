@@ -122,13 +122,13 @@ describe('service worker versioning', () => {
 })
 
 describe('deploy readiness probe', () => {
-    test('/health returns 503 with bot=not_ready before bot.launch() succeeds', async () => {
+    test('/health returns 200 with bot=starting before setBotReady(true)', async () => {
         const { server, port } = await bootServer({ ready: false })
         try {
             const res = await fetch(`http://127.0.0.1:${port}/health`)
-            expect(res.status).toBe(503)
+            expect(res.status).toBe(200)
             const body = await res.json()
-            expect(body.bot).toBe("not_ready")
+            expect(body.bot).toBe("starting")
         } finally {
             server.close()
         }

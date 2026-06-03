@@ -63,7 +63,7 @@
 | **AI Confident Skip** | Skips preview when AI is confident and matches regex → straight to confirm |
 | **Dashboard Link** | `🌐 เปิด Dashboard` button in menu → ticket-based login to web UI |
 | **Notion Schema Check** | On boot, validates your Notion DB has all required properties |
-| **Deploy-Safe Launch** | `/health` returns 503 until `bot.launch()` succeeds — deploy platforms wait for the new instance before killing the old one (avoids 409 polling conflicts) |
+| **Deploy-Safe Launch** | `launchBot` retries 409 conflicts with 3s backoff (5 attempts, 15s cap) and exits cleanly on final conflict; `/health` always 200 once web server is up (dashboard works during bot startup) |
 
 ### 🌐 Web Dashboard
 
@@ -385,7 +385,7 @@ Rate Limit: 60 req/min
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | `200 { status: "ok", bot: "ready" }` once bot.launch() succeeds, or `503 { status: "starting", bot: "not_ready" }` during deploy (use as readiness probe) |
+| `GET` | `/health` | `200 { status: "ok", bot: "ready" \| "starting" }` — always 200 once web server is up; `bot` field reports Telegram polling status |
 | `GET` | `/sw.js` | Service worker with `CACHE_NAME = "homework-bot-v${version}"` auto-injected |
 
 ### Status Values
