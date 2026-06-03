@@ -27,6 +27,49 @@ async function notionWithRetry(fn, retries = NOTION_MAX_RETRIES) {
 
 const MAX_QUERY_PAGES = 50; // safety limit (~5000 items)
 
+/* ── schema validation ──
+   The Notion database is expected to have these properties. If any are
+   missing we log a clear warning so the operator can fix the database
+   rather than discovering it later via cryptic `undefined` errors. */
+const REQUIRED_PROPS = [
+    { name: "Name", type: "title" },
+    { name: "Status", type: "select" },
+    { name: "Subject", type: "rich_text" },
+    { name: "Due", type: "date" },
+    { name: "Priority", type: "select" },
+    { name: "Completed", type: "date" },
+    { name: "Tags", type: "multi_select" },
+    { name: "EventId", type: "rich_text" },
+]
+
+let schemaChecked = false
+
+export async function validateNotionSchema() {
+    if (schemaChecked) return { ok: true, missing: [] }
+    schemaChecked = true
+    if (!DB) {
+        return { ok: false, missing: REQUIRED_PROPS.map((p) => p.name) }
+    }
+    try {
+        const db = await notionWithRetry(() => notion.databases.retrieve({ database_id: DB }))
+        const propNames = new Set(Object.keys(db.properties || {}))
+        const missing = REQUIRED_PROPS.filter((p) => !propNames.has(p.name)).map((p) => p.name)
+        const wrongType = REQUIRED_PROPS
+            .filter((p) => propNames.has(p.name) && db.properties[p.name].type !== p.type)
+            .map((p) => `${p.name} (expected ${p.type}, got ${db.properties[p.name].type})`)
+        if (missing.length) {
+            logger.warn(`Notion schema missing properties: ${missing.join(", ")}`)
+        }
+        if (wrongType.length) {
+            logger.warn(`Notion schema property type mismatches: ${wrongType.join(", ")}`)
+        }
+        return { ok: !missing.length && !wrongType.length, missing: [...missing, ...wrongType] }
+    } catch (err) {
+        logger.warn("Notion schema check failed:", err?.message || err)
+        return { ok: false, missing: ["<unreachable>"] }
+    }
+}
+
 /* ── pagination helper ── */
 async function queryAll(params) {
     const results = [];

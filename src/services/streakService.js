@@ -1,48 +1,28 @@
 import fs from "fs"
 import { logger } from "../utils/logger.js"
+import { createJsonStore } from "../utils/jsonStore.js"
 
-const STREAKS_FILE = ".streaks.json"
+const FILENAME = ".streaks.json"
 const MAX_ENTRIES = 10000
 const MILESTONES = [3, 7, 14, 30, 60, 100, 365]
 
-let streaks = {}
-let writePromise = Promise.resolve()
+const store = createJsonStore(FILENAME, {})
 
 function getToday() {
     return new Date().toISOString().slice(0, 10)
 }
 
-async function doWrite() {
-    const tmp = STREAKS_FILE + ".tmp"
-    const data = JSON.stringify(streaks, null, 2)
-    try {
-        await fs.promises.writeFile(tmp, data)
-        await fs.promises.rename(tmp, STREAKS_FILE)
-    } catch {
-        // silently ignore (e.g. test cleanup races)
-    }
+function getYesterday() {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
 }
-
-function scheduleWrite() {
-    writePromise = doWrite()
-}
-
-function loadStreaks() {
-    try {
-        const raw = fs.readFileSync(STREAKS_FILE, "utf-8")
-        streaks = JSON.parse(raw)
-        if (typeof streaks !== "object" || Array.isArray(streaks)) streaks = {}
-    } catch {
-        streaks = {}
-    }
-}
-
-loadStreaks()
 
 export function recordCompletion(userId) {
     const today = getToday()
     const key = String(userId)
-    let entry = streaks[key]
+    const data = store.data
+    let entry = data[key]
     if (!entry) {
         entry = { current: 0, best: 0, lastDate: null }
     }
@@ -51,11 +31,8 @@ export function recordCompletion(userId) {
         return { current: entry.current, best: entry.best, isNewMilestone: false }
     }
 
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().slice(0, 10)
-
-    if (entry.lastDate === yesterdayStr) {
+    const yesterday = getYesterday()
+    if (entry.lastDate === yesterday) {
         entry.current++
     } else {
         entry.current = 1
@@ -64,23 +41,22 @@ export function recordCompletion(userId) {
     entry.best = Math.max(entry.best, entry.current)
     entry.lastDate = today
 
-    if (Object.keys(streaks).length < MAX_ENTRIES || streaks[key]) {
-        streaks[key] = entry
+    const isNewUser = !(key in data)
+    if (!isNewUser || Object.keys(data).length < MAX_ENTRIES) {
+        data[key] = entry
+    } else {
+        return { current: entry.current, best: entry.best, isNewMilestone: false, capped: true }
     }
 
-    scheduleWrite()
+    store.scheduleWrite()
 
     const isNewMilestone = MILESTONES.includes(entry.current)
-
     return { current: entry.current, best: entry.best, isNewMilestone }
 }
 
 export function getStreak(userId) {
-    const key = String(userId)
-    const entry = streaks[key]
-    if (!entry) {
-        return { current: 0, best: 0, lastDate: null }
-    }
+    const entry = store.data[String(userId)]
+    if (!entry) return { current: 0, best: 0, lastDate: null }
     return { current: entry.current, best: entry.best, lastDate: entry.lastDate }
 }
 
@@ -92,10 +68,8 @@ export function getNextMilestone(current) {
 }
 
 export function getStreakCalendar(userId) {
-    const entry = streaks[String(userId)]
-    if (!entry || !entry.lastDate) {
-        return []
-    }
+    const entry = store.data[String(userId)]
+    if (!entry || !entry.lastDate) return []
 
     const today = new Date()
     const calendar = []
@@ -113,5 +87,5 @@ export function getStreakCalendar(userId) {
 }
 
 export async function flushStreaks() {
-    await writePromise
+    await store.flush()
 }

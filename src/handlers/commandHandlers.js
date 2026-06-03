@@ -1,6 +1,6 @@
 import { Markup } from "telegraf";
-import { parseThaiDate, formatDate, formatDateLabel, formatDueDisplay, isPossiblyLastMonth, parseYMDToLocalDate, THAI_DAYS } from "../utils/dateParser.js";
-import { getHomeworkStats, fetchActive, fetchDone, getPageProps, updateStatus, updateHomework, createHomework } from "../services/notionService.js";
+import { parseThaiDate, formatDate, formatDateLabel, formatDueDisplay, isPossiblyLastMonth, parseYMDToLocalDate } from "../utils/dateParser.js";
+import { getHomeworkStats, fetchActive, fetchDone, getPageProps, updateStatus, updateHomework, createHomework, getPageStatus, archivePage } from "../services/notionService.js";
 import {
     detectSubject,
     cleanTitle,
@@ -10,11 +10,12 @@ import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
 import { recalcPriority } from "../utils/priority.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
-import { getDashboardToken } from "../web/server.js";
+import { createDashboardUrl } from "../web/server.js";
 import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
+import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
 import { getStreak, getNextMilestone, getStreakCalendar } from "../services/streakService.js";
-import { askHint } from "../services/hintService.js";
+import { getStudyTip } from "../services/hintService.js";
 import { buildBadgeMessage } from "../services/badgeService.js";
 import { getStats as pomoGetStats } from "../services/pomodoroService.js";
 import {
@@ -29,19 +30,18 @@ import { STATUS, PRIORITY, priorityWeight } from "../utils/constants.js";
 const WEB_URL = process.env.WEB_URL || "";
 const BOT_USERNAME = process.env.BOT_USERNAME || "homeworkbot";
 
-// ── Collab share tokens ──
-export const shareTokens = new Map()
-const COLLAB_TOKEN_TTL = 24 * 3600_000 // 24h
-
-function pruneShareTokens() {
-    const now = Date.now()
-    for (const [token, data] of shareTokens) {
-        if (now - data._timestamp > COLLAB_TOKEN_TTL) {
-            shareTokens.delete(token)
-        }
-    }
+// ── Collab share tokens (persisted across restarts) ──
+import { setShareToken as setShareTokenPersist, getShareToken, deleteShareToken, hasShareToken, sizeShareTokens, clearShareTokens, iterateShareTokens, SHARE_TOKEN_TTL } from "../services/shareTokenService.js"
+export const shareTokens = {
+    set: (token, data) => setShareTokenPersist(token, data),
+    get: (token) => getShareToken(token),
+    delete: (token) => deleteShareToken(token),
+    has: (token) => hasShareToken(token),
+    get size() { return sizeShareTokens() },
+    clear: () => clearShareTokens(),
+    [Symbol.iterator]: () => iterateShareTokens(),
 }
-setInterval(pruneShareTokens, 30 * 60_000).unref()
+const COLLAB_TOKEN_TTL = SHARE_TOKEN_TTL
 
 export const mainMenu = Markup.inlineKeyboard([
     [
@@ -58,7 +58,7 @@ export const mainMenu = Markup.inlineKeyboard([
         Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
     ],
     ...(WEB_URL
-        ? [[Markup.button.url("🌐 Web Dashboard", `${WEB_URL}?token=${getDashboardToken()}`)]]
+        ? [[Markup.button.url("🌐 Web Dashboard", createDashboardUrl(WEB_URL) || WEB_URL)]]
         : []),
 ]);
 
@@ -92,13 +92,30 @@ export const moreOptionsMenu = Markup.inlineKeyboard([
     ],
 ]);
 
+/* Retry actions must come from this allowlist to prevent user-controlled
+   callback_data from being rendered into reply_markup. */
+const ALLOWED_RETRY_PREFIXES = [
+    "RETRY_FETCH_ACTIVE",
+    "RETRY_FETCH_DONE",
+    "RETRY_FETCH_DASHBOARD",
+    "RETRY_STATUS_",
+    "RETRY_ARCHIVE_",
+]
+
+function isValidRetryAction(retryAction) {
+    if (typeof retryAction !== "string") return false
+    if (retryAction.length > 64) return false
+    return ALLOWED_RETRY_PREFIXES.some((p) => retryAction.startsWith(p))
+}
+
 export function errorWithRetry(message, retryAction) {
+    const safeAction = isValidRetryAction(retryAction) ? retryAction : "HOME"
     return {
         text: `❌ *${escapeMarkdown(message)}*\nกรุณาลองใหม่`,
         parse_mode: "Markdown",
         reply_markup: {
             inline_keyboard: [[
-                { text: "🔁 ลองอีกครั้ง", callback_data: retryAction },
+                { text: "🔁 ลองอีกครั้ง", callback_data: safeAction },
                 { text: "🏠 เมนูหลัก", callback_data: "HOME" },
             ]],
         },
@@ -220,8 +237,6 @@ async function parseText(text) {
             subject,
             title: shortenTitle(aiResult.title || cleanTitle(text) || text, subject),
             priority: hasDue ? (aiResult.priority || "🟡 กลาง") : "🟢 ต่ำ",
-            usedAI: true,
-            model: aiResult.model || "",
             tags: aiResult.tags,
             parseSource: "ai",
         };
@@ -234,8 +249,6 @@ async function parseText(text) {
         subject,
         title: shortenTitle(cleanTitle(text) || text, subject),
         priority,
-        usedAI: false,
-        model: "",
         tags: inferAndParseTags(text, priority),
         parseSource: "regex",
     };
@@ -281,10 +294,6 @@ export function sortByUrgency(pages) {
         if (!dtB) return -1
         return dtA - dtB
     })
-}
-
-function statusEmoji(status) {
-    return status === "Done" ? "✅" : status === "In Progress" ? "🔄" : "📌"
 }
 
 export function buildPanicCard(page) {
@@ -394,31 +403,7 @@ export function registerCommandHandlers(bot, userState) {
             }
 
             const sorted = sortByUrgency(pages)
-            const top3 = sorted.slice(0, 3)
-
-            const keyboard = []
-            for (const p of top3) {
-                keyboard.push([
-                    Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
-                    Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
-                    Markup.button.callback("🗑️ ลบ", `del_${p.id}`),
-                ])
-            }
-            keyboard.push([
-                Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("📋 ค้าง", "LIST_ACTIVE"),
-                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
-            ])
-
-            let msg = `🚨 ${safeBold("โหมดฉุกเฉิน!")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
-            msg += `${top3.length} งานที่ควรทำที่สุดตอนนี้\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
-            for (const p of top3) {
-                msg += `${buildPanicCard(p)}\n\n`
-            }
-            msg += `💪 ${safeBold("เริ่มจากอันแรกเลย!")}`
-
+            const { msg, keyboard } = buildPanic(sorted, 3)
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard(keyboard),
@@ -438,11 +423,7 @@ export function registerCommandHandlers(bot, userState) {
             const tomorrow = new Date()
             tomorrow.setDate(tomorrow.getDate() + 1)
             const tomorrowStr = formatDate(tomorrow)
-
-            const dueTomorrow = pages.filter(p => {
-                const due = p.properties.Due?.date?.start
-                return due === tomorrowStr
-            })
+            const dueTomorrow = pages.filter(p => p.properties.Due?.date?.start === tomorrowStr)
 
             if (!dueTomorrow.length) {
                 return ctx.reply(
@@ -451,37 +432,7 @@ export function registerCommandHandlers(bot, userState) {
                 )
             }
 
-            const today = new Date(); today.setHours(0, 0, 0, 0)
-            const keyboard = []
-            for (const p of dueTomorrow) {
-                keyboard.push([
-                    Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
-                    Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
-                    Markup.button.callback("🗑️ ลบ", `del_${p.id}`),
-                ])
-            }
-            keyboard.push([
-                Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
-                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
-            ])
-
-            let msg = `📅 ${safeBold("งานที่ต้องส่งพรุ่งนี้")} (${dueTomorrow.length} รายการ)\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
-            for (const p of dueTomorrow) {
-                const { title, status, due, subject, priority } = getPageProps(p)
-                const dt = due ? parseYMDToLocalDate(due) : null
-                const diff = dt ? Math.ceil((dt - today) / 86400000) : null
-                let badge = ""
-                if (diff !== null && diff < 0) {
-                    badge = ` 🚨 (เลย ${Math.abs(diff)} วัน!)`
-                }
-                msg += `${statusEmoji(status)} ${safeBold(title)} ${badge}\n`
-                msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}\n\n`
-            }
-            msg += `💪 ${safeBold("เตรียมตัวให้พร้อม!")}`
-
+            const { msg, keyboard } = buildTomorrow(dueTomorrow)
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard(keyboard),
@@ -580,271 +531,63 @@ export function registerCommandHandlers(bot, userState) {
     bot.command("week", async (ctx) => {
         try {
             const pages = await fetchActive()
-
-            const today = new Date(); today.setHours(0, 0, 0, 0)
-            const dayOfWeek = today.getDay()
-            const mon = new Date(today)
-            mon.setDate(today.getDate() - ((dayOfWeek + 6) % 7))
-
-            const days = []
-            let totalCount = 0
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(mon)
-                d.setDate(mon.getDate() + i)
-                const dateStr = formatDate(d)
-                const items = pages.filter(p => p.properties.Due?.date?.start === dateStr)
-                const isToday = dateStr === formatDate(today)
-                days.push({ date: d, dateStr, items, isToday })
-                totalCount += items.length
-            }
-
-            const noDueItems = pages.filter(p => !p.properties.Due?.date?.start)
-
             if (!pages.length) {
                 return ctx.reply(
                     `🎉 ${safeBold("ไม่มีการบ้านอาทิตย์นี้เลย!")}\nพักผ่อนได้ 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
-
-            let msg = `📅 ${safeBold("ตารางประจำสัปดาห์")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
-            for (const day of days) {
-                const dayName = THAI_DAYS[day.date.getDay()]
-                const dateLabel = `${day.date.getDate()} ${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][day.date.getMonth()]}`
-                const prefix = day.isToday ? ">>> 📌 " : ""
-                const countLabel = day.items.length
-                    ? `(${day.items.length} งาน)`
-                    : "(✅ ว่าง)"
-                msg += `${prefix}${dayName} ${dateLabel}  ${countLabel}\n`
-
-                for (const p of day.items) {
-                    const { title, status, due, subject, priority } = getPageProps(p)
-                    const dt = due ? parseYMDToLocalDate(due) : null
-                    const diff = dt ? Math.ceil((dt - today) / 86400000) : null
-                    const dayLabel = diff !== null
-                        ? (diff < 0 ? `เลย ${Math.abs(diff)} วัน` : (diff === 0 ? "วันนี้!" : `อีก ${diff} วัน`))
-                        : ""
-                    msg += `  ${statusEmoji(status)} ${safeBold(title)}  ${priority}`
-                    if (dayLabel) msg += ` — ${dayLabel}`
-                    msg += `\n`
-                }
-                msg += `━━━━━━━━━━━━━━━━━━━━\n`
-            }
-
-            if (noDueItems.length) {
-                msg += `📌 ไม่มีกำหนด (${noDueItems.length} รายการ)\n`
-                for (const p of noDueItems) {
-                    const { title, status, subject, priority } = getPageProps(p)
-                    msg += `  ${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority}\n`
-                }
-                msg += `━━━━━━━━━━━━━━━━━━━━\n`
-            }
-
-            msg += `\n📊 รวม ${totalCount} งานในสัปดาห์นี้`
-
-            if (noDueItems.length) {
-                msg += ` (+ ${noDueItems.length} ไม่มีกำหนด)`
-            }
-
-            const keyboard = [
-                [
-                    Markup.button.callback("➕ เพิ่ม", "ADD"),
-                    Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
-                ],
-                [
-                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
-                ],
-            ]
-
+            const { msg, keyboard } = buildWeek(pages)
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard(keyboard),
             })
         } catch (err) {
             logger.error("/week:", err)
-            return ctx.reply(
-                `❌ ${safeBold("โหลดตารางไม่ได้")}\nกรุณาลองใหม่`,
-                { parse_mode: "Markdown", ...mainMenu },
-            )
+            const errMsg = errorWithRetry("โหลดตารางไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
 
     bot.command("deadline", async (ctx) => {
         try {
             const pages = await fetchActive()
-            if (!pages.length) {
+            const result = buildDeadline(pages)
+            if (!result) {
                 return ctx.reply(
                     `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
-
-            const now = new Date()
-            const today = new Date(); today.setHours(0, 0, 0, 0)
-
-            let closest = null
-            let closestDiff = Infinity
-            for (const p of pages) {
-                const due = p.properties.Due?.date?.start
-                if (!due) continue
-                const dt = parseYMDToLocalDate(due)
-                const diff = Math.ceil((dt - today) / 86400000)
-                if (Math.abs(diff) < Math.abs(closestDiff)) {
-                    closest = p
-                    closestDiff = diff
-                }
-            }
-
-            if (!closest) {
-                return ctx.reply(
-                    `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
-                    { parse_mode: "Markdown", ...mainMenu },
-                )
-            }
-
-            const { title, status, due, subject, priority } = getPageProps(closest)
-            const dt = parseYMDToLocalDate(due)
-            const diffMs = dt - now
-            const absDiffMs = Math.abs(diffMs)
-            const totalDays = Math.floor(absDiffMs / 86400000)
-            const totalHours = Math.floor((absDiffMs % 86400000) / 3600000)
-            const totalMinutes = Math.floor((absDiffMs % 3600000) / 60000)
-
-            let badge, urgency
-            if (closestDiff < 0) {
-                badge = "🚨"
-                urgency = `เลยกำหนด ${Math.abs(closestDiff)} วัน`
-            } else if (closestDiff <= 3) {
-                badge = "🔥"
-                urgency = `เหลือ ${closestDiff} วัน`
-            } else if (closestDiff <= 7) {
-                badge = "⏰"
-                urgency = `เหลือ ${closestDiff} วัน`
-            } else {
-                badge = "📅"
-                urgency = `อีก ${closestDiff} วัน`
-            }
-
-            const barSlots = 20
-            const totalAvailable = closestDiff > 0 ? closestDiff + 14 : 14
-            const elapsed = totalAvailable - (closestDiff > 0 ? closestDiff : 0)
-            const filled = Math.max(0, Math.min(barSlots, Math.round((elapsed / totalAvailable) * barSlots)))
-            const bar = "█".repeat(filled) + "░".repeat(barSlots - filled)
-
-            let msg = `⏰ ${safeBold("นับถอยหลัง")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
-            msg += `${badge} ${safeBold("งานด่วน!")}\n\n`
-            msg += `${subjectEmoji(subject)} ${safeBold(title)}\n`
-            msg += `${safeBold(subject)} ${priority}  |  ${urgency}\n\n`
-            msg += `${bar}\n`
-
-            if (closestDiff < 0) {
-                msg += `⏱️  เลยกำหนดมา ${totalDays} วัน ${totalHours} ชม. แล้ว!\n\n`
-            } else {
-                msg += `⏱️  เหลือ ${totalDays} วัน ${totalHours} ชม. ${totalMinutes} นาที\n\n`
-            }
-
-            msg += `📅 ${formatDueDisplay(due)}`
-
-            const keyboard = [
-                [
-                    Markup.button.callback("✅ เสร็จ", `done_${closest.id}`),
-                    Markup.button.callback("🔄 กำลังทำ", `prog_${closest.id}`),
-                    Markup.button.callback("🗑️ ลบ", `del_${closest.id}`),
-                ],
-                [
-                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
-                ],
-            ]
-
-            return ctx.reply(msg, {
+            return ctx.reply(result.msg, {
                 parse_mode: "Markdown",
-                ...Markup.inlineKeyboard(keyboard),
+                ...Markup.inlineKeyboard(result.keyboard),
             })
         } catch (err) {
             logger.error("/deadline:", err)
-            return ctx.reply(
-                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
-                { parse_mode: "Markdown", ...mainMenu },
-            )
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
 
     bot.command("progress", async (ctx) => {
         try {
             const [activePages, donePages] = await Promise.all([fetchActive(), fetchDone()])
-
-            const bySubject = {}
-            for (const p of activePages) {
-                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
-                if (!bySubject[sub]) bySubject[sub] = { done: 0, total: 0 }
-                bySubject[sub].total++
-            }
-            for (const p of donePages) {
-                const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
-                if (!bySubject[sub]) bySubject[sub] = { done: 0, total: 0 }
-                bySubject[sub].done++
-                bySubject[sub].total++
-            }
-
-            const entries = Object.entries(bySubject)
-            if (!entries.length) {
+            const result = buildProgress(activePages, donePages)
+            if (!result) {
                 return ctx.reply(
                     `📊 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
-
-            const sorted = entries
-                .map(([sub, stats]) => ({
-                    subject: sub,
-                    pct: stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0,
-                    done: stats.done,
-                    total: stats.total,
-                }))
-                .sort((a, b) => a.pct - b.pct)
-
-            let msg = `📊 ${safeBold("ความคืบหน้าแยกวิชา")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
-
-            let totalDone = 0, totalAll = 0
-            for (const s of sorted) {
-                const filled = Math.max(0, Math.min(10, Math.round(s.pct / 10)))
-                const bar = "█".repeat(filled) + "░".repeat(10 - filled)
-                const pctStr = s.pct === 100 ? "🎉" : `${s.pct}%`
-                msg += `${subjectEmoji(s.subject)} ${safeBold(s.subject)}  ${bar}  ${pctStr} (${s.done}/${s.total})\n`
-                totalDone += s.done
-                totalAll += s.total
-            }
-
-            const totalPct = totalAll > 0 ? Math.round((totalDone / totalAll) * 100) : 0
-            msg += `\n━━━━━━━━━━━━━━━━━━━━\n`
-            msg += `📈 รวม: ${totalDone}/${totalAll} เสร็จ  ${totalPct}%`
-
-            const keyboard = [
-                [
-                    Markup.button.callback("➕ เพิ่ม", "ADD"),
-                    Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
-                ],
-                [
-                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
-                ],
-            ]
-
-            return ctx.reply(msg, {
+            return ctx.reply(result.msg, {
                 parse_mode: "Markdown",
-                ...Markup.inlineKeyboard(keyboard),
+                ...Markup.inlineKeyboard(result.keyboard),
             })
         } catch (err) {
             logger.error("/progress:", err)
-            return ctx.reply(
-                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
-                { parse_mode: "Markdown", ...mainMenu },
-            )
+            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
 
@@ -1071,7 +814,7 @@ export function registerCommandHandlers(bot, userState) {
                 return subj === kw || subj.includes(kw)
             })
 
-            const hint = await askHint(subject, filtered)
+            const hint = await getStudyTip(subject, filtered)
 
             if (!hint) {
                 return ctx.reply(
@@ -1816,6 +1559,80 @@ Overdue: ${overdueCount} ชิ้น
                 `❌ ${safeBold("วิเคราะห์ไม่ได้")}\nกรุณาลองใหม่`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
+        }
+    })
+
+    /* RETRY handlers — re-trigger the failed action */
+    bot.action("RETRY_FETCH_ACTIVE", async (ctx) => {
+        await ctx.answerCbQuery("🔁 ลองใหม่…").catch(() => {})
+        try {
+            const pages = await fetchActive()
+            if (!pages.length) {
+                return ctx.reply(`🎉 ${safeBold("ไม่มีการบ้านค้าง")}`, { parse_mode: "Markdown", ...mainMenu })
+            }
+            return ctx.reply(`📋 ${safeBold("โหลดสำเร็จ")} (${pages.length} รายการ)`, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("RETRY_FETCH_ACTIVE:", err)
+            return ctx.reply(`❌ ${safeBold("ยังโหลดไม่ได้")}`, { parse_mode: "Markdown", ...mainMenu })
+        }
+    })
+
+    bot.action("RETRY_FETCH_DONE", async (ctx) => {
+        await ctx.answerCbQuery("🔁 ลองใหม่…").catch(() => {})
+        try {
+            const pages = await fetchDone()
+            return ctx.reply(`✅ ${safeBold("โหลดสำเร็จ")} (${pages.length} รายการ)`, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("RETRY_FETCH_DONE:", err)
+            return ctx.reply(`❌ ${safeBold("ยังโหลดไม่ได้")}`, { parse_mode: "Markdown", ...mainMenu })
+        }
+    })
+
+    bot.action("RETRY_FETCH_DASHBOARD", async (ctx) => {
+        await ctx.answerCbQuery("🔁 ลองใหม่…").catch(() => {})
+        try {
+            const stats = await getHomeworkStats()
+            return ctx.reply(`📊 ${safeBold("โหลดสำเร็จ")}\n━━━━━━━━━━━━━━━━━━\n📌 ${stats.todo}  🔄 ${stats.prog}  ✅ ${stats.done}  🚨 ${stats.overdue}`, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("RETRY_FETCH_DASHBOARD:", err)
+            return ctx.reply(`❌ ${safeBold("ยังโหลดไม่ได้")}`, { parse_mode: "Markdown", ...mainMenu })
+        }
+    })
+
+    /* RETRY_STATUS_<id>_<action> — re-attempt status update with strict id validation */
+    bot.action(/^RETRY_STATUS_([A-Za-z0-9_-]{1,40})_(\w+)$/, async (ctx) => {
+        const [, pageId, action] = ctx.match
+        const map = { done: STATUS.DONE, prog: STATUS.IN_PROGRESS, todo: STATUS.TODO }
+        const newStatus = map[action]
+        if (!newStatus) {
+            return ctx.answerCbQuery("❌ ไม่รู้จัก action").catch(() => {})
+        }
+        await ctx.answerCbQuery("🔁 ลองใหม่…").catch(() => {})
+        try {
+            const oldStatus = await getPageStatus(pageId)
+            await updateStatus(pageId, newStatus)
+            const uid = ctx.from.id
+            const state = userState.get(uid) || {}
+            state._lastAction = { type: "STATUS_CHANGE", pageId, from: oldStatus, to: newStatus, _timestamp: Date.now() }
+            userState.set(uid, state)
+            return ctx.reply(`✅ ${safeBold("อัปเดตสำเร็จ")} — ${newStatus}`, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("RETRY_STATUS:", err)
+            return ctx.reply(`❌ ${safeBold("ยังอัปเดตไม่ได้")}`, { parse_mode: "Markdown", ...mainMenu })
+        }
+    })
+
+    /* RETRY_ARCHIVE_<id> — re-attempt archive with strict id validation */
+    bot.action(/^RETRY_ARCHIVE_([A-Za-z0-9_-]{1,40})$/, async (ctx) => {
+        const [, pageId] = ctx.match
+        await ctx.answerCbQuery("🔁 ลองใหม่…").catch(() => {})
+        try {
+            const { archivePage } = await import("../services/notionService.js")
+            await archivePage(pageId)
+            return ctx.reply(`🗑️ ${safeBold("ลบสำเร็จ")}`, { parse_mode: "Markdown", ...mainMenu })
+        } catch (err) {
+            logger.error("RETRY_ARCHIVE:", err)
+            return ctx.reply(`❌ ${safeBold("ยังลบไม่ได้")}`, { parse_mode: "Markdown", ...mainMenu })
         }
     })
 

@@ -1,7 +1,7 @@
-import fs from "fs"
 import { logger } from "../utils/logger.js"
 import { safeBold } from "../utils/telegramFormat.js"
 import { getStreak } from "./streakService.js"
+import { createJsonStore } from "../utils/jsonStore.js"
 
 const RARITY = {
     COMMON:    { level: 0, label: "Common",   emoji: "🟢" },
@@ -59,44 +59,17 @@ const TASK_MILESTONES = [
 ]
 
 const BADGES_FILE = ".badges.json"
-let badgeStore = {}
-let writePromise = Promise.resolve()
-
-async function doWrite() {
-    const tmp = BADGES_FILE + ".tmp"
-    try {
-        await fs.promises.writeFile(tmp, JSON.stringify(badgeStore, null, 2))
-        await fs.promises.rename(tmp, BADGES_FILE)
-    } catch {
-        // ignore
-    }
-}
-
-function scheduleWrite() {
-    writePromise = doWrite()
-}
-
-function loadBadges() {
-    try {
-        const raw = fs.readFileSync(BADGES_FILE, "utf-8")
-        badgeStore = JSON.parse(raw)
-        if (typeof badgeStore !== "object" || Array.isArray(badgeStore)) badgeStore = {}
-    } catch {
-        badgeStore = {}
-    }
-}
-
-loadBadges()
+const badgeStore = createJsonStore(BADGES_FILE, {})
 
 function getEarned(userId) {
     const key = String(userId)
-    return badgeStore[key] || []
+    return badgeStore.data[key] || []
 }
 
 function setEarned(userId, badges) {
     const key = String(userId)
-    badgeStore[key] = badges
-    scheduleWrite()
+    badgeStore.data[key] = badges
+    badgeStore.scheduleWrite()
 }
 
 export function checkBadges(userId) {
@@ -145,17 +118,13 @@ export function checkZeroOverdue(userId, overdueCount) {
 
 function getUsage(userId) {
     const key = "usage_" + userId
-    try {
-        return badgeStore[key] || { hint: 0, panic: 0, export: 0 }
-    } catch {
-        return { hint: 0, panic: 0, export: 0 }
-    }
+    return badgeStore.data[key] || { hint: 0, panic: 0, export: 0 }
 }
 
 function saveUsage(userId, usage) {
     const key = "usage_" + userId
-    badgeStore[key] = usage
-    scheduleWrite()
+    badgeStore.data[key] = usage
+    badgeStore.scheduleWrite()
 }
 
 export function checkUsageBadgeOnAction(userId, action, badgeId, threshold) {
@@ -264,5 +233,5 @@ export function getRarestBadge(userId) {
 }
 
 export async function flushBadges() {
-    await writePromise
+    await badgeStore.flush()
 }

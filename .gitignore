@@ -8,8 +8,11 @@ homebot.json
 .badges.json
 .pomodoros.json
 .streaks.json
+.share_tokens.json
+*.json.owner
 *.tmp
 .opencode/
+opencode.jsonc
 .DS_Store
 .aider*
 .dashboard_token

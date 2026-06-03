@@ -620,7 +620,19 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
 </div>
 
 <script>
+/* Token (legacy ?token= URL param) is only used as a fallback when no
+   session cookie is present. The recommended path is /api/exchange?ticket=…
+   which sets an httpOnly session cookie, after which the cookie alone
+   authenticates subsequent requests. */
 const TOKEN = new URLSearchParams(location.search).get("token");
+function authHeaders(){
+  const h = {"Content-Type": "application/json"};
+  if (TOKEN) h["Authorization"] = `Bearer ${TOKEN}`;
+  return h;
+}
+function authOpts(extra = {}){
+  return { credentials: "same-origin", ...extra, headers: { ...authHeaders(), ...(extra.headers || {}) } };
+}
 const CACHE_TTL = 30000;
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTH = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -732,7 +744,7 @@ function showCalendar(){showView("calView");loadCal()}
 function showList(){showView("listView");loadList()}
 function showBadges(){showView("badgesView");loadBadges()}
 
-async function fetchJson(url,retries=2){const sep=url.includes('?')?'&':'?';const timeoutMs=8000;for(let attempt=0;attempt<=retries;attempt++){const ctrl=new AbortController();const tid=setTimeout(()=>ctrl.abort(),timeoutMs);try{const r=await fetch(url+sep+"_t="+now(),{signal:ctrl.signal,headers:{"Authorization":`Bearer ${TOKEN}`}});clearTimeout(tid);if(!r.ok){let msg=r.statusText;try{const b=await r.text();if(b)msg=b.slice(0,200)}catch{}throw new Error(msg)}return r.json()}catch(e){clearTimeout(tid);if(e.name==="AbortError")throw new Error("Timeout");if(attempt===retries)throw e;await new Promise(r=>setTimeout(r,500*(attempt+1)))}}}
+async function fetchJson(url,retries=2){const sep=url.includes('?')?'&':'?';const timeoutMs=8000;for(let attempt=0;attempt<=retries;attempt++){const ctrl=new AbortController();const tid=setTimeout(()=>ctrl.abort(),timeoutMs);try{const r=await fetch(url+sep+"_t="+now(),{signal:ctrl.signal,credentials:"same-origin",headers:authHeaders()});clearTimeout(tid);if(!r.ok){let msg=r.statusText;try{const b=await r.text();if(b)msg=b.slice(0,200)}catch{}throw new Error(msg)}return r.json()}catch(e){clearTimeout(tid);if(e.name==="AbortError")throw new Error("Timeout");if(attempt===retries)throw e;await new Promise(r=>setTimeout(r,500*(attempt+1)))}}}
 
 async function loadAll(force){if(!TOKEN)return null;if(TOKEN===FAKE_TOKEN){S.items=FAKE_DATA.homework;S.stats=FAKE_DATA.stats;S.ts=now();S.trend=FAKE_DATA.trend;S.weeklyDone=[3,5,2,6,4,1,3];return FAKE_DATA}if(!force&&S.items.length&&now()-S.ts<CACHE_TTL)return {stats:S.stats,homework:S.items};try{const data=await fetchJson(`/api/all`);S.items=data.homework||[];S.stats=data.stats||null;S.ts=now();S.trend=data.trend||[];computeWeeklyDone();return data}catch(e){return {error:e.message}}}
 
@@ -942,7 +954,7 @@ async function submitHomework(e){
     }
     const res=await fetch("/api/homework",{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      headers:authHeaders(),
       body:JSON.stringify(data),
     });
     if(!res.ok)throw new Error(await res.text());
@@ -1009,7 +1021,7 @@ async function submitEdit(e){
     }
     const res=await fetch("/api/homework/update",{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      headers:authHeaders(),
       body:JSON.stringify(data),
     });
     if(!res.ok)throw new Error(await res.text());
@@ -1035,7 +1047,7 @@ async function deleteHomework(id){
     }
     const res=await fetch("/api/homework/delete",{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      headers:authHeaders(),
       body:JSON.stringify({id}),
     });
     if(!res.ok)throw new Error(await res.text());
@@ -1060,7 +1072,7 @@ async function changeStatus(id,status){
     }
     const res=await fetch("/api/status",{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      headers:authHeaders(),
       body:JSON.stringify({id,status}),
     });
     if(!res.ok)throw new Error(await res.text());
@@ -1125,7 +1137,7 @@ async function bulkStatus(status){
     }
     const res=await fetch("/api/bulk-status",{
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${TOKEN}`},
+      headers:authHeaders(),
       body:JSON.stringify({ids,status}),
     });
     const data=await res.json();

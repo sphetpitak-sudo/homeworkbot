@@ -18,9 +18,24 @@ import { flushCorrections }    from "./src/services/aiCache.js";
 import { flushStreaks }        from "./src/services/streakService.js";
 import { flushBadges }         from "./src/services/badgeService.js";
 import { flushPomodoros }       from "./src/services/pomodoroService.js";
+import { flushShareTokens }    from "./src/services/shareTokenService.js";
 
-/* ── validate env ── */
+/* ── validate env + Notion schema ── */
 validateEnv();
+import("./src/services/notionService.js").then((m) => m.validateNotionSchema())
+    .catch((err) => logger.warn("Notion schema check skipped:", err?.message || err));
+
+/* ── startup banner ── */
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import path from "path";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+let version = "unknown";
+try {
+    const pkg = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf-8"));
+    version = pkg.version;
+} catch { /* keep "unknown" */ }
+logger.info(`🏠 Homework Bot v${version} starting (node ${process.version}, TZ ${process.env.TZ || "system"})`);
 
 /* ── web server (dashboard + health check) ── */
 const PORT = process.env.PORT || 8080;
@@ -247,12 +262,19 @@ cron.schedule("0 2 * * *", autoArchive, { timezone: "Asia/Bangkok" });
 cron.schedule("0 7 * * 1", sendWeeklySummary, { timezone: "Asia/Bangkok" });
 
 /* ── clean stale user states + expired cache every 30 min ── */
+const STALE_TTL = 3_600_000 // 1h for idle/short flows
+const ACTIVE_TTL = 12 * 3_600_000 // 12h for long-running flows (pomodoro, confirm, edit)
 const cleanupInterval = setInterval(() => {
-    const TTL = 3_600_000;
     const now = Date.now();
     let cleaned = 0;
     for (const [uid, state] of userState) {
-        if (now - (state._timestamp || 0) > TTL) {
+        /* Preserve pomodoro sessions and confirmation flows for ACTIVE_TTL
+           since they can legitimately span many hours. Only purge truly
+           idle ephemeral state. */
+        const ttl = (state.mode === "POMODORO" || state.mode === "CONFIRM" || state._pomodoro || state._confirming)
+            ? ACTIVE_TTL
+            : STALE_TTL
+        if (now - (state._timestamp || 0) > ttl) {
             userState.delete(uid);
             cleaned++;
         }
@@ -294,7 +316,25 @@ const shutdown = async (sig) => {
     cleanupPomoTimers()
     bot.stop(sig);
     server.close(() => {})
-    await Promise.all([flushCorrections(), flushStreaks(), flushBadges(), flushPomodoros()]);
+    await Promise.allSettled([
+        flushCorrections(),
+        flushStreaks(),
+        flushBadges(),
+        flushPomodoros(),
+        flushShareTokens(),
+    ]).then((results) => {
+        const labels = ["corrections", "streaks", "badges", "pomodoros", "shareTokens"]
+        let ok = 0, fail = 0
+        results.forEach((r, i) => {
+            if (r.status === "rejected") {
+                logger.warn(`Flush ${labels[i]} failed:`, r.reason?.message || r.reason)
+                fail++
+            } else {
+                ok++
+            }
+        })
+        logger.info(`Shutdown complete (flushed ${ok}/${results.length}, ${fail} failed)`)
+    })
     setTimeout(() => process.exit(0), 10000).unref();
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));

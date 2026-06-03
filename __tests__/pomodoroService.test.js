@@ -160,6 +160,33 @@ describe('getStreak', () => {
         })
         expect(getStreak('user1')).toBe(3)
     })
+
+    test('streak breaks on a gap day', async () => {
+        const today = new Date().toISOString().slice(0, 10)
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+        // 2-day gap between yesterday and 3 days ago → streak = 2
+        const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10)
+        const { getStreak } = await importWithFixture({
+            user1: { count: 3, today: 0, week: 0, totalMinutes: 75, todayDate: null, weekStart: null, history: [today, yesterday, threeDaysAgo] },
+        })
+        expect(getStreak('user1')).toBe(2)
+    })
+
+    test('returns 1 when only yesterday is in history', async () => {
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+        const { getStreak } = await importWithFixture({
+            user1: { count: 1, today: 0, week: 0, totalMinutes: 25, todayDate: null, weekStart: null, history: [yesterday] },
+        })
+        expect(getStreak('user1')).toBe(1)
+    })
+
+    test('returns 0 for future-dated history (clock skew)', async () => {
+        const future = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10)
+        const { getStreak } = await importWithFixture({
+            user1: { count: 1, today: 0, week: 0, totalMinutes: 25, todayDate: null, weekStart: null, history: [future] },
+        })
+        expect(getStreak('user1')).toBe(0)
+    })
 })
 
 describe('checkPomoBadges', () => {

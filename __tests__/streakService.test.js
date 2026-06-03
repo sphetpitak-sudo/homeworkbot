@@ -108,6 +108,7 @@ describe('recordCompletion', () => {
     const mod = await import('../src/services/streakService.js')
 
     mod.recordCompletion('nework')
+    await mod.flushStreaks()
     const loaded = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf-8'))
     expect(Object.keys(loaded).length).toBeLessThanOrEqual(10000)
   })

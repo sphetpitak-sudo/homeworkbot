@@ -285,20 +285,25 @@ describe('buildPanicCard', () => {
 
 describe('errorWithRetry', () => {
   test('returns retry keyboard with correct action', () => {
-    const result = errorWithRetry('Something went wrong', 'RETRY_FETCH')
+    const result = errorWithRetry('Something went wrong', 'RETRY_FETCH_ACTIVE')
     expect(result.text).toContain('Something went wrong')
-    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('RETRY_FETCH')
+    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('RETRY_FETCH_ACTIVE')
   })
 
   test('escapes markdown in error message', () => {
-    const result = errorWithRetry('Error: **bold**', 'RETRY')
+    const result = errorWithRetry('Error: **bold**', 'RETRY_FETCH_ACTIVE')
     expect(result.text).toContain('Error')
     expect(result.reply_markup.inline_keyboard[0][1].callback_data).toBe('HOME')
   })
 
   test('retry button has correct text', () => {
-    const result = errorWithRetry('เกิดข้อผิดพลาด', 'RETRY_FETCH')
+    const result = errorWithRetry('เกิดข้อผิดพลาด', 'RETRY_FETCH_ACTIVE')
     expect(result.reply_markup.inline_keyboard[0][0].text).toBe('🔁 ลองอีกครั้ง')
+  })
+
+  test('falls back to HOME for invalid retry action', () => {
+    const result = errorWithRetry('test', 'INVALID_ACTION')
+    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('HOME')
   })
 
   test('home button has correct text', () => {
@@ -317,8 +322,38 @@ describe('errorWithRetry', () => {
   })
 
   test('sets parse_mode to Markdown', () => {
-    const result = errorWithRetry('test', 'RETRY')
+    const result = errorWithRetry('test', 'RETRY_FETCH_ACTIVE')
     expect(result.parse_mode).toBe('Markdown')
+  })
+
+  test('rejects callback-data injection (long action)', () => {
+    const longAction = 'A'.repeat(200)
+    const result = errorWithRetry('test', longAction)
+    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('HOME')
+  })
+
+  test('rejects non-prefixed actions', () => {
+    const result = errorWithRetry('test', 'DANGEROUS_CALLBACK_DATA')
+    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('HOME')
+  })
+
+  test('accepts all allowlisted prefixes', () => {
+    const allowed = [
+      'RETRY_FETCH_ACTIVE',
+      'RETRY_FETCH_DONE',
+      'RETRY_FETCH_DASHBOARD',
+      'RETRY_STATUS_abc123_prog',
+      'RETRY_ARCHIVE_xyz789',
+    ]
+    for (const action of allowed) {
+      const r = errorWithRetry('test', action)
+      expect(r.reply_markup.inline_keyboard[0][0].callback_data).toBe(action)
+    }
+  })
+
+  test('rejects callback_data that looks like prefix but has payload', () => {
+    const result = errorWithRetry('test', 'RETRY_FETCH_EVIL')
+    expect(result.reply_markup.inline_keyboard[0][0].callback_data).toBe('HOME')
   })
 })
 

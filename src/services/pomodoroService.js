@@ -1,5 +1,5 @@
-import fs from "fs"
 import { logger } from "../utils/logger.js"
+import { createJsonStore } from "../utils/jsonStore.js"
 
 const POMODOROS_FILE = ".pomodoros.json"
 const MAX_ENTRIES = 5000
@@ -14,8 +14,7 @@ const POMO_MILESTONES = [
     { threshold: 500, badge: "POMO_500" },
 ]
 
-let store = {}
-let writePromise = Promise.resolve()
+const jsonStore = createJsonStore(POMODOROS_FILE, {})
 
 function getToday() {
     return new Date().toISOString().slice(0, 10)
@@ -30,34 +29,8 @@ function getWeekStart() {
     return d.toISOString().slice(0, 10)
 }
 
-async function doWrite() {
-    const tmp = POMODOROS_FILE + ".tmp"
-    const data = JSON.stringify(store, null, 2)
-    try {
-        await fs.promises.writeFile(tmp, data)
-        await fs.promises.rename(tmp, POMODOROS_FILE)
-    } catch {
-        // silently ignore
-    }
-}
-
-function scheduleWrite() {
-    writePromise = doWrite()
-}
-
-function loadStore() {
-    try {
-        const raw = fs.readFileSync(POMODOROS_FILE, "utf-8")
-        store = JSON.parse(raw)
-        if (typeof store !== "object" || Array.isArray(store)) store = {}
-    } catch {
-        store = {}
-    }
-}
-
-loadStore()
-
 function getUserEntry(userId) {
+    const store = jsonStore.data
     const key = String(userId)
     if (!store[key]) {
         store[key] = {
@@ -87,22 +60,20 @@ function ensurePeriods(entry) {
 }
 
 export function startSession(userId, homeworkTitle) {
-    const key = String(userId)
-    const entry = getUserEntry(key)
+    const entry = getUserEntry(userId)
     ensurePeriods(entry)
-    scheduleWrite()
+    jsonStore.scheduleWrite()
     return {
-        userId: key,
+        userId: String(userId),
         homeworkTitle: homeworkTitle || null,
         startedAt: Date.now(),
         duration: SESSION_DURATION,
-        phase: "work", // "work" or "break"
+        phase: "work",
     }
 }
 
 export function savePomodoro(userId) {
-    const key = String(userId)
-    const entry = getUserEntry(key)
+    const entry = getUserEntry(userId)
     ensurePeriods(entry)
 
     entry.count++
@@ -113,19 +84,17 @@ export function savePomodoro(userId) {
     if (!entry.history.includes(today)) {
         entry.history.push(today)
     }
-    // Keep max 365 days in history
     if (entry.history.length > 365) {
         entry.history = entry.history.slice(-365)
     }
-    scheduleWrite()
+    jsonStore.scheduleWrite()
     return { count: entry.count, today: entry.today, week: entry.week }
 }
 
 export function getStats(userId) {
-    const key = String(userId)
-    const entry = getUserEntry(key)
+    const entry = getUserEntry(userId)
     ensurePeriods(entry)
-    scheduleWrite()
+    jsonStore.scheduleWrite()
     return {
         count: entry.count,
         today: entry.today,
@@ -136,8 +105,7 @@ export function getStats(userId) {
 }
 
 export function getStreak(userId) {
-    const key = String(userId)
-    const entry = getUserEntry(key)
+    const entry = getUserEntry(userId)
     if (!entry.history.length) return 0
 
     const sorted = [...entry.history].sort().reverse()
@@ -153,23 +121,17 @@ export function getStreak(userId) {
         const curr = new Date(sorted[i])
         const next = new Date(sorted[i + 1])
         const diff = (curr - next) / 86400000
-        if (diff === 1) {
-            streak++
-        } else {
-            break
-        }
+        if (diff === 1) streak++
+        else break
     }
     return streak
 }
 
 export function checkPomoBadges(userId) {
-    const key = String(userId)
-    const entry = getUserEntry(key)
+    const entry = getUserEntry(userId)
     const newBadges = []
     for (const { threshold, badge } of POMO_MILESTONES) {
-        if (entry.count >= threshold) {
-            newBadges.push(badge)
-        }
+        if (entry.count >= threshold) newBadges.push(badge)
     }
     return newBadges
 }
@@ -187,5 +149,5 @@ export function getAutoCloseMs() {
 }
 
 export async function flushPomodoros() {
-    await writePromise
+    await jsonStore.flush()
 }

@@ -28,7 +28,7 @@ function buildHomeworkList(items) {
     }).join("\n")
 }
 
-export async function askHint(subject, homeworkItems) {
+export async function getStudyTip(subject, homeworkItems) {
     if (!homeworkItems || !homeworkItems.length) {
         return null
     }
@@ -44,6 +44,9 @@ export async function askHint(subject, homeworkItems) {
 
     return msg
 }
+
+/* @deprecated Misleading name — no AI involved. Use getStudyTip. */
+export const askHint = getStudyTip
 
 export function getFallbackTipForSubject(subject) {
     return getFallbackTip(subject)

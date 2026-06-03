@@ -1,6 +1,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { fetchActive, fetchDone, getPageProps, createHomework, updateStatus, updateHomework, archivePage } from "../services/notionService.js";
 import { STATUS, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS } from "../utils/constants.js";
@@ -24,13 +25,51 @@ function initDashboardToken() {
         return;
     }
     DASHBOARD_TOKEN = crypto.createHash("sha256").update(notionToken).digest("base64url").slice(0, 32);
-    logger.info(`Dashboard token derived from NOTION_TOKEN: ${DASHBOARD_TOKEN.slice(0, 8)}...`);
+    logger.info("Dashboard token derived from NOTION_TOKEN (length 32) — set DASHBOARD_TOKEN to override");
 }
 
 initDashboardToken();
 
 export function getDashboardToken() {
     return DASHBOARD_TOKEN;
+}
+
+/* ── one-time access tickets ── */
+const TICKET_TTL_MS = 60_000 // 60 seconds
+const SESSION_COOKIE = "hb_session"
+const tickets = new Map()
+
+function issueTicket() {
+    const ticket = crypto.randomBytes(24).toString("base64url")
+    tickets.set(ticket, { _timestamp: Date.now() })
+    return ticket
+}
+
+function consumeTicket(ticket) {
+    if (!ticket) return false
+    const entry = tickets.get(ticket)
+    if (!entry) return false
+    tickets.delete(ticket)
+    return Date.now() - (entry._timestamp || 0) <= TICKET_TTL_MS
+}
+
+function pruneTickets() {
+    const now = Date.now()
+    for (const [k, v] of tickets) {
+        if (now - (v._timestamp || 0) > TICKET_TTL_MS) tickets.delete(k)
+    }
+}
+
+if (!globalThis.__hbTicketIntervalStarted) {
+    globalThis.__hbTicketIntervalStarted = true
+    setInterval(pruneTickets, 30_000).unref()
+}
+
+export function createDashboardUrl(baseUrl) {
+    if (!DASHBOARD_TOKEN) return baseUrl || ""
+    if (!baseUrl) return ""
+    const ticket = issueTicket()
+    return `${baseUrl}/api/exchange?ticket=${ticket}`
 }
 
 function computeStats(activePages, donePages) {
@@ -127,20 +166,100 @@ export function startWebServer(port = 8080) {
         message: { error: "Too many requests, slow down" },
     });
 
-    app.use(express.static(path.join(__dirname, "public")));
     app.use(express.json({ limit: "1mb" }));
     app.use("/api", apiLimiter);
 
+    /* Service worker: inject package.json version into CACHE_NAME so
+       each deploy automatically invalidates stale caches without
+       requiring a manual code change. Must be registered BEFORE
+       express.static so it takes precedence over the raw file. */
+    const swPath = path.join(__dirname, "public", "sw.js")
+    let swSource = ""
+    try {
+        swSource = fs.readFileSync(swPath, "utf-8")
+    } catch { /* leave swSource empty — handler returns 404 below */ }
+    let pkgVersion = "0"
+    try {
+        pkgVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")).version || "0"
+    } catch { /* keep "0" */ }
+    if (swSource && pkgVersion) {
+        swSource = swSource.replace(/"homework-bot-v\d+"/, `"homework-bot-v${pkgVersion}"`)
+    }
+    app.get("/sw.js", (_req, res) => {
+        if (!swSource) return res.status(404).end()
+        res.setHeader("Cache-Control", "no-cache")
+        res.type("application/javascript").send(swSource)
+    })
+
+    app.use(express.static(path.join(__dirname, "public")));
+
+    /* Security headers — defense-in-depth without adding helmet.
+       CSP allows the inline scripts/styles used by the SPA and the
+       Chart.js CDN. Adjust if the dashboard ever loads other origins. */
+    app.use((_req, res, next) => {
+        res.setHeader("X-Content-Type-Options", "nosniff")
+        res.setHeader("X-Frame-Options", "DENY")
+        res.setHeader("Referrer-Policy", "no-referrer")
+        res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'self'; " +
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data:; " +
+            "connect-src 'self'; " +
+            "frame-ancestors 'none'",
+        )
+        next()
+    })
+
     app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+    function parseCookie(header) {
+        const out = {}
+        if (!header) return out
+        for (const part of header.split(";")) {
+            const idx = part.indexOf("=")
+            if (idx === -1) continue
+            const k = part.slice(0, idx).trim()
+            const v = part.slice(idx + 1).trim()
+            if (k) out[k] = decodeURIComponent(v)
+        }
+        return out
+    }
+
+    app.use((req, _res, next) => {
+        req.cookies = parseCookie(req.headers.cookie)
+        next()
+    })
 
     function requireAuth(req, res, next) {
         if (!DASHBOARD_TOKEN) return next();
-        const t = req.headers["authorization"]?.replace("Bearer ", "");
-        if (t !== DASHBOARD_TOKEN) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-        next();
+        const header = req.headers["authorization"]?.replace("Bearer ", "");
+        const cookie = req.cookies?.[SESSION_COOKIE];
+        if (header === DASHBOARD_TOKEN || cookie === DASHBOARD_TOKEN) return next();
+        return res.status(401).json({ error: "Unauthorized" });
     }
+
+    /* Exchange a one-time ticket (sent in URL) for a session cookie.
+       The ticket is single-use and short-lived so it cannot be replayed
+       from browser history or referrer headers. */
+    app.get("/api/exchange", (req, res) => {
+        if (!DASHBOARD_TOKEN) {
+            return res.redirect("/");
+        }
+        const ticket = String(req.query.ticket || "");
+        if (!consumeTicket(ticket)) {
+            return res.status(401).send("Invalid or expired ticket");
+        }
+        res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
+            httpOnly: true,
+            sameSite: "lax",
+            maxAge: 24 * 3600 * 1000,
+            path: "/",
+        });
+        return res.redirect("/");
+    });
 
     /* single endpoint: returns stats + homework + trend in one call */
     app.get("/api/all", requireAuth, async (req, res) => {

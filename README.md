@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/telegraf-4.x-009B77?logo=telegram" alt="Telegraf">
     <img src="https://img.shields.io/badge/express-5.x-000000?logo=express" alt="Express">
     <img src="https://img.shields.io/badge/notion_api-2.x-000000?logo=notion" alt="Notion API">
-    <img src="https://img.shields.io/badge/tests-1313%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-1332%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/license-ISC-blue" alt="License">
   </p>
   <p>
@@ -82,11 +82,14 @@
 
 ### 🔒 Security
 
-- Bearer token authentication (SHA256 of `NOTION_TOKEN`)
-- Rate limiting: 60 req/min
+- **Ticket-based auth** — bot generates one-time `/api/exchange?ticket=X` URL (60s TTL) → browser sets `httpOnly hb_session` cookie
+- Accepts either `Authorization: Bearer` (API clients) OR `Cookie: hb_session=...` (browser dashboard)
+- Security headers on every response: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Content-Security-Policy`
+- Rate limiting: 60 req/min via `express-rate-limit`
 - `TELEGRAM_TOKEN` never exposed in URLs
 - Notion API retry with exponential backoff + jitter
 - Input validation on all API endpoints
+- **Service worker auto-invalidation** — `CACHE_NAME` embedded with `package.json` version, stale caches purged on deploy
 
 ---
 
@@ -174,8 +177,8 @@ npm test
 ```
 
 ```
-Test Suites: 16 passed, 16 total
-Tests:       1313 passed, 1313 total
+Test Suites: 18 passed, 18 total
+Tests:       1332 passed, 1332 total
 ```
 
 #### 6️⃣ Run
@@ -235,7 +238,11 @@ Just type into the chat:
 
 ### Web Dashboard
 
-Access at your deployment URL (e.g. `https://homework.k.jrnm.app`) with the dashboard token in the header:
+Access at your deployment URL (e.g. `https://homework.k.jrnm.app`) using one of:
+
+**From the Telegram bot** — tap `🌐 เปิด Dashboard` in the main menu. The bot generates a one-time ticket URL, you open it, the browser gets an `httpOnly hb_session` cookie (24h), and the dashboard loads. No token to copy.
+
+**From an API client** (curl, scripts, etc.) — use the Bearer token:
 
 ```
 Authorization: Bearer <DASHBOARD_TOKEN>
@@ -287,27 +294,29 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
 
 ```
 📦 homeworkbot
- ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, shutdown
+ ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
  ┣ 📦 src
  ┃ ┣ 📂 handlers
  ┃ ┃ ┣ 📄 commandHandlers.js          ← /start, /menu, /help, /ask, /undo, /focus, /badges, /review, /collab, /smartbook, /pomodoro, /suggest, text router, confirm/preview
- ┃ ┃ ┗ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST)
+ ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST)
+ ┃ ┃ ┗ 📄 viewBuilders.js             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
  ┃ ┣ 📂 services
  ┃ ┃ ┣ 📄 aiService.js                ← Typhoon AI via OpenAI SDK (2-model chain + regex fallback)
  ┃ ┃ ┣ 📄 aiCache.js                  ← .corrections.json persistence + in-memory AI cache
  ┃ ┃ ┣ 📄 qaService.js                ← AI Q&A with homework context
- ┃ ┃ ┣ 📄 notionService.js            ← Notion SDK wrapper (TTL cache, retry, auto-invalidate)
+ ┃ ┃ ┣ 📄 notionService.js            ← Notion SDK wrapper (TTL cache, retry, auto-invalidate, validateNotionSchema)
  ┃ ┃ ┣ 📄 cache.js                    ← Generic in-memory TTL Map with pattern-based invalidation
  ┃ ┃ ┣ 📄 streakService.js            ← 🔥 Streak tracking (.streaks.json, milestones, calendar)
  ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, 23 badges, rarities)
  ┃ ┃ ┣ 📄 pomodoroService.js          ← 🍅 Pomodoro timer (.pomodoros.json, stats, streaks)
- ┃ ┃ ┗ 📄 hintService.js              ← 💡 AI hint generation per subject
+ ┃ ┃ ┣ 📄 hintService.js              ← 💡 AI hint generation per subject (getStudyTip / askHint)
+ ┃ ┃ ┗ 📄 shareTokenService.js        ← 🔗 Collab share-link tokens (.share_tokens.json)
  ┃ ┣ 📂 web
- ┃ ┃ ┣ 📄 server.js                   ← Express (REST API + static files, rate-limited, Bearer auth)
+ ┃ ┃ ┣ 📄 server.js                   ← Express (REST API + static, rate-limited, ticket auth, security headers, SW versioning)
  ┃ ┃ ┗ 📂 public
  ┃ ┃    ┣ 📄 index.html               ← Dashboard (Chart.js, calendar, dark mode, PWA, bulk actions)
  ┃ ┃    ┣ 📄 manifest.json            ← PWA manifest
- ┃ ┃    ┗ 📄 sw.js                    ← Service worker v2
+ ┃ ┃    ┗ 📄 sw.js                    ← Service worker (CACHE_NAME auto-versioned from package.json)
  ┃ ┗ 📂 utils
  ┃    ┣ 📄 dateParser.js              ← Thai date regex parsing (วันนี้/พรุ่งนี้/มะรืน/อีก X วัน/dd/mm/yy)
  ┃    ┣ 📄 subjectDetector.js         ← 50+ keywords → 10 subjects (ไทย→สุขศึกษา)
@@ -316,7 +325,8 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, dashboard limits, pomodoro durations
  ┃    ┣ 📄 priority.js                ← recalcPriority(due): ≤3d HIGH, ≤14d MEDIUM, >14d LOW
  ┃    ┣ 📄 logger.js                  ← Console wrapper with Thai timestamps + emoji levels
- ┃    ┗ 📄 validateEnv.js             ← Environment variable validation
+ ┃    ┣ 📄 validateEnv.js             ← Environment variable validation
+ ┃    ┗ 📄 jsonStore.js               ← Atomic JSON-file persistence (tmp + rename, per-file generation sidecar)
  ┣ 📄 Dockerfile                      ← node:20-alpine, port 8080
  ┣ 📄 .gitignore
  ┣ 📄 package.json
@@ -356,12 +366,14 @@ Rate Limit: 60 req/min
 |--------|------|-------------|
 | `GET` | `/api/all` | stats + homework + trend + weeklyDone |
 | `GET` | `/api/stats` | Stats summary only |
+| `GET` | `/api/exchange?ticket=X` | Exchange one-time ticket (60s TTL) for `hb_session` cookie, then 302 to dashboard |
 
 ### Health
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | `{ status: "ok" }` — container health check |
+| `GET` | `/sw.js` | Service worker with `CACHE_NAME = "homework-bot-v${version}"` auto-injected |
 
 ### Status Values
 
@@ -386,7 +398,7 @@ Rate Limit: 60 req/min
 | **Rate Limiting** | [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) 8.x | 60 req/min |
 | **Cron** | [node-cron](https://github.com/node-cron/node-cron) | 4 cron jobs, overlap guards |
 | **Container** | Docker | `node:20-alpine`, ~150 MB |
-| **Testing** | [Jest](https://jestjs.io/) 29.x | 1239 tests (14 suites) |
+| **Testing** | [Jest](https://jestjs.io/) 29.x | 1332 tests (18 suites) |
 
 ---
 
@@ -511,14 +523,16 @@ npm run test:watch       # Watch mode
 | `cache` | ~75 | `cacheGet/Set/Invalidate/Cleanup`, TTL, pattern-based |
 | `api.e2e` | ~200 | Express API endpoints, auth, error handling |
 | `badgeService` | ~65 | `checkBadges()`, `checkTaskBadges()`, `awardBadges()`, `getAllBadges()`, rarity, grid, usage, persistence |
-| `streakService` | ~20 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence |
-| `commandHandlers` | ~30 | Focus, panic, preview, review edge cases |
+| `streakService` | ~22 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence, MAX_ENTRIES, race-safety |
+| `commandHandlers` | ~33 | Focus, panic, preview, review, `errorWithRetry` allowlist |
 | `hintService` | ~15 | Hint generation, subject matching |
 | `collabSmartbook` | ~15 | Collab token flow, smartbook plan rendering |
 | `quotes` | ~10 | Quote selection, no duplicates |
 | `notionStats` | ~10 | `getHomeworkStats()`, URGENT_DAYS import fix |
+| `notionSchema` | 5 | `validateNotionSchema()`: missing props, type mismatches, unreachable Notion, per-call cache |
+| `dashboardSecurity` | 5 | Security headers, CSP, ticket exchange, cookie auth, SW versioning |
 
-**Total: 1313+ tests, 16 suites, 0 failures**
+**Total: 1332 tests, 18 suites, 0 failures**
 
 ---
 
