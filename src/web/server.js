@@ -195,6 +195,10 @@ function computeWeeklyDone(donePages) {
 export function startWebServer(port = 8080) {
     const app = express();
 
+    /* Trust the first proxy (Railway reverse proxy) so express-rate-limit
+       can correctly identify client IPs via X-Forwarded-For header. */
+    app.set('trust proxy', 1);
+
     const apiLimiter = rateLimit({
         windowMs: 60_000,
         max: 60,
