@@ -96,28 +96,12 @@ describe('dashboard cookie-based auth', () => {
             const { createDashboardUrl } = await import("../src/web/server.js")
             const url = createDashboardUrl(`http://127.0.0.1:${port}`)
             expect(url).toMatch(/\/api\/exchange\?ticket=/)
-            // GET shows confirmation page (prevents prefetch from consuming ticket)
-            const getRes = await fetch(url)
-            expect(getRes.status).toBe(200)
-            const html = await getRes.text()
-            expect(html).toContain('<form method="POST"')
-            // POST consumes the ticket and redirects
-            const ticket = new URL(url).searchParams.get("ticket")
-            const postRes = await fetch(`http://127.0.0.1:${port}/api/exchange`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: `ticket=${encodeURIComponent(ticket)}`,
-                redirect: "manual",
-            })
-            expect(postRes.status).toBe(302)
-            // POST again fails — ticket already consumed
-            const secondPost = await fetch(`http://127.0.0.1:${port}/api/exchange`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: `ticket=${encodeURIComponent(ticket)}`,
-                redirect: "manual",
-            })
-            expect(secondPost.status).toBe(401)
+            // GET consumes the ticket and redirects
+            const first = await fetch(url, { redirect: "manual" })
+            expect(first.status).toBe(302)
+            // GET again fails — ticket already consumed
+            const second = await fetch(url, { redirect: "manual" })
+            expect(second.status).toBe(401)
         } finally {
             server.close()
         }

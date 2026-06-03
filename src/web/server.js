@@ -292,23 +292,11 @@ export function startWebServer(port = 8080) {
     }
 
     /* Exchange a one-time ticket (sent in URL) for a session cookie.
-
-       GET serves a confirmation page — this prevents Telegram/Slack
-       link-preview prefetch from consuming the ticket before the user
-       actually clicks through. The user must submit the form (POST)
-       to exchange the ticket. */
+       Skip rate limit — Telegram/Slack may pre-fetch this URL but the
+       ticket is single-use and short-lived, so the risk is acceptable. */
     app.get("/api/exchange", (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const ticket = String(req.query.ticket || "")
-        if (!ticket) return res.status(400).send("Missing ticket")
-        const escaped = ticket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-        res.setHeader("Content-Type", "text/html; charset=utf-8")
-        res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>Click below to open your dashboard</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">Open Dashboard</button></form></div></body></html>`)
-    })
-
-    app.post("/api/exchange", express.urlencoded({ extended: false }), (req, res) => {
-        if (!DASHBOARD_TOKEN) return res.redirect("/")
-        const ticket = String(req.body?.ticket || "")
         if (!consumeTicket(ticket)) {
             return res.status(401).send("Invalid or expired ticket")
         }
