@@ -302,12 +302,12 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery("ยกเลิกแล้ว ✅").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.editMessageText(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n━━━━━━━━━━━━━━━━`,
+                `❌ ${safeBold("ยกเลิกแล้ว")}\n`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         } catch {
             await ctx.reply(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n━━━━━━━━━━━━━━━━`,
+                `❌ ${safeBold("ยกเลิกแล้ว")}\n`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         }
@@ -349,11 +349,11 @@ export function registerActionHandlers(bot, userState) {
             const priText = priority || "🟡 กลาง";
             await ctx.editMessageText(
                 `🎉 ${safeBold("บันทึกสำเร็จ!")}\n` +
-                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `\n` +
                     `${subjectEmoji(subject)} ${safeBold(title)}\n` +
                     `📚 ${safeSubject} • ${priText}\n` +
                     `📅 ${dueText}\n` +
-                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `\n` +
                     `เลือกเมนูด้านล่างเพื่อไปต่อ`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
             ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
@@ -365,7 +365,7 @@ export function registerActionHandlers(bot, userState) {
             logger.error("CONFIRM_SAVE:", err);
             await ctx.editMessageText(
                 `❌ ${safeBold("บันทึกไม่สำเร็จ")}\n` +
-                    `━━━━━━━━━━━━━━━━\n` +
+                    `\n` +
                     `เกิดข้อผิดพลาด กรุณาลองใหม่`,
                 {
                     parse_mode: "Markdown",
@@ -393,7 +393,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `✏️ ${safeBold("แก้ชื่อการบ้าน")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `ส่งชื่อใหม่มาได้เลย`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
@@ -412,7 +412,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `📚 ${safeBold("แก้ไขวิชา")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `พิมพ์ชื่อวิชาที่ถูกต้อง\n` +
                 `เช่น คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม`,
             { parse_mode: "Markdown", ...cancelMenu },
@@ -432,7 +432,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `📅 ${safeBold("แก้วันกำหนดส่ง")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `พิมพ์วันที่ใหม่\n` +
                 `เช่น พรุ่งนี้, 15/06/2026, อีก 3 วัน, พุธหน้า`,
             { parse_mode: "Markdown", ...cancelMenu },
@@ -460,7 +460,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `🎯 ${safeBold("เลือกความสำคัญ")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `ปัจจุบัน: ${current}\n\n` +
                 "เลือกระดับความสำคัญด้านล่าง",
             {
@@ -486,12 +486,12 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
             `🏷️ ${safeBold("แก้ไขแท็ก")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `แท็กที่มี: ${VALID_TAGS.join(", ")}\n\n` +
                 `พิมพ์แท็กที่ต้องการ คั่นด้วยช่องว่าง\n` +
                 `เช่น สอบ ด่วน อ่าน\n` +
                 `หรือพิมพ์ \`-\` เพื่อล้างแท็ก\n` +
-                `━━━━━━━━━━━━━━━━`,
+                ``,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -598,7 +598,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านค้าง")}\n━━━━━━━━━━━━━━━━\nพักผ่อนได้เต็มที่เลย 🏆`,
+                    `🎉 ${safeBold("ไม่มีการบ้านค้าง")}\n\nพักผ่อนได้เต็มที่เลย 🏆`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
@@ -626,7 +626,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีงานที่ทำเสร็จ")}\n━━━━━━━━━━━━━━━━\nสู้ต่ออีกนิด 💪`,
+                    `📭 ${safeBold("ยังไม่มีงานที่ทำเสร็จ")}\n\nสู้ต่ออีกนิด 💪`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
@@ -776,10 +776,10 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         return ctx.reply(
             `🔍 ${safeBold("ค้นหาการบ้าน")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `พิมพ์คำที่ต้องการค้นหา\n` +
             `เช่น ${safeCode("คณิต")} หรือ ${safeCode("แคลคูลัส")}\n` +
-            `━━━━━━━━━━━━━━━━━━`,
+            ``,
             { parse_mode: "Markdown", ...cancelMenu },
         )
     })
@@ -867,7 +867,7 @@ export function registerActionHandlers(bot, userState) {
         const msg =
             `💬 "${escapeMarkdown(quote.text)}"\n\n` +
             `— ${escapeMarkdown(quote.author)}\n` +
-            `━━━━━━━━━━━━━━━━━━\n\n` +
+            `\n\n` +
             `💪 ${safeBold("สู้ๆ นะ!")}`
         const keyboard = [
             [
@@ -899,7 +899,7 @@ export function registerActionHandlers(bot, userState) {
             if (!hint) {
                 return ctx.reply(
                     `📭 ${safeBold(`ไม่มีงานวิชา ${subject} ค้างอยู่`)}\n` +
-                    `━━━━━━━━━━━━━━━━━━━━\n` +
+                    `\n` +
                     `ลองเลือกวิชาอื่น หรือเพิ่มการบ้านก่อน!`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
@@ -972,9 +972,9 @@ export function registerActionHandlers(bot, userState) {
 
             const msg =
                 `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `${safeCode(text)}\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `💡 คัดลอกข้อความในกรอบไปแชร์ต่อได้เลย!`
 
             const keyboard = [
@@ -1027,7 +1027,7 @@ export function registerActionHandlers(bot, userState) {
             await ctx.answerCbQuery("✅ เพิ่มโน๊ตแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
             return ctx.reply(
                 `📝 ${safeBold("เพิ่มโน๊ตแล้ว!")}\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `📌 "${escapeMarkdown(title)}"\n` +
                 `📝 ${escapeMarkdown(note)}`,
                 { parse_mode: "Markdown", ...mainMenu },
@@ -1076,10 +1076,10 @@ export function registerActionHandlers(bot, userState) {
             }
 
             let msg = `🎯 ${safeBold("โฟกัสงานนี้!")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `\n\n`
             msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
             msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
+            msg += `\n`
             msg += `💡 พิมพ์คำสั่งอื่นไม่ได้ขณะโฟกัส\nพิมพ์ /focus เพื่อดู หรือ /focus exit เพื่อออก`
 
             const keyboard = [
@@ -1170,7 +1170,7 @@ export function registerActionHandlers(bot, userState) {
 
             return ctx.reply(
                 `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `เก่งมาก! ออกจากโฟกัสแล้ว${streakMsg}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
@@ -1220,7 +1220,7 @@ export function registerActionHandlers(bot, userState) {
 
         return ctx.reply(
             `❌ ${safeBold("ยกเลิกโฟกัสแล้ว")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `${focusTitle ? `เลิกโฟกัส "${escapeMarkdown(focusTitle)}"` : "เลิกโฟกัสแล้ว"}\n` +
             `กลับสู่หน้าหลัก`,
             { parse_mode: "Markdown", ...mainMenu },
@@ -1239,32 +1239,26 @@ export function registerActionHandlers(bot, userState) {
 
         if (!streak.current) {
             return ctx.reply(
-                `🔥 ${safeBold("ยังไม่มีสถิติ Streak")}\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
-                `เริ่มต้นด้วยการกด ✅ เสร็จจากการบ้านเลย!\n` +
-                `💪 ทำติดต่อกันทุกวันเพื่อรักษาไฟนี้ไว้`,
+                `🔥 ${safeBold("ยังไม่มีสถิติ Streak")}\n\n` +
+                `กด ✅ เสร็จจากการบ้านเลย!\n` +
+                `ทำติดต่อกันทุกวันเพื่อรักษาไฟ`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
 
-        let msg = `🔥 ${safeBold("สถิติการทำการบ้าน")}\n`
-        msg += `━━━━━━━━━━━━━━━━━━\n`
         const fireEmojis = streak.current >= 30 ? "🔥🔥🔥" : streak.current >= 14 ? "🔥🔥" : "🔥"
-        msg += `${fireEmojis} Streak ปัจจุบัน: ${streak.current} วัน\n`
-        msg += `🏆 สูงสุดตลอดกาล: ${streak.best} วัน\n`
-        msg += `━━━━━━━━━━━━━━━━━━\n`
+        let msg = `🔥 ${safeBold("สถิติ Streak")}\n\n`
+        msg += `${fireEmojis}  ปัจจุบัน ${streak.current} วัน\n`
+        msg += `🏆  สูงสุด ${streak.best} วัน\n`
 
         if (nextMilestone) {
             const remaining = nextMilestone - streak.current
-            msg += `🎯 เป้าหมายต่อไป: ${nextMilestone} วัน (อีก ${remaining} วัน)\n`
+            msg += `\n🎯 เป้าหมายถัดไป ${nextMilestone} วัน (อีก ${remaining} วัน)`
         }
-
-        msg += `💪 รักษาไฟนี้ไว้!`
 
         const keyboard = [
             [
                 Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("🔥 Streak", "STREAK"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
             [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
@@ -1327,7 +1321,7 @@ export function registerActionHandlers(bot, userState) {
                 `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
             const fullMsg = message + streakMsg
             if (tip) {
-                await ctx.reply(`${fullMsg}\n\n━━━━\n${tip.text}`, {
+                await ctx.reply(`${fullMsg}\n\n────\n${tip.text}`, {
                     parse_mode: "Markdown",
                     ...dashboardMenu(),
                 }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
@@ -1383,7 +1377,7 @@ export function registerActionHandlers(bot, userState) {
             return ctx.reply(
                 `🗑️ ${safeBold("ลบ " + title + "?")}\n` +
                 `การลบไม่สามารถยกเลิกได้\n` +
-                `━━━━━━━━━━━━━━━━`,
+                ``,
                 {
                     parse_mode: "Markdown",
                     ...Markup.inlineKeyboard([
@@ -1415,7 +1409,7 @@ export function registerActionHandlers(bot, userState) {
 
             const recoveryMsg = await ctx.reply(
                 `🗑️ ${safeBold("ลบแล้ว")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `↩️ กู้คืนได้ใน 10 วินาที`,
                 {
                     parse_mode: "Markdown",
@@ -1460,7 +1454,7 @@ export function registerActionHandlers(bot, userState) {
             await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             return ctx.reply(
                 `↩️ ${safeBold("กู้คืนแล้ว")}\n` +
-                `━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `${safeBold(item.name)} ถูกนำกลับมาแล้ว`,
                 { parse_mode: "Markdown", ...dashboardMenu() },
             );
@@ -1483,10 +1477,10 @@ export function registerActionHandlers(bot, userState) {
         const dueText = formatDueDisplay(due);
         const msg =
             `📝 ${safeBold("ตั้งค่าเพิ่มเติม")}\n` +
-            `━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `${subjectEmoji(subject)} ${safeBold(title)}\n` +
             `🎯 ${priority || "🟡 กลาง"}  |  📅 ${dueText}\n` +
-            `━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `เลือกรายการด้านล่าง`;
 
         return ctx.reply(msg, {
@@ -1556,11 +1550,11 @@ export function registerActionHandlers(bot, userState) {
             }).length
 
             let msg = `📋 ${safeBold("สรุปการบ้านที่ทำเสร็จแล้ว")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `\n\n`
             msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
             msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
             msg += `📅 30 วัน: ${monthCount} รายการ\n`
-            msg += `\n━━━━━━━━━━━━━━━━━━\n`
+            msg += `\n`
             msg += `📊 ${safeBold("เลือกช่วงเวลาเพื่อดูรายละเอียด:")}`
 
             const keyboard = [
@@ -1622,7 +1616,7 @@ export function registerActionHandlers(bot, userState) {
             if (!filtered.length) {
                 return ctx.reply(
                     `📭 ${safeBold("ไม่มีงานที่ทำเสร็จในช่วง")} ${periodLabel}\n` +
-                    `━━━━━━━━━━━━━━━━━━\n` +
+                    `\n` +
                     `ลองเพิ่มการบ้านและทำให้เสร็จก่อน!`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
@@ -1659,14 +1653,14 @@ export function registerActionHandlers(bot, userState) {
             }
 
             let msg = `📋 ${safeBold("สรุปการบ้าน — " + periodLabel)}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `\n\n`
             msg += `✅ ทำเสร็จ: ${totalInPeriod} รายการ\n`
             if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
             msg += `📊 คิดเป็น ${completedPct}% ของทั้งหมด\n`
             if (overdueCount > 0) {
                 msg += `⚠️ Overdue: ${overdueCount} รายการ\n`
             }
-            msg += `\n━━━━━━━━━━━━━━━━━━\n`
+            msg += `\n`
             msg += `${sentiment}`
 
             const keyboard = [
@@ -1729,10 +1723,10 @@ export function registerActionHandlers(bot, userState) {
 
             return ctx.reply(
                 `👥 ${safeBold("แชร์งานนี้กับเพื่อน!")}\n` +
-                `━━━━━━━━━━━━━━━━━━\n\n` +
+                `\n\n` +
                 `${safeBold(title)}\n` +
                 `${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `📤 ส่งข้อความนี้ให้เพื่อน:\n\n` +
                 `${safeCode(`@${botUsername} /collab accept ${token}`)}\n\n` +
                 `⏱️ token มีอายุ 24 ชม.`,
@@ -1804,7 +1798,7 @@ export function registerActionHandlers(bot, userState) {
 
                 const title = state._pomoHomeworkTitle || ""
                 let msg = `☕ ${safeBold("พักเบรก 5 นาที!")}\n`
-                msg += `━━━━━━━━━━━━━━━━━━\n`
+                msg += `\n`
                 msg += `🍅 เซสชันเสร็จแล้ว!\n`
                 if (title) msg += `📌 งานที่ทำ: ${escapeMarkdown(title)}\n`
                 msg += `\nพักผ่อนสักครู่ แล้วกลับมาลุยต่อ!`
@@ -1838,7 +1832,7 @@ export function registerActionHandlers(bot, userState) {
 
         const title = homeworkTitle || ""
         let msg = `🍅 ${safeBold("เริ่ม Pomodoro!")}\n`
-        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `\n`
         msg += `⏱️ 25 นาที — เริ่มเลย!\n`
         if (title) msg += `📌 งาน: ${escapeMarkdown(title)}\n`
         msg += `\n💪 สู้ๆ ไฟighting!`
@@ -1881,7 +1875,7 @@ export function registerActionHandlers(bot, userState) {
 
         return ctx.reply(
             `❌ ${safeBold("ยกเลิก Pomodoro แล้ว")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `พิมพ์ /pomodoro เพื่อเริ่มใหม่`,
             { parse_mode: "Markdown", ...mainMenu },
         )
@@ -1896,13 +1890,13 @@ export function registerActionHandlers(bot, userState) {
         const streak = pomoGetStreak(uid)
 
         let msg = `🍅 ${safeBold("สถิติ Pomodoro")}\n`
-        msg += `━━━━━━━━━━━━━━━━━━\n`
+        msg += `\n`
         msg += `📅 วันนี้: ${stats.today} เซสชัน\n`
         msg += `📅 สัปดาห์: ${stats.week} เซสชัน\n`
         msg += `🏆 รวม: ${stats.count} เซสชัน\n`
         msg += `⏱️ เวลาทั้งหมด: ${stats.totalHours} ชั่วโมง\n`
         if (streak > 0) msg += `🔥 Streak: ${streak} วัน\n`
-        msg += `━━━━━━━━━━━━━━━━━━`
+        msg += ``
 
         const keyboard = [
             [Markup.button.callback("🍅 เริ่มใหม่", "POMODORO_START")],
@@ -1920,7 +1914,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch(() => {})
         return ctx.reply(
             `🔄 ${safeBold("กำลังแนะนำใหม่...")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `พิมพ์ /suggest เพื่อรับคำแนะนำใหม่`,
             { parse_mode: "Markdown", ...mainMenu },
         )
@@ -1936,7 +1930,7 @@ export function registerActionHandlers(bot, userState) {
         }
         return ctx.reply(
             `💾 ${safeBold("บันทึกแผนแล้ว!")}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
+            `\n` +
             `พิมพ์ /smartbook view เพื่อดูแผนที่บันทึกไว้`,
             { parse_mode: "Markdown", ...mainMenu },
         )
@@ -1948,7 +1942,7 @@ export function registerActionHandlers(bot, userState) {
             // Re-trigger AI by sending /smartbook message
             return ctx.reply(
                 `🔄 ${safeBold("กำลังรีเฟรชแผน...")}\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
+                `\n` +
                 `พิมพ์ /smartbook เพื่อสร้างแผนใหม่`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
@@ -2047,7 +2041,7 @@ export function registerActionHandlers(bot, userState) {
             }
 
             let msg = `📋 ${safeBold("รายละเอียด (หน้า ${pageNum + 1}/${totalPages})")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n\n`
+            msg += `\n\n`
             for (let i = 0; i < pageItems.length; i++) {
                 const p = pageItems[i]
                 const { title, subject, priority, completed } = getPageProps(p)
