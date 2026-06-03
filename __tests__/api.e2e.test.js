@@ -78,7 +78,7 @@ const MOCK_DONE = [
   makePage('page-5', { title: 'งานภาษาไทย', subject: 'ไทย', due: '2026-05-10', status: 'Done', priority: '🟢 ต่ำ', completed: '2026-05-11' }),
 ];
 
-const { startWebServer } = await import('../src/web/server.js');
+const { startWebServer, setBotReady } = await import('../src/web/server.js');
 
 /* ── tests ── */
 
@@ -95,6 +95,7 @@ describe('Web Dashboard API E2E', () => {
     mockArchivePage.mockResolvedValue(undefined);
 
     server = startWebServer(0);
+    setBotReady(true);
     await new Promise((resolve) => server.on('listening', resolve));
     const addr = server.address();
     baseUrl = `http://127.0.0.1:${addr.port}`;
@@ -665,6 +666,30 @@ describe('Web Dashboard API E2E', () => {
     test('GET /health does not require auth', async () => {
       const res = await fetch(`${baseUrl}/health`);
       expect(res.status).toBe(200);
+    });
+  });
+
+  /* ── Deploy readiness probe ── */
+
+  describe('Deploy readiness probe', () => {
+    test('GET /health returns 503 before setBotReady(true)', async () => {
+      /* botReady is a module-scoped flag shared across all startWebServer
+         calls in this test file. Reset it before starting the fresh
+         server so we can verify the not-ready code path. */
+      setBotReady(false);
+      const s = startWebServer(0);
+      await new Promise((r) => s.on("listening", r));
+      try {
+        const port = s.address().port;
+        const res = await fetch(`http://127.0.0.1:${port}/health`);
+        expect(res.status).toBe(503);
+        const body = await res.json();
+        expect(body.bot).toBe("not_ready");
+      } finally {
+        s.close();
+        /* Restore for any tests that run after us. */
+        setBotReady(true);
+      }
     });
   });
 });

@@ -21,17 +21,18 @@ jest.unstable_mockModule('../src/services/notionService.js', () => ({
     archivePage: mockArchivePage,
 }))
 
-async function bootServer() {
+async function bootServer({ ready = true } = {}) {
     jest.resetModules()
     process.env.DASHBOARD_TOKEN = TOKEN
     process.env.NOTION_TOKEN = "test-notion-token"
-    const { startWebServer } = await import("../src/web/server.js")
+    const { startWebServer, setBotReady } = await import("../src/web/server.js")
     const port = BASE_PORT + Math.floor(Math.random() * 1000)
     const server = await new Promise((resolve) => {
         const s = startWebServer(port)
         s.once("listening", () => resolve(s))
     })
-    return { server, port }
+    if (ready) setBotReady(true)
+    return { server, port, setBotReady }
 }
 
 describe('dashboard security headers', () => {
@@ -114,6 +115,33 @@ describe('service worker versioning', () => {
             const text = await res.text()
             const pkgVersion = (await import("../package.json", { with: { type: "json" } })).default.version
             expect(text).toContain(`"homework-bot-v${pkgVersion}"`)
+        } finally {
+            server.close()
+        }
+    })
+})
+
+describe('deploy readiness probe', () => {
+    test('/health returns 503 with bot=not_ready before bot.launch() succeeds', async () => {
+        const { server, port } = await bootServer({ ready: false })
+        try {
+            const res = await fetch(`http://127.0.0.1:${port}/health`)
+            expect(res.status).toBe(503)
+            const body = await res.json()
+            expect(body.bot).toBe("not_ready")
+        } finally {
+            server.close()
+        }
+    })
+
+    test('/health returns 200 with bot=ready after setBotReady(true)', async () => {
+        const { server, port, setBotReady } = await bootServer({ ready: false })
+        try {
+            setBotReady(true)
+            const res = await fetch(`http://127.0.0.1:${port}/health`)
+            expect(res.status).toBe(200)
+            const body = await res.json()
+            expect(body.bot).toBe("ready")
         } finally {
             server.close()
         }

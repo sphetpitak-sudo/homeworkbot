@@ -39,6 +39,13 @@ const TICKET_TTL_MS = 60_000 // 60 seconds
 const SESSION_COOKIE = "hb_session"
 const tickets = new Map()
 
+/* ── bot readiness flag (toggled by index.js after bot.launch()) ── */
+let botReady = false
+
+export function setBotReady(ready) {
+    botReady = !!ready
+}
+
 function issueTicket() {
     const ticket = crypto.randomBytes(24).toString("base64url")
     tickets.set(ticket, { _timestamp: Date.now() })
@@ -213,7 +220,16 @@ export function startWebServer(port = 8080) {
         next()
     })
 
-    app.get("/health", (req, res) => res.json({ status: "ok" }));
+    app.get("/health", (_req, res) => {
+        /* /health doubles as the deploy-platform readiness probe. Return
+           503 until bot.launch() has succeeded so the platform keeps the
+           old container alive (and its Telegram long-polling session)
+           until the new container is actually ready to take over. */
+        if (!botReady) {
+            return res.status(503).json({ status: "starting", bot: "not_ready" });
+        }
+        res.json({ status: "ok", bot: "ready" });
+    });
 
     function parseCookie(header) {
         const out = {}

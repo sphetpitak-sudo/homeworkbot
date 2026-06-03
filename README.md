@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/telegraf-4.x-009B77?logo=telegram" alt="Telegraf">
     <img src="https://img.shields.io/badge/express-5.x-000000?logo=express" alt="Express">
     <img src="https://img.shields.io/badge/notion_api-2.x-000000?logo=notion" alt="Notion API">
-    <img src="https://img.shields.io/badge/tests-1332%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-1335%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/license-ISC-blue" alt="License">
   </p>
   <p>
@@ -63,6 +63,7 @@
 | **AI Confident Skip** | Skips preview when AI is confident and matches regex → straight to confirm |
 | **Dashboard Link** | `🌐 เปิด Dashboard` button in menu → ticket-based login to web UI |
 | **Notion Schema Check** | On boot, validates your Notion DB has all required properties |
+| **Deploy-Safe Launch** | `/health` returns 503 until `bot.launch()` succeeds — deploy platforms wait for the new instance before killing the old one (avoids 409 polling conflicts) |
 
 ### 🌐 Web Dashboard
 
@@ -181,7 +182,7 @@ npm test
 
 ```
 Test Suites: 18 passed, 18 total
-Tests:       1332 passed, 1332 total
+Tests:       1335 passed, 1335 total
 ```
 
 #### 6️⃣ Run
@@ -384,7 +385,7 @@ Rate Limit: 60 req/min
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | `{ status: "ok" }` — container health check |
+| `GET` | `/health` | `200 { status: "ok", bot: "ready" }` once bot.launch() succeeds, or `503 { status: "starting", bot: "not_ready" }` during deploy (use as readiness probe) |
 | `GET` | `/sw.js` | Service worker with `CACHE_NAME = "homework-bot-v${version}"` auto-injected |
 
 ### Status Values
@@ -410,7 +411,7 @@ Rate Limit: 60 req/min
 | **Rate Limiting** | [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) 8.x | 60 req/min |
 | **Cron** | [node-cron](https://github.com/node-cron/node-cron) | 4 cron jobs, overlap guards |
 | **Container** | Docker | `node:20-alpine`, ~150 MB |
-| **Testing** | [Jest](https://jestjs.io/) 29.x | 1332 tests across 18 suites, ESM `--experimental-vm-modules` |
+| **Testing** | [Jest](https://jestjs.io/) 29.x | 1335 tests across 18 suites, ESM `--experimental-vm-modules` |
 | **Persistence** | Atomic JSON files | `createJsonStore` (tmp + rename, per-file generation sidecar, setImmediate-deferred writes) |
 
 ---
@@ -545,9 +546,9 @@ npm run test:watch       # Watch mode
 | `pomodoroService` | ~30 | Pomodoro session lifecycle, getStreak edge cases |
 | `qaService` | ~20 | AI Q&A fallback chain, error handling |
 | `notionSchema` | 5 | `validateNotionSchema()`: missing props, type mismatches, unreachable Notion, per-call cache |
-| `dashboardSecurity` | 5 | Security headers, CSP, ticket exchange, cookie auth, SW versioning |
+| `dashboardSecurity` | 7 | Security headers, CSP, ticket exchange, cookie auth, SW versioning, /health 503 before ready, /health 200 after setBotReady(true) |
 
-**Total: 1332 tests, 18 suites, 0 failures**
+**Total: 1335 tests, 18 suites, 0 failures**
 
 ---
 

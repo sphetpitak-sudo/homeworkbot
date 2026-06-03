@@ -13,7 +13,7 @@ import { STATUS } from "./src/utils/constants.js";
 import { escapeMarkdown }      from "./src/utils/telegramFormat.js";
 import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers, cleanupPomoTimers }  from "./src/handlers/actionHandlers.js";
-import { startWebServer }      from "./src/web/server.js";
+import { startWebServer, setBotReady } from "./src/web/server.js";
 import { flushCorrections }    from "./src/services/aiCache.js";
 import { flushStreaks }        from "./src/services/streakService.js";
 import { flushBadges }         from "./src/services/badgeService.js";
@@ -284,19 +284,31 @@ const cleanupInterval = setInterval(() => {
 }, 30 * 60 * 1000)
 cleanupInterval.unref()
 
-/* ── launch with retry on 409 conflict ── */
-async function launchBot(retries = 5, delay = 3000) {
+/* ── launch with retry on 409 conflict ──
+   Telegram long-polling is exclusive — only one process can hold the
+   endpoint at a time. During a rolling deploy the previous instance
+   may not have released its polling session by the time the new
+   instance starts, so we retry with a longer initial delay. On final
+   409 we exit cleanly (code 0) so the deploy platform doesn't treat
+   it as a crash — the next deploy attempt will succeed once the old
+   instance is fully gone. */
+async function launchBot(retries = 3, delay = 10_000) {
     for (let i = 0; i < retries; i++) {
         try {
             await bot.launch();
+            setBotReady(true);
             logger.info("🤖 Homework Bot running...");
             return;
         } catch (err) {
             const is409 = err?.response?.error_code === 409 || err?.response?.status === 409 || String(err?.message ?? "").includes("409");
             if (is409 && i < retries - 1) {
-                logger.warn(`409 Conflict (attempt ${i + 1}/${retries}), retrying in ${delay}ms...`);
+                logger.warn(`409 Conflict (attempt ${i + 1}/${retries}), another instance still polling — retrying in ${delay}ms...`);
                 await new Promise((r) => setTimeout(r, delay));
-                delay *= 2;
+                delay = Math.min(delay * 2, 30_000);
+            } else if (is409) {
+                logger.warn(`409 Conflict: previous instance still holding the polling endpoint after ${retries} attempts. Exiting cleanly — the next deploy will succeed once it's gone.`);
+                server.close(() => process.exit(0));
+                return;
             } else {
                 throw err;
             }
@@ -304,7 +316,7 @@ async function launchBot(retries = 5, delay = 3000) {
     }
 }
 launchBot().catch((err) => {
-    logger.error(`Failed to launch bot after all retries: ${err?.message || err}`);
+    logger.error(`Failed to launch bot: ${err?.message || err}`);
     server.close(() => process.exit(1));
 });
 
