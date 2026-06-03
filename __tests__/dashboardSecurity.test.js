@@ -96,8 +96,10 @@ describe('dashboard cookie-based auth', () => {
             const { createDashboardUrl } = await import("../src/web/server.js")
             const url = createDashboardUrl(`http://127.0.0.1:${port}`)
             expect(url).toMatch(/\/api\/exchange\?ticket=/)
-            // GET shows confirmation page (prevents prefetch from consuming ticket)
-            const getRes = await fetch(url)
+            // Bot UA GET shows confirmation page (prevents prefetch from consuming ticket)
+            const getRes = await fetch(url, {
+                headers: { "User-Agent": "TelegramBot (like BotFather)" },
+            })
             expect(getRes.status).toBe(200)
             const html = await getRes.text()
             expect(html).toContain('<form method="POST"')

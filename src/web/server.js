@@ -292,23 +292,48 @@ export function startWebServer(port = 8080) {
     }
 
     /* Exchange a one-time ticket (sent in URL) for a session cookie.
-       GET serves a confirmation page — Telegram/Slack/Discord pre-fetch
-       URLs and would consume the ticket before the real user clicks. Bots
-       do NOT submit forms, so the ticket survives until the user clicks. */
+       - Real browsers: consume ticket directly, set cookie, redirect to dashboard.
+       - Bot pre-fetches (Telegram/Slack/Discord): show confirmation page with
+         a form POST. Bots don't submit forms, so the ticket survives until
+         the user clicks the button. */
+    function isBotUA(ua) {
+        if (!ua) return false
+        return /TelegramBot|Slackbot|Discordbot|facebookexternalhit|WhatsApp|Twitterbot|curl|wget|bot\//i.test(ua)
+    }
+
     app.get("/api/exchange", (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const ticket = String(req.query.ticket || "")
         if (!ticket) return res.status(400).send("Missing ticket")
-        const escaped = ticket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-        res.setHeader("Content-Type", "text/html; charset=utf-8")
-        res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>กดปุ่มด้านล่างเพื่อเปิดแดชบอร์ด</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">เข้าแดชบอร์ด</button></form></div></body></html>`)
+
+        /* Bot pre-fetch → show confirmation page (form POST will consume) */
+        if (isBotUA(req.headers["user-agent"])) {
+            const escaped = ticket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+            res.setHeader("Content-Type", "text/html; charset=utf-8")
+            return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>กดปุ่มด้านล่างเพื่อเปิดแดชบอร์ด</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">เข้าแดชบอร์ด</button></form></div></body></html>`)
+        }
+
+        /* Real browser → consume ticket directly */
+        if (!consumeTicket(ticket)) {
+            res.setHeader("Content-Type", "text/html; charset=utf-8")
+            return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
+        }
+        res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
+            httpOnly: true,
+            sameSite: "lax",
+            maxAge: 24 * 3600 * 1000,
+            path: "/",
+        })
+        return res.redirect("/")
     })
 
+    /* POST fallback for confirmation-page form submit */
     app.post("/api/exchange", express.urlencoded({ extended: false }), (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const ticket = String(req.body?.ticket || "")
         if (!consumeTicket(ticket)) {
-            return res.status(401).send("Invalid or expired ticket")
+            res.setHeader("Content-Type", "text/html; charset=utf-8")
+            return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
         }
         res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
             httpOnly: true,
