@@ -254,6 +254,17 @@ export function startWebServer(port = 8080) {
         res.type("application/javascript").send(swSource)
     })
 
+    /* If user visits / without a session cookie, show a friendly
+       "please authenticate via the bot" page instead of the broken
+       dashboard (which would fail all API calls with 401). */
+    app.get("/", (req, res, next) => {
+        if (!DASHBOARD_TOKEN) return next()
+        const cookie = req.cookies?.[SESSION_COOKIE]
+        if (cookie === DASHBOARD_TOKEN) return next()
+        res.setHeader("Content-Type", "text/html; charset=utf-8")
+        return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>ต้องเข้าสู่ระบบผ่านบอท Telegram ก่อน</p><div class="hint">1. เปิดบอท Homework Bot ใน Telegram<br>2. กดปุ่ม 🌐 Web Dashboard<br>3. ทำตามขั้นตอนในลิงก์</div></div></body></html>`)
+    })
+
     app.use(express.static(path.join(__dirname, "public")));
 
     /* Security headers — defense-in-depth without adding helmet.
