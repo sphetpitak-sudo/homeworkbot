@@ -14,7 +14,7 @@ import { createDashboardUrl } from "../web/server.js";
 import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
 import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
-import { getStreak, getNextMilestone, getStreakCalendar } from "../services/streakService.js";
+import { getStreak, getNextMilestone } from "../services/streakService.js";
 import { getStudyTip } from "../services/hintService.js";
 import { buildBadgeMessage } from "../services/badgeService.js";
 import { getStats as pomoGetStats } from "../services/pomodoroService.js";
@@ -838,7 +838,6 @@ export function registerCommandHandlers(bot, userState) {
     bot.command("streak", async (ctx) => {
         const uid = ctx.from.id
         const streak = getStreak(uid)
-        const calendar = getStreakCalendar(uid)
         const nextMilestone = getNextMilestone(streak.current)
 
         if (!streak.current) {
@@ -857,25 +856,6 @@ export function registerCommandHandlers(bot, userState) {
         msg += `${fireEmojis} Streak ปัจจุบัน: ${streak.current} วัน\n`
         msg += `🏆 สูงสุดตลอดกาล: ${streak.best} วัน\n`
         msg += `━━━━━━━━━━━━━━━━━━\n`
-
-        if (calendar.length) {
-            msg += `📅 7 วันล่าสุด:\n\n`
-            const dayNames = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."]
-            const today = new Date()
-            const weekDays = []
-            const weekMarks = []
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date(today)
-                d.setDate(d.getDate() - i)
-                weekDays.push(dayNames[d.getDay()])
-                const dateStr = d.toISOString().slice(0, 10)
-                const cal = calendar.find(c => c.date === dateStr)
-                weekMarks.push(cal?.done ? "✅" : "❌")
-            }
-            msg += `${weekMarks.join(" ")}\n`
-            msg += `${weekDays.join("  ")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
-        }
 
         if (nextMilestone) {
             const remaining = nextMilestone - streak.current

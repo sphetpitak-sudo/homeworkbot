@@ -40,7 +40,7 @@ import {
 } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 import { setCorrection } from "../services/aiCache.js";
-import { recordCompletion, getStreak } from "../services/streakService.js";
+import { recordCompletion, getStreak, getNextMilestone } from "../services/streakService.js";
 import { QUOTES } from "../utils/quotes.js";
 import { getStudyTip } from "../services/hintService.js";
 import { checkBadges, checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
@@ -1249,7 +1249,6 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         const uid = ctx.from.id
         const streak = getStreak(uid)
-        const calendar = getStreakCalendar(uid)
         const nextMilestone = getNextMilestone(streak.current)
 
         if (!streak.current) {
@@ -1268,25 +1267,6 @@ export function registerActionHandlers(bot, userState) {
         msg += `${fireEmojis} Streak ปัจจุบัน: ${streak.current} วัน\n`
         msg += `🏆 สูงสุดตลอดกาล: ${streak.best} วัน\n`
         msg += `━━━━━━━━━━━━━━━━━━\n`
-
-        if (calendar.length) {
-            msg += `📅 7 วันล่าสุด:\n\n`
-            const dayNames = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."]
-            const today = new Date()
-            const weekMarks = []
-            const weekDays = []
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date(today)
-                d.setDate(d.getDate() - i)
-                weekDays.push(dayNames[d.getDay()])
-                const dateStr = d.toISOString().slice(0, 10)
-                const cal = calendar.find(c => c.date === dateStr)
-                weekMarks.push(cal?.done ? "✅" : "❌")
-            }
-            msg += `${weekMarks.join(" ")}\n`
-            msg += `${weekDays.join("  ")}\n`
-            msg += `━━━━━━━━━━━━━━━━━━\n`
-        }
 
         if (nextMilestone) {
             const remaining = nextMilestone - streak.current
