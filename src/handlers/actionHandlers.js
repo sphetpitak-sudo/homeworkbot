@@ -19,7 +19,7 @@ import {
 } from "../services/notionService.js";
 
 import { mainMenu, cancelMenu, showConfirm, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard } from "./commandHandlers.js";
-import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress } from "./viewBuilders.js";
+import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
 import {
     escapeMarkdown,
     safeBold,
@@ -40,10 +40,9 @@ import {
 } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
 import { setCorrection } from "../services/aiCache.js";
-import { recordCompletion, getStreak, getNextMilestone } from "../services/streakService.js";
 import { QUOTES } from "../utils/quotes.js";
 import { getStudyTip } from "../services/hintService.js";
-import { checkBadges, checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
+import { checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
 import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges } from "../services/pomodoroService.js";
 
 /* ── pomodoro timer tracking for graceful shutdown ── */
@@ -122,14 +121,6 @@ function showHintOnce(uid, key, message, extra = {}) {
 }
 
 /* ── small helpers ── */
-function statusEmoji(status) {
-    return status === STATUS.DONE
-        ? "✅"
-        : status === STATUS.IN_PROGRESS
-          ? "🔄"
-          : "📌";
-}
-
 function progressBar(percent) {
     const filled = Math.max(
         0,
@@ -970,7 +961,7 @@ export function registerActionHandlers(bot, userState) {
             text += `=====================================\n`
             text += `รวม ${total} รายการ | เสร็จ ${pct}%\n`
 
-            const msg =
+            let msg =
                 `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
                 `\n` +
                 `${safeCode(text)}\n` +
@@ -1136,34 +1127,16 @@ export function registerActionHandlers(bot, userState) {
             userState.delete(uid)
             await ctx.editMessageReplyMarkup(undefined).catch(() => {})
 
-            let streakMsg = ""
-            try {
-                const result = recordCompletion(uid)
-                if (result.isNewMilestone) {
-                    streakMsg = `\n\n🎉🎉🎉 *ครบ ${result.current} วันติดแล้ว!* 🔥🔥🔥`
-                }
-            } catch { logger.debug("Non-critical: streak record failed in focus done") }
-
-            try {
-                const newBadgeIds = checkBadges(uid)
-                const awarded = awardBadges(uid, newBadgeIds)
-                if (awarded.length) {
-                    streakMsg += `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
-                    for (const b of awarded) {
-                        streakMsg += `${b.icon} ${b.name} — ${b.desc}\n`
-                    }
-                }
-            } catch { logger.debug("Non-critical: streak badge check failed in focus done") }
-
+            let badgeMsg = ""
             try {
                 const donePages = await fetchDone()
                 const totalDone = donePages.length
                 const taskBadgeIds = checkTaskBadges(uid, totalDone)
                 const taskAwarded = awardBadges(uid, taskBadgeIds)
                 if (taskAwarded.length) {
-                    streakMsg += `\n\n`
+                    badgeMsg += `\n\n`
                     for (const b of taskAwarded) {
-                        streakMsg += `🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!\n`
+                        badgeMsg += `🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!\n`
                     }
                 }
             } catch { logger.debug("Non-critical: task badge check failed in focus done") }
@@ -1171,7 +1144,7 @@ export function registerActionHandlers(bot, userState) {
             return ctx.reply(
                 `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
                 `\n` +
-                `เก่งมาก! ออกจากโฟกัสแล้ว${streakMsg}`,
+                `เก่งมาก! ออกจากโฟกัสแล้ว${badgeMsg}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         } catch (err) {
@@ -1229,46 +1202,6 @@ export function registerActionHandlers(bot, userState) {
 
     /* FOCUS_NEXT — removed; no flow populates _focusPages (was a dead path) */
 
-
-    /* STREAK */
-    bot.action("STREAK", async (ctx) => {
-        await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
-        const uid = ctx.from.id
-        const streak = getStreak(uid)
-        const nextMilestone = getNextMilestone(streak.current)
-
-        if (!streak.current) {
-            return ctx.reply(
-                `🔥 ${safeBold("ยังไม่มีสถิติ Streak")}\n\n` +
-                `กด ✅ เสร็จจากการบ้านเลย!\n` +
-                `ทำติดต่อกันทุกวันเพื่อรักษาไฟ`,
-                { parse_mode: "Markdown", ...mainMenu },
-            )
-        }
-
-        const fireEmojis = streak.current >= 30 ? "🔥🔥🔥" : streak.current >= 14 ? "🔥🔥" : "🔥"
-        let msg = `🔥 ${safeBold("สถิติ Streak")}\n\n`
-        msg += `${fireEmojis}  ปัจจุบัน ${streak.current} วัน\n`
-        msg += `🏆  สูงสุด ${streak.best} วัน\n`
-
-        if (nextMilestone) {
-            const remaining = nextMilestone - streak.current
-            msg += `\n🎯 เป้าหมายถัดไป ${nextMilestone} วัน (อีก ${remaining} วัน)`
-        }
-
-        const keyboard = [
-            [
-                Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-            ],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
-        ]
-        return ctx.reply(msg, {
-            parse_mode: "Markdown",
-            ...Markup.inlineKeyboard(keyboard),
-        })
-    })
-
     /* STATUS helpers */
     async function setStatus(ctx, pageId, status, message) {
         try {
@@ -1281,45 +1214,27 @@ export function registerActionHandlers(bot, userState) {
             state._lastAction = { type: "STATUS_CHANGE", pageId, from: oldStatus, to: status, _timestamp: Date.now() };
             userState.set(uid, state);
 
-            let streakMsg = ""
+            let badgeMsg = ""
             if (status === STATUS.DONE) {
                 try {
-                    const result = recordCompletion(uid)
-                    if (result.isNewMilestone) {
-                        streakMsg = `\n\n🎉🎉🎉 *ครบ ${result.current} วันติดแล้ว!* 🔥🔥🔥\n💪 รักษา streak ต่อไป!`
-                    }
-                    // award streak badges
-                    const newBadgeIds = checkBadges(uid)
-                    const awarded = awardBadges(uid, newBadgeIds)
-                    if (awarded.length) {
-                        streakMsg += `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
-                        for (const b of awarded) {
-                            streakMsg += `${b.icon} ${b.name} — ${b.desc}\n`
+                    const donePages = await fetchDone()
+                    const totalDone = donePages.length
+                    const taskBadgeIds = checkTaskBadges(uid, totalDone)
+                    const taskAwarded = awardBadges(uid, taskBadgeIds)
+                    if (taskAwarded.length) {
+                        for (const b of taskAwarded) {
+                            badgeMsg += `\n\n🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!`
                         }
-                    }
-                    // award task count badges
-                    try {
-                        const donePages = await fetchDone()
-                        const totalDone = donePages.length
-                        const taskBadgeIds = checkTaskBadges(uid, totalDone)
-                        const taskAwarded = awardBadges(uid, taskBadgeIds)
-                        if (taskAwarded.length) {
-                            for (const b of taskAwarded) {
-                                streakMsg += `\n\n🏅 ${b.icon} ${safeBold(b.name)} — ${b.desc}!`
-                            }
-                        }
-                    } catch (e) {
-                        logger.debug("Task badge check error:", e?.message)
                     }
                 } catch (e) {
-                    logger.debug("Streak record error:", e?.message)
+                    logger.debug("Task badge check error:", e?.message)
                 }
             }
 
             await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             const tip = showHintOnce(uid, "status_change",
                 `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
-            const fullMsg = message + streakMsg
+            const fullMsg = message + badgeMsg
             if (tip) {
                 await ctx.reply(`${fullMsg}\n\n────\n${tip.text}`, {
                     parse_mode: "Markdown",
@@ -1508,7 +1423,6 @@ export function registerActionHandlers(bot, userState) {
         const msg = buildBadgeMessage(uid)
         const keyboard = [
             [
-                Markup.button.callback("🔥 Streak", "STREAK"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
             [Markup.button.callback("🏠 เมนูหลัก", "HOME")],

@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -230,6 +231,7 @@ export function startWebServer(port = 8080) {
     });
 
     app.use(express.json({ limit: "1mb" }));
+    app.use(cookieParser());
     app.use("/api", apiLimiter);
 
     /* Service worker: inject package.json version into CACHE_NAME so
@@ -298,24 +300,6 @@ export function startWebServer(port = 8080) {
             bot: botReady ? "ready" : "starting",
         });
     });
-
-    function parseCookie(header) {
-        const out = {}
-        if (!header) return out
-        for (const part of header.split(";")) {
-            const idx = part.indexOf("=")
-            if (idx === -1) continue
-            const k = part.slice(0, idx).trim()
-            const v = part.slice(idx + 1).trim()
-            if (k) out[k] = decodeURIComponent(v)
-        }
-        return out
-    }
-
-    app.use((req, _res, next) => {
-        req.cookies = parseCookie(req.headers.cookie)
-        next()
-    })
 
     function requireAuth(req, res, next) {
         if (!DASHBOARD_TOKEN) return next();

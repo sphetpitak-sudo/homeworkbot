@@ -15,7 +15,6 @@ import { registerCommandHandlers } from "./src/handlers/commandHandlers.js";
 import { registerActionHandlers, cleanupPomoTimers }  from "./src/handlers/actionHandlers.js";
 import { startWebServer, setBotReady } from "./src/web/server.js";
 import { flushCorrections }    from "./src/services/aiCache.js";
-import { flushStreaks }        from "./src/services/streakService.js";
 import { flushBadges }         from "./src/services/badgeService.js";
 import { flushPomodoros }       from "./src/services/pomodoroService.js";
 import { flushShareTokens }    from "./src/services/shareTokenService.js";
@@ -57,7 +56,6 @@ bot.telegram.setMyCommands([
     { command: "deadline", description: "⏰ นับถอยหลังงานด่วนที่สุด" },
     { command: "progress", description: "📊 ความคืบหน้าแยกตามวิชา" },
     { command: "hint", description: "🧠 คำแนะนำการเริ่มทำการบ้าน" },
-    { command: "streak", description: "🔥 สถิติ Streak การทำการบ้าน" },
     { command: "search", description: "🔍 ค้นหาการบ้าน" },
     { command: "quote", description: "💬 คำคมกำลังใจ" },
     { command: "export", description: "📋 ส่งออกรายการการบ้าน" },
@@ -330,12 +328,11 @@ const shutdown = async (sig) => {
     server.close(() => {})
     await Promise.allSettled([
         flushCorrections(),
-        flushStreaks(),
         flushBadges(),
         flushPomodoros(),
         flushShareTokens(),
     ]).then((results) => {
-        const labels = ["corrections", "streaks", "badges", "pomodoros", "shareTokens"]
+        const labels = ["corrections", "badges", "pomodoros", "shareTokens"]
         let ok = 0, fail = 0
         results.forEach((r, i) => {
             if (r.status === "rejected") {

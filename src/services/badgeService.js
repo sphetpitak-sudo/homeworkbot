@@ -1,6 +1,5 @@
 import { logger } from "../utils/logger.js"
 import { safeBold } from "../utils/telegramFormat.js"
-import { getStreak } from "./streakService.js"
 import { createJsonStore } from "../utils/jsonStore.js"
 
 const RARITY = {
@@ -24,13 +23,7 @@ const BADGES = {
     TEN_TASKS:       { id: "TEN_TASKS",       icon: "⭐", name: "ขยัน",            desc: "ทำการบ้านเสร็จ 10 ชิ้น",      rarity: RARITY.UNCOMMON },
     FIFTY_TASKS:     { id: "FIFTY_TASKS",     icon: "🌟", name: "ครึ่งร้อย",        desc: "ทำการบ้านเสร็จ 50 ชิ้น",      rarity: RARITY.RARE },
     HUNDRED_TASKS:   { id: "HUNDRED_TASKS",   icon: "💎", name: "ร้อยชิ้น",         desc: "ทำการบ้านเสร็จ 100 ชิ้น",     rarity: RARITY.EPIC },
-    STREAK_3:        { id: "STREAK_3",        icon: "🔥", name: "ไฟเริ่มติด",       desc: "ทำติดต่อ 3 วัน",              rarity: RARITY.COMMON },
-    STREAK_7:        { id: "STREAK_7",        icon: "🔥", name: "ไฟลุก",           desc: "ทำติดต่อ 7 วัน",              rarity: RARITY.UNCOMMON },
-    STREAK_14:       { id: "STREAK_14",       icon: "🔥🔥", name: "เพลิงลุก",      desc: "ทำติดต่อ 14 วัน",             rarity: RARITY.RARE },
-    STREAK_30:       { id: "STREAK_30",       icon: "🏆", name: "เที่ยวบินระยะไกล",desc: "ทำติดต่อ 30 วัน",             rarity: RARITY.EPIC },
-    STREAK_60:       { id: "STREAK_60",       icon: "👑", name: "ราชาแห่งไฟ",      desc: "ทำติดต่อ 60 วัน",             rarity: RARITY.EPIC },
-    STREAK_100:      { id: "STREAK_100",      icon: "💯", name: "เซียนร้อย",        desc: "ทำติดต่อ 100 วัน",            rarity: RARITY.LEGENDARY },
-    STREAK_365:      { id: "STREAK_365",      icon: "🎖️", name: "ตำนาน",          desc: "ทำติดต่อ 1 ปี",               rarity: RARITY.LEGENDARY },
+
     ZERO_OVERDUE_30: { id: "ZERO_OVERDUE_30", icon: "⏰", name: "ตรงเวลา",         desc: "ไม่มี overdue 30 วัน",         rarity: RARITY.RARE },
     HINT_10:         { id: "HINT_10",         icon: "🔍", name: "นักสืบ",          desc: "ใช้ /hint 10 ครั้ง",          rarity: RARITY.UNCOMMON },
     PANIC_5:         { id: "PANIC_5",         icon: "🚨", name: "วิกฤตการณ์",      desc: "ใช้ /panic 5 ครั้ง",          rarity: RARITY.COMMON },
@@ -39,16 +32,6 @@ const BADGES = {
     POMO_50:         { id: "POMO_50",         icon: "🍅", name: "เจ้าแห่งสมาธิ",    desc: "ทำ Pomodoro ครบ 50 เซสชัน",  rarity: RARITY.RARE },
     POMO_100:        { id: "POMO_100",        icon: "🍅", name: "เซนปรมาจารย์",    desc: "ทำ Pomodoro ครบ 100 เซสชัน", rarity: RARITY.LEGENDARY },
     POMO_500:        { id: "POMO_500",        icon: "💎", name: "ไทม์ลอร์ด",       desc: "ทำ Pomodoro ครบ 500 เซสชัน", rarity: RARITY.LEGENDARY },
-}
-
-const STREAK_MILESTONES = {
-    3:   "STREAK_3",
-    7:   "STREAK_7",
-    14:  "STREAK_14",
-    30:  "STREAK_30",
-    60:  "STREAK_60",
-    100: "STREAK_100",
-    365: "STREAK_365",
 }
 
 const TASK_MILESTONES = [
@@ -70,21 +53,6 @@ function setEarned(userId, badges) {
     const key = String(userId)
     badgeStore.data[key] = badges
     badgeStore.scheduleWrite()
-}
-
-export function checkBadges(userId) {
-    const earned = getEarned(userId)
-    const newBadges = []
-    const streak = getStreak(userId)
-
-    if (streak.current > 0) {
-        const milestoneId = STREAK_MILESTONES[streak.current]
-        if (milestoneId && !earned.includes(milestoneId)) {
-            newBadges.push(milestoneId)
-        }
-    }
-
-    return newBadges
 }
 
 export function checkTaskBadges(userId, totalDone) {
@@ -181,7 +149,7 @@ export function buildBadgeMessage(userId) {
 
     if (!earned.length) {
         msg += `📭 ยังไม่มีเหรียญ\n`
-        msg += `💪 ทำการบ้านและรักษา streak เพื่อรับเหรียญ!\n\n`
+        msg += `💪 ทำการบ้านเพื่อรับเหรียญ!\n\n`
     } else {
         msg += `✅ ${safeBold("ปลดล็อกแล้ว")} (${earned.length}/${allBadges.length})\n\n`
         for (const b of earned) {

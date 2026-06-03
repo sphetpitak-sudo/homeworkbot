@@ -4,22 +4,18 @@ import { jest } from '@jest/globals'
 
 const BADGES_FILE = '.badges.json'
 const BADGES_TMP = '.badges.json.tmp'
-const STREAKS_FILE = '.streaks.json'
 const BADGES_PATH = path.join(process.cwd(), BADGES_FILE)
 const BADGES_TMP_PATH = path.join(process.cwd(), BADGES_TMP)
-const STREAKS_PATH = path.join(process.cwd(), STREAKS_FILE)
 
 function cleanup() {
   try { fs.unlinkSync(BADGES_PATH) } catch {}
   try { fs.unlinkSync(BADGES_TMP_PATH) } catch {}
-  try { fs.unlinkSync(STREAKS_PATH) } catch {}
 }
 
-async function importWithFixtures(badgeData, streakData) {
+async function importWithFixtures(badgeData) {
   jest.resetModules()
   cleanup()
   if (badgeData) fs.writeFileSync(BADGES_PATH, JSON.stringify(badgeData))
-  if (streakData) fs.writeFileSync(STREAKS_PATH, JSON.stringify(streakData))
   return await import('../src/services/badgeService.js')
 }
 
@@ -29,80 +25,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-})
-
-describe('checkBadges', () => {
-  test('returns empty array when no streak data', async () => {
-    const { checkBadges } = await importWithFixtures({}, {})
-    const result = checkBadges('user1')
-    expect(result).toEqual([])
-  })
-
-  test('returns STREAK_3 when streak is 3', async () => {
-    const streakData = { user1: { current: 3, best: 3, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_3')
-    expect(result.length).toBe(1)
-  })
-
-  test('returns STREAK_7 when streak is 7', async () => {
-    const streakData = { user1: { current: 7, best: 7, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_7')
-  })
-
-  test('returns STREAK_14 when streak is 14', async () => {
-    const streakData = { user1: { current: 14, best: 14, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_14')
-  })
-
-  test('returns STREAK_30 when streak is 30', async () => {
-    const streakData = { user1: { current: 30, best: 30, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_30')
-  })
-
-  test('returns STREAK_60 when streak is 60', async () => {
-    const streakData = { user1: { current: 60, best: 60, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_60')
-  })
-
-  test('returns STREAK_100 when streak is 100', async () => {
-    const streakData = { user1: { current: 100, best: 100, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_100')
-  })
-
-  test('returns STREAK_365 when streak is 365', async () => {
-    const streakData = { user1: { current: 365, best: 365, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toContain('STREAK_365')
-  })
-
-  test('returns empty array for non-milestone streak values', async () => {
-    const streakData = { user1: { current: 2, best: 5, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures({}, streakData)
-    const result = checkBadges('user1')
-    expect(result).toEqual([])
-  })
-
-  test('does not return badge already earned', async () => {
-    const badgeData = { user1: ['STREAK_3'] }
-    const streakData = { user1: { current: 3, best: 3, lastDate: '2026-05-29' } }
-    const { checkBadges } = await importWithFixtures(badgeData, streakData)
-    const result = checkBadges('user1')
-    expect(result).not.toContain('STREAK_3')
-    expect(result).toEqual([])
-  })
 })
 
 describe('checkTaskBadges', () => {
@@ -174,20 +96,20 @@ describe('checkTaskBadges', () => {
 describe('awardBadges', () => {
   test('awards new badges and persists to file', async () => {
     const { awardBadges, flushBadges } = await importWithFixtures({})
-    const awarded = awardBadges('user1', ['STREAK_3'])
+    const awarded = awardBadges('user1', ['FIRST_TASK'])
     expect(awarded.length).toBe(1)
-    expect(awarded[0].id).toBe('STREAK_3')
+    expect(awarded[0].id).toBe('FIRST_TASK')
     await flushBadges()
     const saved = JSON.parse(fs.readFileSync(BADGES_PATH, 'utf-8'))
-    expect(saved.user1).toContain('STREAK_3')
+    expect(saved.user1).toContain('FIRST_TASK')
   })
 
   test('skips already earned badges', async () => {
-    const badgeData = { user1: ['STREAK_3'] }
+    const badgeData = { user1: ['FIRST_TASK'] }
     const { awardBadges } = await importWithFixtures(badgeData)
-    const awarded = awardBadges('user1', ['STREAK_3', 'STREAK_7'])
+    const awarded = awardBadges('user1', ['FIRST_TASK', 'TEN_TASKS'])
     expect(awarded.length).toBe(1)
-    expect(awarded[0].id).toBe('STREAK_7')
+    expect(awarded[0].id).toBe('TEN_TASKS')
   })
 
   test('returns empty array for empty input', async () => {
@@ -197,15 +119,15 @@ describe('awardBadges', () => {
   })
 
   test('returns empty array for already earned badges only', async () => {
-    const badgeData = { user1: ['STREAK_3'] }
+    const badgeData = { user1: ['FIRST_TASK'] }
     const { awardBadges } = await importWithFixtures(badgeData)
-    const awarded = awardBadges('user1', ['STREAK_3'])
+    const awarded = awardBadges('user1', ['FIRST_TASK'])
     expect(awarded).toEqual([])
   })
 
   test('awards multiple badges at once', async () => {
     const { awardBadges, flushBadges } = await importWithFixtures({})
-    const awarded = awardBadges('user1', ['FIRST_TASK', 'TEN_TASKS', 'STREAK_3'])
+    const awarded = awardBadges('user1', ['FIRST_TASK', 'TEN_TASKS', 'PANIC_5'])
     expect(awarded.length).toBe(3)
     await flushBadges()
     const saved = JSON.parse(fs.readFileSync(BADGES_PATH, 'utf-8'))
@@ -214,12 +136,12 @@ describe('awardBadges', () => {
 
   test('handles multiple users independently', async () => {
     const { awardBadges, flushBadges } = await importWithFixtures({})
-    awardBadges('user1', ['STREAK_3'])
-    awardBadges('user2', ['STREAK_7'])
+    awardBadges('user1', ['FIRST_TASK'])
+    awardBadges('user2', ['TEN_TASKS'])
     await flushBadges()
     const saved = JSON.parse(fs.readFileSync(BADGES_PATH, 'utf-8'))
-    expect(saved.user1).toContain('STREAK_3')
-    expect(saved.user2).toContain('STREAK_7')
+    expect(saved.user1).toContain('FIRST_TASK')
+    expect(saved.user2).toContain('TEN_TASKS')
     expect(saved.user1.length).toBe(1)
     expect(saved.user2.length).toBe(1)
   })
@@ -255,21 +177,21 @@ describe('getAllBadges', () => {
   })
 
   test('marks earned badges correctly', async () => {
-    const badgeData = { user1: ['STREAK_3', 'FIRST_TASK'] }
+    const badgeData = { user1: ['FIRST_TASK', 'TEN_TASKS'] }
     const { getAllBadges } = await importWithFixtures(badgeData)
     const all = getAllBadges('user1')
-    const streak3 = all.find(b => b.id === 'STREAK_3')
     const firstTask = all.find(b => b.id === 'FIRST_TASK')
-    const streak7 = all.find(b => b.id === 'STREAK_7')
-    expect(streak3.earned).toBe(true)
+    const tenTasks = all.find(b => b.id === 'TEN_TASKS')
+    const panic5 = all.find(b => b.id === 'PANIC_5')
     expect(firstTask.earned).toBe(true)
-    expect(streak7.earned).toBe(false)
+    expect(tenTasks.earned).toBe(true)
+    expect(panic5.earned).toBe(false)
   })
 
-  test('returns 19 badges total', async () => {
+  test('returns 12 badges total', async () => {
     const { getAllBadges } = await importWithFixtures({})
     const all = getAllBadges('user1')
-    expect(all.length).toBe(19)
+    expect(all.length).toBe(12)
   })
 })
 
@@ -282,20 +204,20 @@ describe('buildBadgeMessage', () => {
   })
 
   test('shows earned badges when badges exist', async () => {
-    const badgeData = { user1: ['STREAK_3', 'FIRST_TASK'] }
+    const badgeData = { user1: ['PANIC_5', 'FIRST_TASK'] }
     const { buildBadgeMessage } = await importWithFixtures(badgeData)
     const msg = buildBadgeMessage('user1')
     expect(msg).toContain('ปลดล็อกแล้ว')
     expect(msg).toContain('ก้าวแรก')
-    expect(msg).toContain('ไฟเริ่มติด')
+    expect(msg).toContain('5 ครั้ง')
     expect(msg).toContain('ยังไม่ได้ปลดล็อก')
   })
 
   test('shows correct count of earned vs total', async () => {
-    const badgeData = { user1: ['STREAK_3'] }
+    const badgeData = { user1: ['FIRST_TASK'] }
     const { buildBadgeMessage } = await importWithFixtures(badgeData)
     const msg = buildBadgeMessage('user1')
-    expect(msg).toContain('1/19')
+    expect(msg).toContain('1/12')
   })
 
   test('shows locked badges section even when some earned', async () => {
@@ -303,8 +225,6 @@ describe('buildBadgeMessage', () => {
     const { buildBadgeMessage } = await importWithFixtures(badgeData)
     const msg = buildBadgeMessage('user1')
     expect(msg).toContain('ยังไม่ได้ปลดล็อก')
-    expect(msg).toContain('ไฟลุก')
-    expect(msg).toContain('เพลิงลุก')
   })
 })
 
@@ -324,11 +244,10 @@ describe('getBadgeById', () => {
     expect(badge).toBeNull()
   })
 
-  test('returns badge for streak milestone id', async () => {
+  test('returns null for removed streak milestone id', async () => {
     const { getBadgeById } = await importWithFixtures({})
     const badge = getBadgeById('STREAK_7')
-    expect(badge).not.toBeNull()
-    expect(badge.name).toBe('ไฟลุก')
+    expect(badge).toBeNull()
   })
 
   test('returns null for empty string', async () => {
@@ -345,22 +264,22 @@ describe('flushBadges', () => {
 
   test('resolves after awardBadges triggers write', async () => {
     const { awardBadges, flushBadges } = await importWithFixtures({})
-    awardBadges('user1', ['STREAK_3'])
+    awardBadges('user1', ['FIRST_TASK'])
     await expect(flushBadges()).resolves.toBeUndefined()
     const saved = JSON.parse(fs.readFileSync(BADGES_PATH, 'utf-8'))
-    expect(saved.user1).toContain('STREAK_3')
+    expect(saved.user1).toContain('FIRST_TASK')
   })
 })
 
 describe('badgeService persistent file', () => {
   test('loads existing badges from file on import', async () => {
-    const badgeData = { user1: ['STREAK_3'], user2: ['FIRST_TASK', 'TEN_TASKS'] }
+    const badgeData = { user1: ['PANIC_5'], user2: ['FIRST_TASK', 'TEN_TASKS'] }
     fs.writeFileSync(BADGES_PATH, JSON.stringify(badgeData))
     jest.resetModules()
     const { getAllBadges } = await import('../src/services/badgeService.js')
     const user1Badges = getAllBadges('user1')
     const user2Badges = getAllBadges('user2')
-    expect(user1Badges.find(b => b.id === 'STREAK_3').earned).toBe(true)
+    expect(user1Badges.find(b => b.id === 'PANIC_5').earned).toBe(true)
     expect(user2Badges.find(b => b.id === 'TEN_TASKS').earned).toBe(true)
   })
 
@@ -389,7 +308,7 @@ describe('badgeService persistent file', () => {
 
   test('atomic write: temp file is removed after successful write', async () => {
     const { awardBadges, flushBadges } = await importWithFixtures({})
-    awardBadges('user1', ['STREAK_3'])
+    awardBadges('user1', ['FIRST_TASK'])
     await flushBadges()
     const tmpPath = BADGES_PATH + '.tmp'
     expect(fs.existsSync(tmpPath)).toBe(false)
@@ -404,13 +323,13 @@ describe('getBadgeCount', () => {
   })
 
   test('returns correct count for user with badges', async () => {
-    const badgeData = { user1: ['STREAK_3', 'FIRST_TASK', 'TEN_TASKS'] }
+    const badgeData = { user1: ['FIRST_TASK', 'HINT_10', 'EXPORT_3'] }
     const { getBadgeCount } = await importWithFixtures(badgeData)
     expect(getBadgeCount('user1')).toBe(3)
   })
 
   test('handles number userId', async () => {
-    const badgeData = { '12345': ['STREAK_3'] }
+    const badgeData = { '12345': ['PANIC_5'] }
     const { getBadgeCount } = await importWithFixtures(badgeData)
     expect(getBadgeCount(12345)).toBe(1)
   })
@@ -423,11 +342,11 @@ describe('getRarestBadge', () => {
   })
 
   test('returns the rarest badge by rarity level', async () => {
-    const badgeData = { user1: ['STREAK_3', 'STREAK_100', 'FIRST_TASK'] }
+    const badgeData = { user1: ['FIRST_TASK', 'ZERO_OVERDUE_30', 'HINT_10'] }
     const { getRarestBadge } = await importWithFixtures(badgeData)
     const rarest = getRarestBadge('user1')
     expect(rarest).not.toBeNull()
-    expect(rarest.id).toBe('STREAK_100')
+    expect(rarest.id).toBe('ZERO_OVERDUE_30')
   })
 
   test('returns common badge when only common badges earned', async () => {
@@ -444,7 +363,7 @@ describe('buildBadgeGrid', () => {
     const { buildBadgeGrid } = await importWithFixtures({})
     const grid = buildBadgeGrid('user1')
     expect(Array.isArray(grid)).toBe(true)
-    expect(grid.length).toBe(19)
+    expect(grid.length).toBe(12)
     for (const b of grid) {
       expect(b).toHaveProperty('id')
       expect(b).toHaveProperty('icon')
@@ -457,12 +376,12 @@ describe('buildBadgeGrid', () => {
   })
 
   test('marks earned badges correctly in grid', async () => {
-    const badgeData = { user1: ['STREAK_3'] }
+    const badgeData = { user1: ['PANIC_5'] }
     const { buildBadgeGrid } = await importWithFixtures(badgeData)
     const grid = buildBadgeGrid('user1')
-    const streak3 = grid.find(b => b.id === 'STREAK_3')
+    const panic5 = grid.find(b => b.id === 'PANIC_5')
     const firstTask = grid.find(b => b.id === 'FIRST_TASK')
-    expect(streak3.earned).toBe(true)
+    expect(panic5.earned).toBe(true)
     expect(firstTask.earned).toBe(false)
   })
 })

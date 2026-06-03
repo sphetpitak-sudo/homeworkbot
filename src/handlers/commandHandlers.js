@@ -14,7 +14,6 @@ import { createDashboardUrl } from "../web/server.js";
 import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
 import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
-import { getStreak, getNextMilestone } from "../services/streakService.js";
 import { getStudyTip } from "../services/hintService.js";
 import { buildBadgeMessage } from "../services/badgeService.js";
 import { getStats as pomoGetStats } from "../services/pomodoroService.js";
@@ -833,43 +832,6 @@ export function registerCommandHandlers(bot, userState) {
         }
     })
 
-    bot.command("streak", async (ctx) => {
-        const uid = ctx.from.id
-        const streak = getStreak(uid)
-        const nextMilestone = getNextMilestone(streak.current)
-
-        if (!streak.current) {
-            return ctx.reply(
-                `🔥 ${safeBold("ยังไม่มีสถิติ Streak")}\n\n` +
-                `กด ✅ เสร็จจากการบ้านเลย!\n` +
-                `ทำติดต่อกันทุกวันเพื่อรักษาไฟนี้ไว้`,
-                { parse_mode: "Markdown", ...mainMenu },
-            )
-        }
-
-        const fireEmojis = streak.current >= 30 ? "🔥🔥🔥" : streak.current >= 14 ? "🔥🔥" : "🔥"
-        let msg = `🔥 ${safeBold("สถิติ Streak")}\n\n`
-        msg += `${fireEmojis}  ปัจจุบัน ${streak.current} วัน\n`
-        msg += `🏆  สูงสุด ${streak.best} วัน\n`
-
-        if (nextMilestone) {
-            const remaining = nextMilestone - streak.current
-            msg += `\n🎯 เป้าหมายถัดไป ${nextMilestone} วัน (อีก ${remaining} วัน)`
-        }
-
-        const keyboard = [
-            [
-                Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-            ],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
-        ]
-        return ctx.reply(msg, {
-            parse_mode: "Markdown",
-            ...Markup.inlineKeyboard(keyboard),
-        })
-    })
-
     bot.command("undo", async (ctx) => {
         const uid = ctx.from.id;
         const state = userState.get(uid);
@@ -1013,7 +975,6 @@ export function registerCommandHandlers(bot, userState) {
         const msg = buildBadgeMessage(uid)
         const keyboard = [
             [
-                Markup.button.callback("🔥 Streak", "STREAK"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
             [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
@@ -1434,9 +1395,6 @@ export function registerCommandHandlers(bot, userState) {
                 .map(([s, c]) => `- ${s}: ${c} ชิ้น`)
                 .join("\n")
 
-            const { getStreak } = await import("../services/streakService.js")
-            const streakData = getStreak(ctx.from.id)
-
             const thaiDate = today.toLocaleDateString("th-TH", {
                 weekday: "long", year: "numeric", month: "long", day: "numeric",
             })
@@ -1449,7 +1407,6 @@ ${contextLines}
 จำนวนแยกวิชา:
 ${subjectBreakdown}
 
-Streak ปัจจุบัน: ${streakData.current} วัน
 Overdue: ${overdueCount} ชิ้น
 
 ตอบสั้นๆ ภาษาไทย ไม่เกิน 150 ตัวอักษร ให้เหตุผลสั้นๆ 1-2 บรรทัด
