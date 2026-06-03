@@ -27,10 +27,8 @@ export function buildPanic(sorted, topN = 3) {
     const top = sorted.slice(0, topN)
     const today = todayMidnight()
 
-    let msg = `🚨 ${safeBold("โหมดฉุกเฉิน!")}\n`
-    msg += `━━━━━━━━━━━━━━━━━━\n`
-    msg += `${top.length} งานที่ควรทำที่สุดตอนนี้\n`
-    msg += `━━━━━━━━━━━━━━━━━━\n\n`
+    let msg = `🚨 ${safeBold("โหมดฉุกเฉิน!")}\n\n`
+    msg += `${top.length} งานที่ควรทำที่สุดตอนนี้\n\n`
     for (const p of top) {
         const title = p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ"
         const status = p.properties.Status?.select?.name || "Todo"
@@ -40,15 +38,9 @@ export function buildPanic(sorted, topN = 3) {
         const dt = due ? parseYMDToLocalDate(due) : null
         const diff = dt ? Math.ceil((dt - today) / 86400000) : null
 
-        let badge = ""
-        if (diff !== null && diff < 0) badge = `🚨 (เลย ${Math.abs(diff)} วัน)`
-        else if (diff !== null && diff <= 3) badge = `⏰ (เหลือ ${diff} วัน)`
-        else if (diff !== null && diff <= 7) badge = `⌛ (เหลือ ${diff} วัน)`
-
-        msg += `${statusEmoji(status)} ${safeBold(title)} ${badge}\n`
+        msg += `${statusEmoji(status)} ${safeBold(title)}${badgeForDiff(diff)}\n`
         msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
     }
-    msg += `💪 ${safeBold("เริ่มจากอันแรกเลย!")}`
 
     const keyboard = top.map((p) => [
         Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
@@ -58,7 +50,7 @@ export function buildPanic(sorted, topN = 3) {
     keyboard.push([
         Markup.button.callback("➕ เพิ่ม", "ADD"),
         Markup.button.callback("📋 ค้าง", "LIST_ACTIVE"),
-        Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+        Markup.button.callback("🏠 เมนูหลัก", "HOME"),
     ])
 
     return { msg, keyboard }
@@ -68,8 +60,7 @@ export function buildPanic(sorted, topN = 3) {
 export function buildTomorrow(dueTomorrow) {
     const today = todayMidnight()
 
-    let msg = `📅 ${safeBold("งานที่ต้องส่งพรุ่งนี้")} (${dueTomorrow.length} รายการ)\n`
-    msg += `━━━━━━━━━━━━━━━━━━\n\n`
+    let msg = `📅 ${safeBold("งานพรุ่งนี้")} (${dueTomorrow.length})\n\n`
     for (const p of dueTomorrow) {
         const title = p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ"
         const status = p.properties.Status?.select?.name || "Todo"
@@ -81,7 +72,6 @@ export function buildTomorrow(dueTomorrow) {
         msg += `${statusEmoji(status)} ${safeBold(title)}${badgeForDiff(diff)}\n`
         msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}\n\n`
     }
-    msg += `💪 ${safeBold("เตรียมตัวให้พร้อม!")}`
 
     const keyboard = dueTomorrow.map((p) => [
         Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
@@ -91,8 +81,7 @@ export function buildTomorrow(dueTomorrow) {
     keyboard.push([
         Markup.button.callback("➕ เพิ่ม", "ADD"),
         Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
-        Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-        Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+        Markup.button.callback("🏠 เมนูหลัก", "HOME"),
     ])
 
     return { msg, keyboard }
@@ -119,14 +108,13 @@ export function buildWeek(pages) {
 
     const noDueItems = pages.filter((p) => !p.properties.Due?.date?.start)
 
-    let msg = `📅 ${safeBold("ตารางประจำสัปดาห์")}\n`
-    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
+    let msg = `📅 ${safeBold("ตารางสัปดาห์")}\n\n`
     for (const day of days) {
         const dayName = THAI_DAYS[day.date.getDay()]
         const dateLabel = `${day.date.getDate()} ${THAI_MONTHS[day.date.getMonth()]}`
-        const prefix = day.isToday ? ">>> 📌 " : ""
-        const countLabel = day.items.length ? `(${day.items.length} งาน)` : "(✅ ว่าง)"
-        msg += `${prefix}${dayName} ${dateLabel}  ${countLabel}\n`
+        const prefix = day.isToday ? "▸ " : "  "
+        const countLabel = day.items.length ? `(${day.items.length})` : ""
+        msg += `${prefix}${safeBold(dayName)} ${dateLabel}  ${countLabel}\n`
         for (const p of day.items) {
             const title = p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ"
             const status = p.properties.Status?.select?.name || "Todo"
@@ -138,27 +126,26 @@ export function buildWeek(pages) {
             const dayLabel = diff !== null
                 ? (diff < 0 ? `เลย ${Math.abs(diff)} วัน` : (diff === 0 ? "วันนี้!" : `อีก ${diff} วัน`))
                 : ""
-            msg += `  ${statusEmoji(status)} ${safeBold(title)}  ${priority}`
-            if (dayLabel) msg += ` — ${dayLabel}`
+            msg += `  ${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}`
+            if (dayLabel) msg += `  ${dayLabel}`
             msg += `\n`
         }
-        msg += `━━━━━━━━━━━━━━━━━━━━\n`
+        if (day.isToday) msg += `\n`
     }
 
     if (noDueItems.length) {
-        msg += `📌 ไม่มีกำหนด (${noDueItems.length} รายการ)\n`
+        msg += `📌 ไม่มีกำหนด (${noDueItems.length})\n`
         for (const p of noDueItems) {
             const title = p.properties.Name?.title?.[0]?.plain_text || "ไม่มีชื่อ"
             const status = p.properties.Status?.select?.name || "Todo"
             const subject = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป"
             const priority = p.properties.Priority?.select?.name || PRIORITY.MEDIUM
-            msg += `  ${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority}\n`
+            msg += `  ${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}\n`
         }
-        msg += `━━━━━━━━━━━━━━━━━━━━\n`
     }
 
-    msg += `\n📊 รวม ${totalCount} งานในสัปดาห์นี้`
-    if (noDueItems.length) msg += ` (+ ${noDueItems.length} ไม่มีกำหนด)`
+    msg += `\n📊 รวม ${totalCount} งาน`
+    if (noDueItems.length) msg += ` (+${noDueItems.length} ไม่มีกำหนด)`
 
     const keyboard = [
         [
@@ -167,7 +154,7 @@ export function buildWeek(pages) {
         ],
         [
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-            Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            Markup.button.callback("🏠 เมนูหลัก", "HOME"),
         ],
     ]
     return { msg, keyboard, totalCount, hasAny: pages.length > 0 }
@@ -223,16 +210,14 @@ export function buildDeadline(pages) {
     const filled = Math.max(0, Math.min(barSlots, Math.round((elapsed / totalAvailable) * barSlots)))
     const bar = "█".repeat(filled) + "░".repeat(barSlots - filled)
 
-    let msg = `⏰ ${safeBold("นับถอยหลัง")}\n`
-    msg += `━━━━━━━━━━━━━━━━━━\n`
-    msg += `${badge} ${safeBold("งานด่วน!")}\n\n`
-    msg += `${subjectEmoji(subject)} ${safeBold(title)}\n`
-    msg += `${safeBold(subject)} ${priority}  |  ${urgency}\n\n`
+    let msg = `⏰ ${safeBold("นับถอยหลัง")}\n\n`
+    msg += `${badge} ${safeBold(title)}\n`
+    msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)}  ${priority}  |  ${urgency}\n\n`
     msg += `${bar}\n`
     if (closestDiff < 0) {
-        msg += `⏱️  เลยกำหนดมา ${totalDays} วัน ${totalHours} ชม. แล้ว!\n\n`
+        msg += `⏱️ เลยกำหนดมา ${totalDays} วัน ${totalHours} ชม.\n`
     } else {
-        msg += `⏱️  เหลือ ${totalDays} วัน ${totalHours} ชม. ${totalMinutes} นาที\n\n`
+        msg += `⏱️ เหลือ ${totalDays} วัน ${totalHours} ชม. ${totalMinutes} นาที\n`
     }
     msg += `📅 ${formatDueDisplay(due)}`
 
@@ -244,7 +229,7 @@ export function buildDeadline(pages) {
         ],
         [
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-            Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            Markup.button.callback("🏠 เมนูหลัก", "HOME"),
         ],
     ]
     return { msg, keyboard, pageId: closest.id }
@@ -276,21 +261,19 @@ export function buildProgress(activePages, donePages) {
         }))
         .sort((a, b) => a.pct - b.pct)
 
-    let msg = `📊 ${safeBold("ความคืบหน้าแยกวิชา")}\n`
-    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`
+    let msg = `📊 ${safeBold("ความคืบหน้าแยกวิชา")}\n\n`
     let totalDone = 0
     let totalAll = 0
     for (const s of sorted) {
         const filled = Math.max(0, Math.min(10, Math.round(s.pct / 10)))
         const bar = "█".repeat(filled) + "░".repeat(10 - filled)
         const pctStr = s.pct === 100 ? "🎉" : `${s.pct}%`
-        msg += `${subjectEmoji(s.subject)} ${safeBold(s.subject)}  ${bar}  ${pctStr} (${s.done}/${s.total})\n`
+        msg += `${subjectEmoji(s.subject)} ${escapeMarkdown(s.subject)}  ${bar}  ${pctStr} (${s.done}/${s.total})\n`
         totalDone += s.done
         totalAll += s.total
     }
     const totalPct = totalAll > 0 ? Math.round((totalDone / totalAll) * 100) : 0
-    msg += `\n━━━━━━━━━━━━━━━━━━━━\n`
-    msg += `📈 รวม: ${totalDone}/${totalAll} เสร็จ  ${totalPct}%`
+    msg += `\n📈 รวม ${totalDone}/${totalAll} เสร็จ  ${totalPct}%`
 
     const keyboard = [
         [
@@ -299,7 +282,7 @@ export function buildProgress(activePages, donePages) {
         ],
         [
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-            Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            Markup.button.callback("🏠 เมนูหลัก", "HOME"),
         ],
     ]
     return { msg, keyboard }

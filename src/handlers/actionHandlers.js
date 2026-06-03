@@ -152,7 +152,7 @@ function dashboardMenu() {
         ],
         [
             Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
-            Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+            Markup.button.callback("🏠 เมนูหลัก", "HOME"),
         ],
     ]);
 }
@@ -163,7 +163,7 @@ function listFooterMenu() {
             Markup.button.callback("➕ เพิ่ม", "ADD"),
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
         ],
-        [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+        [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
     ]);
 }
 
@@ -239,39 +239,30 @@ function buildDashboard(activePages, donePages) {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const bar = progressBar(pct);
 
-    let msg = `📊 ${safeBold("ภาพรวมการบ้าน")}\n`;
-    msg += `━━━━━━━━━━━━━━━━━━\n`;
-    msg += `${bar} ${pct}% (${total} รายการ)\n`;
+    let msg = `📊 ${safeBold("ภาพรวมการบ้าน")}\n\n`;
+    msg += `${bar} ${pct}%\n`;
     msg += `📌 ${todo}  🔄 ${prog}  ✅ ${done}`;
     if (overduePages.length) msg += `  🚨 ${overduePages.length}`;
     msg += `\n`;
 
-    msg += `\n⚡ ${safeBold("ใกล้ครบ")} (≤ ${URGENT_DAYS} วัน)\n`;
-    if (!urgent.length) {
-        msg += `✨ ไม่มีการบ้านเร่งด่วน\n`;
-    } else {
+    if (urgent.length) {
+        msg += `\n⚡ ใกล้ครบ (${URGENT_DAYS} วัน)\n`;
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
             const { title, due, status, subject, priority } = getPageProps(p);
-            msg += `${statusEmoji(status)} ${safeBold(title)} ${priority} ${subjectEmoji(subject)} — ${formatDueDisplay(due)}\n`;
+            msg += `${statusEmoji(status)} ${escapeMarkdown(title)}  ${priority} ${subjectEmoji(subject)}${formatDueDisplay(due)}\n`;
         }
         if (urgent.length > URGENT_DISPLAY_MAX) {
-            msg += `… และอีก ${urgent.length - URGENT_DISPLAY_MAX} รายการ\n`;
+            msg += `… +${urgent.length - URGENT_DISPLAY_MAX}\n`;
         }
     }
 
-    msg += `\n📖 ${safeBold("วิชาที่ยังค้าง")}\n`;
+    msg += `\n📖 วิชาที่ค้าง\n`;
     const sorted = Object.entries(bySubject).sort((a, b) => b[1] - a[1]);
     if (!sorted.length) {
-        msg += `🎉 ไม่มีการบ้านค้าง\n`;
+        msg += `🎉 ไม่มีค้าง\n`;
     } else {
-        const rows = [];
         for (const [subject, count] of sorted.slice(0, SUBJECT_DISPLAY_MAX)) {
-            rows.push(`${subjectEmoji(subject)} ${safeBold(subject)} ${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}`);
-        }
-        for (let i = 0; i < rows.length; i += 2) {
-            const left = rows[i];
-            const right = rows[i + 1] || "";
-            msg += `${left}${right ? `  ${right}` : ""}\n`;
+            msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)}  ${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
         }
     }
 
@@ -295,14 +286,12 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "ADD", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
-            `✏️ ${safeBold("เพิ่มการบ้านใหม่")}\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
-                `ส่งข้อความเดียว เช่น\n` +
+            `✏️ ${safeBold("เพิ่มการบ้านใหม่")}\n\n` +
+                `พิมพ์การบ้าน เช่น\n` +
                 `${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n` +
                 `${safeCode("รายงานอังกฤษ วันศุกร์")}\n` +
                 `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}\n\n` +
-                `🤖 ระบบเดาวิชา + วันที่ + ความสำคัญให้อัตโนมัติ\n` +
-                `━━━━━━━━━━━━━━━━━━`,
+                `🤖 ระบบเดาวิชา + วันที่ให้อัตโนมัติ`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -536,14 +525,11 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "ASK_AI", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n` +
-                `━━━━━━━━━━━━━━━━━━\n` +
+            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
                 `พิมพ์คำถาม เช่น\n` +
-                `• "งานคณิตส่งวันไหนบ้าง"\n` +
-                `• "มีงานอะไรที่ยังไม่ทำ"\n` +
-                `• "อาทิตย์นี้มีงานกี่ชิ้น"\n\n` +
-                `พิมพ์คำถามเลย หรือกดยกเลิก\n` +
-                `━━━━━━━━━━━━━━━━━━`,
+                `${safeCode("งานคณิตส่งวันไหนบ้าง")}\n` +
+                `${safeCode("อาทิตย์นี้มีงานกี่ชิ้น")}\n\n` +
+                `หรือกดยกเลิก`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -556,13 +542,13 @@ export function registerActionHandlers(bot, userState) {
         const display = pages.slice(start, end);
         const items = display.map(p => {
             const { title, status, due, subject, priority } = getPageProps(p);
-            return `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${formatDateLabel(due, "due")}`;
+            return `${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}  ${formatDateLabel(due, "due")}`;
         });
         const totalPages = Math.ceil(pages.length / ITEMS_PER_PAGE);
-        let msg = `📋 ${safeBold("งานที่ยังค้าง")} (${pages.length})\n━━━━━━━━━━━━━━━━━━\n${items.join("\n")}`;
+        let msg = `📋 ${safeBold("งานค้าง")} (${pages.length})\n\n${items.join("\n")}`;
         if (totalPages > 1) msg += `\n\nหน้า ${page + 1}/${totalPages}`;
         if (page === 0 && showOncePerSession(uid, "PRIORITY_LEGEND")) {
-            msg += `\n━━━━━━━━━━━━━━━━━━\n🔴 สูง = ด่วน  🟡 กลาง = ปกติ  🟢 ต่ำ = ยังมีเวลา`;
+            msg += `\n\n🔴 สูง  🟡 กลาง  🟢 ต่ำ`;
         }
         return msg;
     }
@@ -573,10 +559,10 @@ export function registerActionHandlers(bot, userState) {
         const display = pages.slice(start, end);
         const items = display.map(p => {
             const { title, status, subject, priority, completed } = getPageProps(p);
-            return `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${formatDateLabel(completed, "completed")}`;
+            return `${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}  ${formatDateLabel(completed, "completed")}`;
         });
         const totalPages = Math.ceil(pages.length / ITEMS_PER_PAGE);
-        let msg = `✅ ${safeBold("งานที่ทำเสร็จแล้ว")} (${pages.length})\n━━━━━━━━━━━━━━━━━━\n${items.join("\n")}`;
+        let msg = `✅ ${safeBold("งานเสร็จ")} (${pages.length})\n\n${items.join("\n")}`;
         if (totalPages > 1) msg += `\n\nหน้า ${page + 1}/${totalPages}`;
         return msg;
     }
@@ -591,7 +577,7 @@ export function registerActionHandlers(bot, userState) {
             Markup.button.callback("➕ เพิ่ม", "ADD"),
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
         ]);
-        buttons.push([Markup.button.callback("🏠 หน้าหลัก", "HOME")]);
+        buttons.push([Markup.button.callback("🏠 เมนูหลัก", "HOME")]);
         return Markup.inlineKeyboard(buttons);
     }
 
@@ -888,7 +874,7 @@ export function registerActionHandlers(bot, userState) {
                 Markup.button.callback("💬 อีกคำคม", "QUOTE"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -996,7 +982,7 @@ export function registerActionHandlers(bot, userState) {
                     Markup.button.callback("➕ เพิ่ม", "ADD"),
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
                 ],
-                [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+                [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
             ]
             // award EXPORT_3 badge
             try {
@@ -1281,7 +1267,7 @@ export function registerActionHandlers(bot, userState) {
                 Markup.button.callback("🔥 Streak", "STREAK"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -1531,7 +1517,7 @@ export function registerActionHandlers(bot, userState) {
                 Markup.button.callback("🔥 Streak", "STREAK"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -1585,7 +1571,7 @@ export function registerActionHandlers(bot, userState) {
                 ],
                 [
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                    Markup.button.callback("🏠 เมนูหลัก", "HOME"),
                 ],
             ]
 
@@ -1689,7 +1675,7 @@ export function registerActionHandlers(bot, userState) {
                 ],
                 [
                     Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
-                    Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                    Markup.button.callback("🏠 เมนูหลัก", "HOME"),
                 ],
             ]
 
@@ -1826,7 +1812,7 @@ export function registerActionHandlers(bot, userState) {
 
                 const keyboard = [
                     [Markup.button.callback("⏭️ เริ่มรอบใหม่", "POMODORO_START")],
-                    [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+                    [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
                 ]
                 await bot.telegram.sendMessage(uid, msg, {
                     parse_mode: "Markdown",
@@ -1920,7 +1906,7 @@ export function registerActionHandlers(bot, userState) {
 
         const keyboard = [
             [Markup.button.callback("🍅 เริ่มใหม่", "POMODORO_START")],
-            [Markup.button.callback("🏠 หน้าหลัก", "HOME")],
+            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
         ]
 
         return ctx.reply(msg, {
@@ -2081,7 +2067,7 @@ export function registerActionHandlers(bot, userState) {
             if (row.length) keyboard.push(row)
             keyboard.push([
                 Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
-                Markup.button.callback("🏠 หน้าหลัก", "HOME"),
+                Markup.button.callback("🏠 เมนูหลัก", "HOME"),
             ])
 
             return ctx.reply(msg, {
