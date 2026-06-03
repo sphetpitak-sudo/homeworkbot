@@ -83,6 +83,29 @@ function consumeTicket(token) {
     return true
 }
 
+/* Validate a preliminary ticket (HMAC + expiry) WITHOUT consuming it.
+   Used by the two-stage exchange: the GET endpoint validates the
+   prelim ticket from the bot URL, then embeds a fresh consumable
+   ticket in the confirmation form. The prelim ticket itself is never
+   marked as consumed, so Telegram pre-fetches don't break it. */
+function validatePrelimTicket(token) {
+    if (!token) return false
+    const parts = token.split(".")
+    if (parts.length !== 2) return false
+    const [data, sig] = parts
+    const expected = crypto.createHmac("sha256", TICKET_HMAC_KEY).update(data).digest("base64url").slice(0, 12)
+    if (sig.length !== expected.length) return false
+    const sigBuf = Buffer.from(sig, "utf-8")
+    const expBuf = Buffer.from(expected, "utf-8")
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return false
+    let payload
+    try {
+        payload = JSON.parse(Buffer.from(data, "base64url").toString("utf-8"))
+    } catch { return false }
+    if (Date.now() > payload.exp) return false
+    return true
+}
+
 /* Periodic prune of the consumed-ticket set to prevent unbounded growth */
 if (!globalThis.__hbTicketIntervalStarted) {
     globalThis.__hbTicketIntervalStarted = true
@@ -291,43 +314,42 @@ export function startWebServer(port = 8080) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
-    /* Exchange a one-time ticket (sent in URL) for a session cookie.
-       - Real browsers: consume ticket directly, set cookie, redirect to dashboard.
-       - Bot pre-fetches (Telegram/Slack/Discord): show confirmation page with
-         a form POST. Bots don't submit forms, so the ticket survives until
-         the user clicks the button. */
+    /* ── Two-stage ticket exchange ──
+       Stage 1: Bot sends URL with a preliminary ticket.
+       Stage 2: GET validates the preliminary ticket, embeds the real
+       (consumable) ticket in a confirmation form. POST consumes it.
+
+       Why two stages? Telegram pre-fetches bot-sent URLs. If we
+       consumed the ticket on GET, the pre-fetch would eat it before
+       the user clicks. The preliminary ticket is never "consumed"
+       (just validated), so it survives pre-fetches. Only the POST
+       consumes the real ticket. */
     function isBotUA(ua) {
         if (!ua) return false
         return /TelegramBot|Slackbot|Discordbot|facebookexternalhit|WhatsApp|Twitterbot|curl|wget|bot\//i.test(ua)
     }
 
+    /* Stage 1: validate preliminary ticket → show confirmation with real ticket */
     app.get("/api/exchange", (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
-        const ticket = String(req.query.ticket || "")
-        if (!ticket) return res.status(400).send("Missing ticket")
+        const prelimToken = String(req.query.ticket || "")
+        if (!prelimToken) return res.status(400).send("Missing ticket")
 
-        /* Bot pre-fetch → show confirmation page (form POST will consume) */
-        if (isBotUA(req.headers["user-agent"])) {
-            const escaped = ticket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-            res.setHeader("Content-Type", "text/html; charset=utf-8")
-            return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>กดปุ่มด้านล่างเพื่อเปิดแดชบอร์ด</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">เข้าแดชบอร์ด</button></form></div></body></html>`)
-        }
-
-        /* Real browser → consume ticket directly */
-        if (!consumeTicket(ticket)) {
+        /* Validate preliminary token (HMAC + expiry, but NOT consumed) */
+        if (!validatePrelimTicket(prelimToken)) {
             res.setHeader("Content-Type", "text/html; charset=utf-8")
             return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
         }
-        res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
-            httpOnly: true,
-            sameSite: "lax",
-            maxAge: 24 * 3600 * 1000,
-            path: "/",
-        })
-        return res.redirect("/")
+
+        /* Generate a real (consumable) ticket */
+        const realTicket = createSignedTicket()
+
+        const escaped = realTicket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+        res.setHeader("Content-Type", "text/html; charset=utf-8")
+        res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>กดปุ่มด้านล่างเพื่อเปิดแดชบอร์ด</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">เข้าแดชบอร์ด</button></form></div></body></html>`)
     })
 
-    /* POST fallback for confirmation-page form submit */
+    /* Stage 2: POST consumes the real ticket → sets cookie → redirect */
     app.post("/api/exchange", express.urlencoded({ extended: false }), (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const ticket = String(req.body?.ticket || "")
