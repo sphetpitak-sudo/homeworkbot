@@ -14,9 +14,12 @@ import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim() || null;
-if (DASHBOARD_TOKEN) logger.info("Dashboard auth enabled");
-else logger.warn("DASHBOARD_TOKEN not set — dashboard auth disabled (all requests allowed)");
+let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim() || crypto.randomBytes(32).toString("hex");
+if (process.env.DASHBOARD_TOKEN) {
+    logger.info("Dashboard auth enabled (DASHBOARD_TOKEN from env)");
+} else {
+    logger.info("DASHBOARD_TOKEN not set — auto-generated random token (resets on restart)");
+}
 
 export function getDashboardToken() {
     return DASHBOARD_TOKEN;
@@ -113,7 +116,6 @@ export function setBotReady(ready) {
 }
 
 export function createDashboardUrl(baseUrl) {
-    if (!DASHBOARD_TOKEN) return baseUrl || ""
     if (!baseUrl) return ""
     const ticket = createSignedTicket()
     return `${baseUrl}/api/exchange?ticket=${ticket}`
@@ -247,7 +249,6 @@ export function startWebServer(port = 8080) {
        "please authenticate via the bot" page instead of the broken
        dashboard (which would fail all API calls with 401). */
     app.get("/", (req, res, next) => {
-        if (!DASHBOARD_TOKEN) return next()
         const cookie = req.cookies?.[SESSION_COOKIE]
         if (cookie === DASHBOARD_TOKEN) return next()
         const queryToken = req.query.token
@@ -260,7 +261,8 @@ export function startWebServer(port = 8080) {
             })
             return next()
         }
-        return next()
+        res.setHeader("Content-Type", "text/html; charset=utf-8")
+        return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>ต้องเข้าสู่ระบบผ่านบอท Telegram ก่อน</p><div class="hint">1. เปิดบอท Homework Bot ใน Telegram<br>2. กดปุ่ม 🌐 Web Dashboard<br>3. ทำตามขั้นตอนในลิงก์</div></div></body></html>`)
     })
 
     app.use(express.static(path.join(__dirname, "public")));
@@ -298,7 +300,6 @@ export function startWebServer(port = 8080) {
     });
 
     function requireAuth(req, res, next) {
-        if (!DASHBOARD_TOKEN) return next();
         const header = req.headers["authorization"]?.replace("Bearer ", "");
         const cookie = req.cookies?.[SESSION_COOKIE];
         if (header === DASHBOARD_TOKEN || cookie === DASHBOARD_TOKEN) return next();
