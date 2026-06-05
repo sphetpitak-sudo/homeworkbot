@@ -132,10 +132,9 @@ Edit `.env` with your credentials:
 
 ```env
 # ── Required ──
-TELEGRAM_TOKEN=123456:ABC-DEF1234            # From @BotFather
-NOTION_TOKEN=secret_abc123def456...          # From https://www.notion.so/my-integrations
-DATABASE_ID=abc123def456789abc123def456      # Your Notion database ID (see below)
-DASHBOARD_TOKEN=abc123def456789abc123def...  # openssl rand -hex 32
+TELEGRAM_TOKEN=123456:ABC-DEF1234        # From @BotFather
+NOTION_TOKEN=secret_abc123def456...      # From https://www.notion.so/my-integrations
+DATABASE_ID=abc123def456789abc123def456  # Your Notion database ID (see below)
 
 # ── Required for AI parsing + Q&A ──
 TYPHOON_API_KEY=typhoon-abc123...            # From https://playground.opentyphoon.ai
@@ -256,7 +255,7 @@ Access at your deployment URL (e.g. `https://homework.k.jrnm.app`) using one of:
 Authorization: Bearer <DASHBOARD_TOKEN>
 ```
 
-> Generate the dashboard token with `openssl rand -hex 32` and set it as `DASHBOARD_TOKEN`.
+> If `DASHBOARD_TOKEN` is not set, the dashboard has **no authentication** — anyone with the URL can access the API and data. Set it in production with `openssl rand -hex 32`.
 
 ---
 
@@ -452,7 +451,7 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 | `TELEGRAM_TOKEN` | ✅ | — | Telegram bot token from @BotFather |
 | `NOTION_TOKEN` | ✅ | — | Notion integration secret |
 | `DATABASE_ID` | ✅ | — | Notion database ID |
-| `DASHBOARD_TOKEN` | ✅ | — | Web dashboard auth token (generate: `openssl rand -hex 32`) |
+| `DASHBOARD_TOKEN` | ❌ | — | Web dashboard auth (generate `openssl rand -hex 32`; unset = no auth) |
 | `TYPHOON_API_KEY` | ❌ | — | AI parsing (free: 5 req/s, 200 req/min) |
 | `REMINDER_CHAT_ID` | ❌ | — | Chat ID for daily reminders + weekly summary |
 | `WEB_URL` | ❌ | — | Web dashboard URL (shows 🌐 button in bot menu) |

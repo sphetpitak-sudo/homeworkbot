@@ -15,6 +15,8 @@ import crypto from "crypto";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim() || null;
+if (DASHBOARD_TOKEN) logger.info("Dashboard auth enabled");
+else logger.warn("DASHBOARD_TOKEN not set — dashboard auth disabled (all requests allowed)");
 
 export function getDashboardToken() {
     return DASHBOARD_TOKEN;
