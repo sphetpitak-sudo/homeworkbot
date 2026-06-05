@@ -1,6 +1,6 @@
 import { logger } from "./logger.js";
 
-const REQUIRED = ["TELEGRAM_TOKEN", "NOTION_TOKEN", "DATABASE_ID"];
+const REQUIRED = ["TELEGRAM_TOKEN", "NOTION_TOKEN", "DATABASE_ID", "DASHBOARD_TOKEN"];
 
 export function validateEnv() {
   const missing = REQUIRED.filter((k) => !process.env[k]);

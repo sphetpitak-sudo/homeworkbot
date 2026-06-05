@@ -6,7 +6,7 @@
     <img src="https://img.shields.io/badge/telegraf-4.x-009B77?logo=telegram" alt="Telegraf">
     <img src="https://img.shields.io/badge/express-5.x-000000?logo=express" alt="Express">
     <img src="https://img.shields.io/badge/notion_api-2.x-000000?logo=notion" alt="Notion API">
-    <img src="https://img.shields.io/badge/tests-1335%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-1306%20passing-brightgreen" alt="Tests">
     <img src="https://img.shields.io/badge/license-ISC-blue" alt="License">
   </p>
   <p>
@@ -30,7 +30,7 @@
 |---------|-------------|
 | **AI Parse Homework** | Type "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้" → AI (Typhoon) extracts subject, due date, priority, tags automatically |
 | **AI Q&A** | `/ask` — ask about homework in natural language, AI answers from Notion |
-| **AI Suggest** | `/suggest` — AI analyzes all active homework + streak + overdue → suggests what to do first |
+| **AI Suggest** | `/suggest` — AI analyzes all active homework + overdue → suggests what to do first |
 | **AI Smartbook** | `/smartbook` — AI generates a 7-day study plan from active homework, export as iCal |
 | **Pomodoro Timer** | `/pomodoro` — 🍅 25-min work + 5-min break timer, links with /focus, badges, persistent stats |
 | **Focus Mode** | `/focus` — pick one task, block distractions, change status without leaving focus |
@@ -42,8 +42,7 @@
 | **Search** | `/search` — search homework by keyword |
 | **Export** | `/export` — shareable plain-text summary of all homework |
 | **Stats** | `/stats` — quick stats overview |
-| **Streak** | `/streak` — 🔥 consecutive days of completing homework, milestones (3/7/14/30/60/100/365) |
-| **Badges** | `/badges` — 🏅 23 achievement badges (streak, tasks, pomodoro, hint, panic, export) |
+| **Badges** | `/badges` — 🏅 achievement badges (tasks, pomodoro, usage) |
 | **Review** | `/review` — completed homework summary with period picker + sentiment |
 | **Collab** | `/collab` — share a homework item with a friend via token (24h TTL) |
 | **Noted** | `/noted` — attach a short note to any homework |
@@ -133,16 +132,17 @@ Edit `.env` with your credentials:
 
 ```env
 # ── Required ──
-TELEGRAM_TOKEN=123456:ABC-DEF1234        # From @BotFather
-NOTION_TOKEN=secret_abc123def456...      # From https://www.notion.so/my-integrations
-DATABASE_ID=abc123def456789abc123def456  # Your Notion database ID (see below)
+TELEGRAM_TOKEN=123456:ABC-DEF1234            # From @BotFather
+NOTION_TOKEN=secret_abc123def456...          # From https://www.notion.so/my-integrations
+DATABASE_ID=abc123def456789abc123def456      # Your Notion database ID (see below)
+DASHBOARD_TOKEN=abc123def456789abc123def...  # openssl rand -hex 32
 
 # ── Required for AI parsing + Q&A ──
-TYPHOON_API_KEY=typhoon-abc123...        # From https://playground.opentyphoon.ai
+TYPHOON_API_KEY=typhoon-abc123...            # From https://playground.opentyphoon.ai
 
 # ── Optional ──
-REMINDER_CHAT_ID=123456789               # Chat ID for reminders (get it from @userinfobot)
-WEB_URL=https://homework.k.jrnm.app      # Web dashboard URL (shows 🌐 button in bot menu)
+REMINDER_CHAT_ID=123456789                   # Chat ID for reminders (get it from @userinfobot)
+WEB_URL=https://homework.k.jrnm.app          # Web dashboard URL (shows 🌐 button in bot menu)
 ```
 
 #### 4️⃣ Create Notion Database
@@ -181,8 +181,8 @@ npm test
 ```
 
 ```
-Test Suites: 18 passed, 18 total
-Tests:       1335 passed, 1335 total
+Test Suites: 17 passed, 17 total
+Tests:       1306 passed, 1306 total
 ```
 
 #### 6️⃣ Run
@@ -195,7 +195,7 @@ On boot, the bot will:
 - Print a startup banner: `🏠 Homework Bot v1.0.0 starting (node v20.x.x, TZ Asia/Bangkok)`
 - Validate your Notion database schema (warns but doesn't exit if properties are missing)
 - Start the web dashboard on `PORT` (default `8080`)
-- Register all 23 commands with Telegram
+- Register all 22 commands with Telegram
 
 Open Telegram → find your bot → type `/start` or just type homework directly, e.g.:
 - `คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้` (Math worksheet page 20, due tomorrow)
@@ -224,7 +224,6 @@ Open Telegram → find your bot → type `/start` or just type homework directly
 | `/suggest` | 💡 AI suggests what to do first |
 | `/badges` | 🏅 View achievement badges |
 | `/hint` | 🧠 Thai tips to start each subject |
-| `/streak` | 🔥 Consecutive day streak (with milestones) |
 | `/review` | 📋 Completed homework summary |
 | `/collab` | 👥 Share homework with friends (24h token) |
 | `/smartbook` | 📚 AI generates 7-day study plan |
@@ -257,7 +256,7 @@ Access at your deployment URL (e.g. `https://homework.k.jrnm.app`) using one of:
 Authorization: Bearer <DASHBOARD_TOKEN>
 ```
 
-> The dashboard token is a SHA256 hash of your `NOTION_TOKEN`. You can override it by setting the `DASHBOARD_TOKEN` environment variable.
+> Generate the dashboard token with `openssl rand -hex 32` and set it as `DASHBOARD_TOKEN`.
 
 ---
 
@@ -290,11 +289,10 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
                               ├─ 07:00 Mon → weeklySummary
                               └─ 08:00 → sendReminders
                                    ↕
-                              Persistent Stores
-                              ├─ .streaks.json (streakService)
-                              ├─ .badges.json  (badgeService)
-                              ├─ .pomodoros.json (pomodoroService)
-                              └─ .corrections.json (aiCache)
+                               Persistent Stores
+                               ├─ .badges.json  (badgeService)
+                               ├─ .pomodoros.json (pomodoroService)
+                               └─ .corrections.json (aiCache)
 ```
 
 ---
@@ -306,7 +304,7 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
  ┣ 📦 src
  ┃ ┣ 📂 handlers
- ┃ ┃ ┣ 📄 commandHandlers.js          ← 23 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /streak /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
+ ┃ ┃ ┣ 📄 commandHandlers.js          ← 22 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
  ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
  ┃ ┃ ┗ 📄 viewBuilders.js             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
  ┃ ┣ 📂 services
@@ -315,8 +313,7 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
  ┃ ┃ ┣ 📄 qaService.js                ← AI Q&A with homework context
  ┃ ┃ ┣ 📄 notionService.js            ← Notion SDK wrapper (TTL cache, retry, auto-invalidate, validateNotionSchema)
  ┃ ┃ ┣ 📄 cache.js                    ← Generic in-memory TTL Map with pattern-based invalidation
- ┃ ┃ ┣ 📄 streakService.js            ← 🔥 Streak tracking (.streaks.json, milestones, calendar)
- ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, 23 badges, rarities)
+ ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, rarities)
  ┃ ┃ ┣ 📄 pomodoroService.js          ← 🍅 Pomodoro timer (.pomodoros.json, stats, streaks)
  ┃ ┃ ┣ 📄 hintService.js              ← 💡 Thai hint generation per subject (getStudyTip / askHint)
  ┃ ┃ ┗ 📄 shareTokenService.js        ← 🔗 Collab share-link tokens (.share_tokens.json, 24h TTL)
@@ -455,10 +452,10 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 | `TELEGRAM_TOKEN` | ✅ | — | Telegram bot token from @BotFather |
 | `NOTION_TOKEN` | ✅ | — | Notion integration secret |
 | `DATABASE_ID` | ✅ | — | Notion database ID |
+| `DASHBOARD_TOKEN` | ✅ | — | Web dashboard auth token (generate: `openssl rand -hex 32`) |
 | `TYPHOON_API_KEY` | ❌ | — | AI parsing (free: 5 req/s, 200 req/min) |
 | `REMINDER_CHAT_ID` | ❌ | — | Chat ID for daily reminders + weekly summary |
 | `WEB_URL` | ❌ | — | Web dashboard URL (shows 🌐 button in bot menu) |
-| `DASHBOARD_TOKEN` | ❌ | SHA256(NOTION_TOKEN) | Custom dashboard auth token |
 | `PORT` | ❌ | `8080` | Web server port |
 | `TZ` | ❌ | `Asia/Bangkok` | Timezone (hardcoded in index.js) |
 
@@ -537,7 +534,6 @@ npm run test:watch       # Watch mode
 | `cache` | ~75 | `cacheGet/Set/Invalidate/Cleanup`, TTL, pattern-based |
 | `api.e2e` | ~200 | Express API endpoints, auth (Bearer + cookie), error handling |
 | `badgeService` | ~65 | `checkBadges()`, `checkTaskBadges()`, `awardBadges()`, `getAllBadges()`, rarity, grid, usage, persistence |
-| `streakService` | 22 | `recordCompletion()`, `getStreak()`, milestones, calendar, persistence, MAX_ENTRIES, race-safety across `jest.resetModules` |
 | `commandHandlers` | 33 | Focus, panic, preview, review, `errorWithRetry` allowlist |
 | `hintService` | ~15 | Hint generation, subject matching |
 | `collabSmartbook` | ~15 | Collab token flow, smartbook plan rendering |
@@ -548,7 +544,7 @@ npm run test:watch       # Watch mode
 | `notionSchema` | 5 | `validateNotionSchema()`: missing props, type mismatches, unreachable Notion, per-call cache |
 | `dashboardSecurity` | 7 | Security headers, CSP, ticket exchange, cookie auth, SW versioning, /health 503 before ready, /health 200 after setBotReady(true) |
 
-**Total: 1335 tests, 18 suites, 0 failures**
+**Total: 1306 tests, 17 suites, 0 failures** (run `npm test`)
 
 ---
 

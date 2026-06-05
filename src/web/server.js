@@ -14,22 +14,7 @@ import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/* ── separate dashboard token (never expose TELEGRAM_TOKEN) ── */
-let DASHBOARD_TOKEN = null;
-
-function initDashboardToken() {
-    const envToken = process.env.DASHBOARD_TOKEN?.trim();
-    if (envToken) { DASHBOARD_TOKEN = envToken; return; }
-    const notionToken = process.env.NOTION_TOKEN?.trim();
-    if (!notionToken) {
-        logger.warn("DASHBOARD_TOKEN not set and NOTION_TOKEN missing — dashboard auth disabled (all requests allowed)");
-        return;
-    }
-    DASHBOARD_TOKEN = crypto.createHash("sha256").update(notionToken).digest("base64url").slice(0, 32);
-    logger.info("Dashboard token derived from NOTION_TOKEN (length 32) — set DASHBOARD_TOKEN to override");
-}
-
-initDashboardToken();
+let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim() || null;
 
 export function getDashboardToken() {
     return DASHBOARD_TOKEN;
@@ -263,8 +248,17 @@ export function startWebServer(port = 8080) {
         if (!DASHBOARD_TOKEN) return next()
         const cookie = req.cookies?.[SESSION_COOKIE]
         if (cookie === DASHBOARD_TOKEN) return next()
-        res.setHeader("Content-Type", "text/html; charset=utf-8")
-        return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>ต้องเข้าสู่ระบบผ่านบอท Telegram ก่อน</p><div class="hint">1. เปิดบอท Homework Bot ใน Telegram<br>2. กดปุ่ม 🌐 Web Dashboard<br>3. ทำตามขั้นตอนในลิงก์</div></div></body></html>`)
+        const queryToken = req.query.token
+        if (queryToken === DASHBOARD_TOKEN) {
+            res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
+                httpOnly: true,
+                sameSite: "lax",
+                maxAge: 365 * 24 * 60 * 60 * 1000,
+                path: "/",
+            })
+            return next()
+        }
+        return next()
     })
 
     app.use(express.static(path.join(__dirname, "public")));
