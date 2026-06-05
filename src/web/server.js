@@ -10,6 +10,7 @@ import { recalcPriority } from "../utils/priority.js";
 import { formatDate } from "../utils/dateParser.js";
 import { logger } from "../utils/logger.js";
 import { buildBadgeGrid, getBadgeCount, getRarestBadge } from "../services/badgeService.js";
+import { QUOTES } from "../utils/quotes.js";
 import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -500,6 +501,16 @@ export function startWebServer(port = 8080) {
             res.status(500).json({ error: "Internal server error" })
         }
     })
+
+    app.get("/api/quote", requireAuth, async (req, res) => {
+        try {
+            const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+            res.json(q);
+        } catch (err) {
+            logger.error("API GET /api/quote:", err);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
 
     app.post("/api/bulk-status", requireAuth, async (req, res) => {
         const { ids, status } = req.body;

@@ -411,7 +411,10 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
       Add
     </button>
   </div>
-  <div id="homeMotivate" class="motivate"></div>
+  <div class="card" id="homeQuoteCard" style="margin-bottom:12px;padding:14px 18px;display:none;">
+    <div id="homeQuoteText" style="font-size:13px;font-style:italic;color:var(--text2);line-height:1.6;"></div>
+    <div id="homeQuoteAuthor" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
+  </div>
   <div class="stats" id="homeStats">
     <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
     <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
@@ -433,6 +436,16 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
         <div style="width:32px;height:32px;border-radius:8px;background:rgba(61,184,158,0.1);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--green);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
         <div><div style="font-weight:600;font-size:13px;">All caught up!</div><div style="font-size:10px;color:var(--text3);">No overdue tasks</div></div>
       </div>
+    </div>
+  </div>
+  <div class="grid-2" id="homePanicRow" style="display:none;">
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Urgent — 3 งานด่วนที่สุด</div>
+      <div id="homePanicList"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Progress by Subject</div>
+      <div id="homeSubjectProgress"></div>
     </div>
   </div>
   <div class="quick-grid">
@@ -780,14 +793,74 @@ function destroyChart(id){const c=S.charts.get(id);if(c){c.destroy();S.charts.de
 function saveChart(id,c){S.charts.set(id,c)}
 function chartTooltip(){const d=document.body.classList.contains("dark");return{backgroundColor:d?"#1a1a24":"#fff",titleColor:d?"#e8e4df":"#1a1a2e",bodyColor:d?"#e8e4df":"#1a1a2e",titleFont:{size:11,weight:"600"},bodyFont:{size:11},padding:8,cornerRadius:6,displayColors:false}}
 
-async function loadHome(){try{const d=await loadAll();if(d?.error){qs("homeStats").innerHTML=`<div class="empty">${esc(d.error)}</div>`;return}if(!d?.stats)return;const s=d.stats;const activeCount=s.todo+s.prog;const motEl=qs("homeMotivate");if(s.done>0&&activeCount===0)motEl.textContent="All done!";else if(s.done>0&&activeCount<=3)motEl.textContent=`Almost there — ${activeCount} left!`;else if(s.overdue>0)motEl.textContent=`${s.overdue} overdue · ${activeCount} active`;else motEl.textContent=`${activeCount} task${activeCount>1?'s':''} · ${s.urgent} urgent`;
+async function loadHome(){try{const d=await loadAll();if(d?.error){qs("homeStats").innerHTML=`<div class="empty">${esc(d.error)}</div>`;return}if(!d?.stats)return;const s=d.stats;
 const iconSVG=(stroke,icon)=>`<svg viewBox="0 0 24 24" style="stroke:${stroke};fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">${icon}</svg>`;
 const icons={todo:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',prog:'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',done:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',total:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',urgent:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',overdue:'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'};
 qs("homeStats").innerHTML=`<div class="stat"><div class="stat-icon" style="background:${COLORS.todo}15;">${iconSVG(COLORS.todo,icons.todo)}</div><div class="val" style="color:${COLORS.todo}">${s.todo}</div><div class="lbl">To Do</div></div><div class="stat"><div class="stat-icon" style="background:${COLORS.prog}15;">${iconSVG(COLORS.prog,icons.prog)}</div><div class="val" style="color:${COLORS.prog}">${s.prog}</div><div class="lbl">In Progress</div></div><div class="stat"><div class="stat-icon" style="background:${COLORS.done}15;">${iconSVG(COLORS.done,icons.done)}</div><div class="val" style="color:${COLORS.done}">${s.done}</div><div class="lbl">Done</div></div><div class="stat"><div class="stat-icon" style="background:var(--accent-soft);">${iconSVG('var(--accent)',icons.total)}</div><div class="val" style="color:var(--accent)">${s.total}</div><div class="lbl">Total</div></div><div class="stat"><div class="stat-icon" style="background:rgba(232,133,74,0.1);">${iconSVG('var(--accent)',icons.urgent)}</div><div class="val" style="color:var(--accent)">${s.urgent}</div><div class="lbl">Urgent</div></div><div class="stat"><div class="stat-icon" style="background:rgba(232,93,93,0.1);">${iconSVG('var(--coral)',icons.overdue)}</div><div class="val" style="color:var(--coral)">${s.overdue||0}</div><div class="lbl">Overdue</div></div>`;
 const byDate=indexByDate(S.items);const todayKey=fmtLocalDate(new Date());const todayItems=(byDate.get(todayKey)||[]).filter(i=>i.status!==STATUS.DONE);const tomorrowKey=fmtLocalDate(new Date(Date.now()+86400000));const tomorrowItems=(byDate.get(tomorrowKey)||[]).filter(i=>i.status!==STATUS.DONE);const nowDate=new Date();qs("homeTodayDate").textContent=`(${DOW[nowDate.getDay()]}. ${nowDate.getDate()} ${MONTH[nowDate.getMonth()]})`;
 if(todayItems.length||tomorrowItems.length){let h="";if(todayItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;">Today (${todayItems.length})</div>`;h+=todayItems.map(i=>{const pr=i.priority||"🟡 กลาง";return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}if(tomorrowItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;margin-top:8px;">Tomorrow (${tomorrowItems.length})</div>`;h+=tomorrowItems.map(i=>{const pr=i.priority||"🟡 กลาง";return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}qs("homeTodayList").innerHTML=h}else{qs("homeTodayList").innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:10px 0;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Nothing due today or tomorrow</div>'}
-if(s.overdue>0){qs("homeOverdueCount").textContent=`${s.overdue} task${s.overdue>1?'s':''}`;qs("homeOverdueAlert").classList.remove("hide");qs("homeNoOverdue").style.display="none"}else{qs("homeOverdueAlert").classList.add("hide");qs("homeNoOverdue").style.display="flex"}qs("homeTs").textContent=fmtTime()}catch(e){qs("homeStats").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
+if(s.overdue>0){qs("homeOverdueCount").textContent=`${s.overdue} task${s.overdue>1?'s':''}`;qs("homeOverdueAlert").classList.remove("hide");qs("homeNoOverdue").style.display="none"}else{qs("homeOverdueAlert").classList.add("hide");qs("homeNoOverdue").style.display="flex"}qs("homeTs").textContent=fmtTime();loadQuote();renderPanic();renderSubjectProgress()}catch(e){qs("homeStats").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
 function refreshHome(){S.ts=0;loadHome();showToast("Updated!")}
+
+/* ── Quote ─ */
+async function loadQuote(){
+  try{
+    const q=await fetchJson("/api/quote");
+    if(q&&q.text){
+      qs("homeQuoteCard").style.display="block";
+      qs("homeQuoteText").innerHTML=`"${esc(q.text)}"`;
+      qs("homeQuoteAuthor").textContent=`— ${q.author}`;
+    }
+  }catch(e){qs("homeQuoteCard").style.display="none"}
+}
+
+/* ── Top 3 Urgent / Panic ─ */
+function renderPanic(){
+  const nonDone=S.items.filter(i=>i.status!==STATUS.DONE&&i.due);
+  const sorted=nonDone.sort((a,b)=>new Date(a.due)-new Date(b.due));
+  const top3=sorted.slice(0,3);
+  const row=qs("homePanicRow");
+  if(!top3.length){row.style.display="none";return}
+  row.style.display="grid";
+  qs("homePanicList").innerHTML=top3.map((i,idx)=>{
+    const pr=i.priority||"🟡 กลาง";
+    const d=daysDiff(i.due);
+    const urgent=d!==null&&d<=3;
+    return`<div class="today-item" onclick="showDetail('${i.id}')">
+      <span style="font-weight:700;font-size:12px;color:${urgent?"var(--coral)":"var(--accent)"};min-width:18px;">#${idx+1}</span>
+      <span class="ti-title">${esc(i.title)}</span>
+      <span class="ti-pri" style="color:${priColor(pr)}">${pr}</span>
+      <span style="font-size:10px;color:var(--text3);">${dueLabel(i.due)}</span>
+    </div>`
+  }).join("");
+}
+
+/* ── Progress by Subject ─ */
+function renderSubjectProgress(){
+  const el=qs("homeSubjectProgress");
+  const subs={};
+  for(const i of S.items){
+    if(!i.subject)continue;
+    if(!subs[i.subject])subs[i.subject]={total:0,done:0};
+    subs[i.subject].total++;
+    if(i.status===STATUS.DONE)subs[i.subject].done++;
+  }
+  const entries=Object.entries(subs).sort((a,b)=>b[1].total-a[1].total);
+  if(!entries.length){el.innerHTML='<div class="empty" style="padding:12px;">No tasks yet</div>';return}
+  el.innerHTML=entries.map(([sub,{total,done}])=>{
+    const pct=total>0?Math.round(done/total*100):0;
+    const color=pct>=80?"var(--green)":pct>=50?"var(--accent)":"var(--coral)";
+    return`<div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+        <span>${subjEmoji(sub)} ${esc(sub)}</span>
+        <span style="color:var(--text3);">${done}/${total}</span>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:99px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;border-radius:99px;background:${color};transition:width .6s;"></div>
+      </div>
+    </div>`
+  }).join("");
+}
 
 async function loadDash(){try{const d=await loadAll(true);if(d?.error){qs("dashStats").innerHTML=`<div class="empty">${esc(d.error)}</div>`;return}const s=d.stats;if(!s)return;setGreeting();renderDashStats(s);renderDashCharts(s);renderDashPills(s);renderWeekGrid();qs("dashTs").textContent=fmtTime()}catch(e){qs("dashStats").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
 function refreshDash(){S.ts=0;loadDash();showToast("Updated!")}
