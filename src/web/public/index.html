@@ -526,9 +526,11 @@ input[type="checkbox"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent
       <button class="bulk-btn" onclick="bulkStatus('Todo')">To Do</button>
       <button class="bulk-btn" onclick="bulkStatus('In Progress')">In Progress</button>
       <button class="bulk-btn" onclick="bulkStatus('Done')">Done</button>
+      <button class="bulk-btn" style="color:var(--coral);border-color:var(--coral);" onclick="bulkDelete()">🗑 Delete</button>
       <button class="bulk-btn bulk-clear" onclick="clearSelection()">Clear</button>
     </div>
     <div class="filter-group" id="listFilters" style="margin-bottom:10px;"></div>
+    <div id="filterChips" style="margin-bottom:6px;display:none;"></div>
     <div class="table-wrap">
       <table><thead><tr>
         <th style="width:30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;"></th>
@@ -694,7 +696,18 @@ function getSelectedTags(elId){
 function indexByDate(items){const m=new Map();for(const i of items){if(!i.due)continue;if(!m.has(i.due))m.set(i.due,[]);m.get(i.due).push(i)}return m}
 function fmtLocalDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 
-function showToast(msg){const t=document.createElement("div");t.textContent=msg;t.style.cssText="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:8px 16px;border-radius:10px;font-size:12px;z-index:999;animation:fadeIn .3s";document.body.appendChild(t);setTimeout(()=>t.remove(),1800)}
+function showToast(msg, type){
+  const t=document.createElement("div");
+  if(type==="error"){
+    t.innerHTML='<span style="flex:1">'+esc(msg)+'</span><span onclick="this.parentElement.remove()" style="cursor:pointer;margin-left:10px;opacity:.7;font-weight:600;">✕</span>';
+    t.style.cssText="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--coral);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;z-index:999;animation:fadeIn .3s;display:flex;align-items:center;gap:4px;max-width:90vw;box-shadow:0 4px 12px rgba(0,0,0,0.15);";
+  }else{
+    t.textContent=msg;
+    t.style.cssText="position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:8px 16px;border-radius:10px;font-size:12px;z-index:999;animation:fadeIn .3s";
+    setTimeout(()=>t.remove(),1800)
+  }
+  document.body.appendChild(t);
+}
 
 const RARITY_ORDER = ["Common", "Uncommon", "Rare", "Epic", "Legendary"];
 const RARITY_COLORS = {
@@ -859,6 +872,7 @@ function listFilter(){
   const total=S.items.length,done=S.items.filter(i=>i.status===STATUS.DONE).length;
   qs("listStatus").textContent=`${total} total · ${done} done · ${filtered.length} shown`;
   listRenderTable(filtered);
+  renderFilterChips();
 }
 function tagsHtml(t){return(t||[]).map(v=>`<span class="tag-pill">${esc(v)}</span>`).join("")}
 function listRenderTable(items){const today=new Date();today.setHours(0,0,0,0);const tbody=qs("listTable");const totalPages=Math.max(1,Math.ceil(items.length/S.pageSize));const pg=Math.min(S.page,totalPages-1);const start=pg*S.pageSize;const pageItems=items.slice(start,start+S.pageSize);if(!items.length){S.page=0;tbody.innerHTML='<tr><td colspan="9" class="empty"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>No matching tasks<br><span style="font-size:11px;">Try adjusting your search or filters</span></td></tr>';renderPagination(0,0);return}const groups={overdue:[],thisWeek:[],nextWeek:[],later:[],noDate:[],done:[]};const eow=new Date(today);eow.setDate(today.getDate()+(7-today.getDay()));const enw=new Date(eow);enw.setDate(eow.getDate()+7);for(const i of pageItems){if(i.status===STATUS.DONE){groups.done.push(i);continue}if(!i.due){groups.noDate.push(i);continue}const dt=new Date(i.due+"T00:00:00");if(dt<today)groups.overdue.push(i);else if(dt<=eow)groups.thisWeek.push(i);else if(dt<=enw)groups.nextWeek.push(i);else groups.later.push(i)}const config=[["Overdue",groups.overdue],["This Week",groups.thisWeek],["Next Week",groups.nextWeek],["Later",groups.later],["No Date",groups.noDate],["Done",groups.done]];let html="";for(const [hdr,g] of config){if(!g.length)continue;html+=`<tr class="grp"><td colspan="9">${hdr} (${g.length})</td></tr>`;html+=g.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";const pc=priColor(pri);const pcls=priCls(pri);const dr=dueClass(i.due);const checked=S.selected?.has(i.id)?"checked":"";const statusBtns=`<div class="status-btns"><button class="status-btn s-todo${i.status===STATUS.TODO?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.TODO}')" title="To Do"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></button><button class="status-btn s-prog${i.status===STATUS.PROG?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.PROG}')" title="In Progress"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="status-btn s-done${i.status===STATUS.DONE?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.DONE}')" title="Done"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button></div>`;return`<tr onclick="showDetail('${i.id}')"${i.status===STATUS.DONE?' class="done-row"':''}><td><input type="checkbox" ${checked} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="cursor:pointer;"></td><td>${statusBtns}</td><td>${subjEmoji(i.subject)} ${esc(i.title)}</td><td><span class="tag">${esc(i.subject)}</span></td><td style="color:${pc};font-weight:600;" class="pri-${pcls}">${pri}</td><td class="${dr}">${i.due||"-"}</td><td class="${dr}">${i.due?dueLabel(i.due):"-"}</td><td>${completedLabel(i.completed)}</td><td>${tagsHtml(i.tags)}</td></tr>`}).join("")}tbody.innerHTML=html;renderPagination(items.length,totalPages)}
@@ -962,7 +976,7 @@ async function submitHomework(e){
     S.ts=0;
     loadHome();
   }catch(err){
-    showToast("Error: "+err.message);
+    showToast(err.message,"error");
   }
 }
 qs("addDue")?.addEventListener("change",updatePriorityPreview);
@@ -1029,7 +1043,7 @@ async function submitEdit(e){
     S.ts=0;
     loadAll().then(()=>{showDetail(data.id)});
   }catch(err){
-    showToast("Error: "+err.message);
+    showToast(err.message,"error");
   }
 }
 qs("editDue")?.addEventListener("change",updateEditPriorityPreview);
@@ -1055,10 +1069,9 @@ async function deleteHomework(id){
     S.ts=0;
     loadHome();
   }catch(err){
-    showToast("Error: "+err.message);
+    showToast(err.message,"error");
   }
 }
-
 /* ── Status Change ─ */
 async function changeStatus(id,status){
   try{
@@ -1084,10 +1097,9 @@ async function changeStatus(id,status){
     else if(v==="dashView")loadDash();
     else if(v==="listView")loadList();
   }catch(err){
-    showToast("Error: "+err.message);
+    showToast(err.message,"error");
   }
 }
-
 /* ── Bulk Actions ─ */
 function toggleSelect(id){
   if(S.selected.has(id))S.selected.delete(id);
@@ -1149,9 +1161,107 @@ async function bulkStatus(status){
     listRenderFilters();
     listFilter();
   }catch(err){
-    showToast("Error: "+err.message);
+    showToast(err.message,"error");
   }
 }
+
+/* ── Bulk Delete ─ */
+async function bulkDelete(){
+  if(!S.selected.size)return;
+  if(!confirm(`Delete ${S.selected.size} homework(s) permanently?`))return;
+  const ids=[...S.selected];
+  try{
+    if(TOKEN===FAKE_TOKEN){
+      S.items=S.items.filter(i=>!S.selected.has(i.id));
+      showToast(`Deleted ${ids.length} items! (demo)`);
+      S.selected.clear();
+      updateBulkBar();
+      listRenderFilters();
+      listFilter();
+      return;
+    }
+    const results=await Promise.allSettled(ids.map(id=>
+      fetch("/api/homework/delete",{method:"POST",headers:authHeaders(),body:JSON.stringify({id})})
+    ));
+    const ok=results.filter(r=>r.status==="fulfilled"&&r.value.ok).length;
+    const fail=results.filter(r=>r.status==="rejected"||!r.value.ok).length;
+    if(fail>0)showToast(`Deleted ${ok}/${ids.length} items (${fail} failed)`,"error");
+    else showToast(`Deleted ${ids.length} items!`);
+    S.items=S.items.filter(i=>!S.selected.has(i.id));
+    S.selected.clear();
+    updateBulkBar();
+    listRenderFilters();
+    listFilter();
+  }catch(err){
+    showToast(err.message,"error");
+  }
+}
+
+/* ── Filter chips ─ */
+function renderFilterChips(){
+  const el=qs("filterChips");
+  const chips=[];
+  if(S.subject)chips.push(`📚 ${esc(S.subject)}`);
+  if(S.tag)chips.push(`🏷 ${esc(S.tag)}`);
+  const from=qs("dateFrom")?.value,to=qs("dateTo")?.value;
+  if(from)chips.push(`📅 From ${esc(from)}`);
+  if(to)chips.push(`📅 To ${esc(to)}`);
+  if(S.search)chips.push(`🔍 "${esc(S.search)}"`);
+  if(chips.length){
+    el.innerHTML=chips.map(c=>`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:99px;font-size:11px;">${c}<span onclick="clearAllFilters()" style="cursor:pointer;opacity:.6;margin-left:2px;" title="Clear filters">✕</span></span>`).join("");
+    el.style.display="flex";
+    el.style.gap="4px";
+    el.style.flexWrap="wrap";
+  }else{
+    el.style.display="none";
+  }
+}
+function clearAllFilters(){
+  qs("searchBox").value="";
+  qs("subjectFilter").value="";
+  qs("tagFilter").value="";
+  qs("dateFrom").value="";
+  qs("dateTo").value="";
+  S.filter="all";
+  listRenderFilters();
+  listFilter();
+}
+
+/* ── Keyboard Shortcuts ─ */
+document.addEventListener("keydown",function(e){
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT"||e.target.tagName==="TEXTAREA")return;
+  switch(e.key){
+    case "Escape":
+      closeDetail();
+      if(qs("editOverlay").classList.contains("open"))closeEditModal();
+      if(qs("addOverlay").classList.contains("open"))closeAddModal();
+      break;
+    case "n":
+      if(!e.ctrlKey&&!e.metaKey)openAddModal();
+      break;
+    case "r":
+      if(!e.ctrlKey&&!e.metaKey){const v=VIEWS[S.viewIdx];if(v==="homeView")refreshHome();else if(v==="dashView")refreshDash();else if(v==="listView"){S.ts=0;loadList()}else if(v==="badgesView")loadBadges();else loadCal();showToast("Refreshed!")}
+      break;
+    case "1":showHome();break;
+    case "2":showDashboard();break;
+    case "3":showCalendar();break;
+    case "4":showList();break;
+    case "5":showBadges();break;
+  }
+});
+
+/* ── Auto-refresh (30s, skip when hidden) ─ */
+setInterval(()=>{
+  if(document.hidden)return;
+  loadAll().then(()=>{
+    const v=VIEWS[S.viewIdx];
+    if(v==="homeView")loadHome();
+    else if(v==="dashView")loadDash();
+    else if(v==="listView")loadList();
+    else if(v==="badgesView")loadBadges();
+    else if(v==="calView")loadCal();
+  }).catch(()=>{});
+},30000);
 
 showHome();
 </script>
