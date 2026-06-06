@@ -313,7 +313,7 @@ export function buildPanicCard(page) {
 
 export function registerCommandHandlers(bot, userState) {
     bot.start((ctx) => {
-        const name = escapeMarkdown(ctx.from?.first_name || "เพื่อน");
+        const name = escapeMarkdown(ctx.from?.first_name || t("cmd.fallbackName"));
         ctx.reply(buildWelcomeMessage(name), {
             parse_mode: "Markdown",
             ...mainMenu,
@@ -329,37 +329,33 @@ export function registerCommandHandlers(bot, userState) {
 
     bot.command("ask", async (ctx) => {
         if (!isQaReady()) {
-            return ctx.reply("⚠️ ยังไม่ได้ตั้งค่า TYPHOON_API_KEY", {
+            return ctx.reply(t("cmd.ask.noKey"), {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
         }
         userState.set(ctx.from.id, { mode: "ASK_AI", _timestamp: Date.now() });
         return ctx.reply(
-            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
-                `พิมพ์คำถาม เช่น\n` +
-                `${safeCode("งานคณิตส่งวันไหนบ้าง")}\n` +
-                `${safeCode("อาทิตย์นี้มีงานกี่ชิ้น")}\n\n` +
-                `หรือกดยกเลิก`,
+            `🤖 ${safeBold(t("cmd.ask.title"))}\n\n` +
+                `${t("cmd.ask.line1")}\n` +
+                `${safeCode(t("cmd.ask.ex1"))}\n` +
+                `${safeCode(t("cmd.ask.ex2"))}\n\n` +
+                `${t("cmd.ask.line2")}`,
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
 
     bot.command("help", (ctx) =>
         ctx.reply(
-            `🆘 ${safeBold("วิธีใช้งาน")}\n\n` +
-                `📝 ${safeBold("เพิ่มงาน")}\n` +
-                `พิมพ์การบ้านมาที่แชท เช่น\n` +
-                `${safeCode("คณิต หน้า 45 พรุ่งนี้")}\n` +
-                `${safeCode("รายงานอังกฤษ วันศุกร์")}\n` +
-                `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}\n\n` +
-                `🤖 ระบบจะเดาวิชา + วันที่ให้อัตโนมัติ\n\n` +
-                `📋 ${safeBold("คำสั่งที่ใช้บ่อย")}\n` +
-                `/menu — เมนูหลัก\n` +
-                `/stats — ดูสถิติ\n` +
-                `/panic — งานด่วน\n` +
-                `/week — ตารางสัปดาห์\n` +
-                `/ask — ถาม AI`,
+            `🆘 ${safeBold(t("cmd.help.title"))}\n\n` +
+                `📝 ${safeBold(t("cmd.help.addTitle"))}\n` +
+                `${t("cmd.help.addLine1")}\n` +
+                `${safeCode(t("cmd.help.ex1"))}\n` +
+                `${safeCode(t("cmd.help.ex2"))}\n` +
+                `${safeCode(t("cmd.help.ex3"))}\n\n` +
+                `🤖 ${t("cmd.help.autoDetect")}\n\n` +
+                `📋 ${safeBold(t("cmd.help.cmdListTitle"))}\n` +
+                `${t("cmd.help.cmdList")}`,
             {
                 parse_mode: "Markdown",
                 ...mainMenu,
@@ -374,17 +370,17 @@ export function registerCommandHandlers(bot, userState) {
             const filled = Math.round(stats.pct / 10)
             const bar = "█".repeat(filled) + "░".repeat(10 - filled)
             const msg =
-                `📊 ${safeBold("สถิติการบ้าน")}\n\n` +
-                `📌 ยังไม่ทำ  ${stats.todo}\n` +
-                `🔄 กำลังทำ  ${stats.prog}\n` +
-                `✅ เสร็จแล้ว  ${stats.done}\n\n` +
-                `⚡ ด่วน  ${stats.urgent}  │  🚨 เลยกำหนด  ${stats.overdue}\n\n` +
+                `📊 ${safeBold(t("cmd.stats.title"))}\n\n` +
+                `📌 ${t("cmd.stats.todo")}  ${stats.todo}\n` +
+                `🔄 ${t("cmd.stats.prog")}  ${stats.prog}\n` +
+                `✅ ${t("cmd.stats.done")}  ${stats.done}\n\n` +
+                `⚡ ${t("cmd.stats.urgent")}  ${stats.urgent}  │  🚨 ${t("cmd.stats.overdue")}  ${stats.overdue}\n\n` +
                 `${bar}  ${stats.pct}%`
             return ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu })
         } catch (err) {
             logger.error("/stats:", err)
             return ctx.reply(
-                `❌ โหลดสถิติไม่ได้ กรุณาลองใหม่`,
+                `❌ ${t("cmd.stats.err")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -395,7 +391,7 @@ export function registerCommandHandlers(bot, userState) {
             const pages = await fetchActive()
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านด่วน!")}\nพักผ่อนได้เลย 🏆`,
+                    `🎉 ${safeBold(t("cmd.panic.empty"))}\n${t("cmd.panic.emptyLine2")} 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -409,7 +405,7 @@ export function registerCommandHandlers(bot, userState) {
         } catch (err) {
             logger.error("/panic:", err)
             return ctx.reply(
-                `❌ ${safeBold("เกิดข้อผิดพลาด")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.errors.generic"))}\n${t("cmd.errors.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -425,7 +421,7 @@ export function registerCommandHandlers(bot, userState) {
 
             if (!dueTomorrow.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("พรุ่งนี้ไม่มีการบ้านส่ง!")}\nไปเที่ยวได้เลย 🏆`,
+                    `🎉 ${safeBold(t("cmd.tomorrow.empty"))}\n${t("cmd.tomorrow.emptyLine2")} 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -438,7 +434,7 @@ export function registerCommandHandlers(bot, userState) {
         } catch (err) {
             logger.error("/tomorrow:", err)
             return ctx.reply(
-                `❌ ${safeBold("เกิดข้อผิดพลาด")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.errors.generic"))}\n${t("cmd.errors.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -448,10 +444,10 @@ export function registerCommandHandlers(bot, userState) {
         const args = ctx.message.text.split(" ").slice(1).join(" ").trim()
         if (!args) {
             return ctx.reply(
-                `🔍 ${safeBold("พิมพ์คำค้นหา")}\n` +
+                `🔍 ${safeBold(t("cmd.search.prompt"))}\n` +
                 `\n` +
-                `เช่น /search ${safeCode("คณิต")}\n` +
-                `    /search ${safeCode("แคลคูลัส")}`,
+                `${t("cmd.search.example1")} /search ${safeCode("math")}\n` +
+                `    /search ${safeCode("calculus")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -471,9 +467,9 @@ export function registerCommandHandlers(bot, userState) {
 
             if (!matchedActive.length && !matchedDone.length) {
                 return ctx.reply(
-                    `🔍 ${safeBold(`ไม่พบ "${escapeMarkdown(args)}"`)} ในระบบ\n` +
+                    `🔍 ${safeBold(t("cmd.search.notFound", { term: escapeMarkdown(args) }))} ${t("cmd.search.notFoundLine2")}\n` +
                     `\n` +
-                    `ลองค้นหาด้วยคำอื่น หรือกลับไปที่เมนูหลัก`,
+                    `${t("cmd.search.tryAnother")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -491,29 +487,29 @@ export function registerCommandHandlers(bot, userState) {
             const activePage = matchedActive.slice(0, PAGE_SIZE)
             const remainingActive = Math.max(0, totalActive - activePage.length)
 
-            let msg = `🔍 ${safeBold(`ผลค้นหา: "${escapeMarkdown(args)}"`)} (${total} รายการ)\n`
+            let msg = `🔍 ${safeBold(t("cmd.search.results", { term: escapeMarkdown(args), count: total }))}\n`
             msg += `\n\n`
 
             const keyboard = []
 
             if (activePage.length) {
-                msg += `📌 ${safeBold("ยังไม่เสร็จ")} (${totalActive}):\n`
+                msg += `📌 ${safeBold(t("cmd.search.active"))} (${totalActive}):\n`
                 for (const p of activePage) {
                     const { title, status, due, subject, priority } = getPageProps(p)
                     msg += `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n`
                     keyboard.push([
-                        Markup.button.callback("✅ เสร็จ", `done_${p.id}`),
-                        Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
+                        Markup.button.callback(t("cmd.btn.done"), `done_${p.id}`),
+                        Markup.button.callback(t("cmd.btn.inProgress"), `prog_${p.id}`),
                     ])
                 }
                 if (remainingActive > 0) {
-                    msg += `\n_…แสดง ${activePage.length} จาก ${totalActive} — ลองค้นหาให้แคบลง_`
+                    msg += `\n_${t("cmd.search.truncated", { shown: activePage.length, total: totalActive })}_`
                 }
                 msg += `\n`
             }
 
             if (matchedDone.length) {
-                msg += `✅ ${safeBold("เสร็จแล้ว")} (${totalDone}):\n`
+                msg += `✅ ${safeBold(t("cmd.search.completed"))} (${totalDone}):\n`
                 for (const p of matchedDone) {
                     const props = getPageProps(p)
                     msg += `${statusEmoji(props.status)} ${safeBold(props.title)} ${subjectEmoji(props.subject)} ${props.priority} — ✅ ${formatDateLabel(props.completed, "completed")}\n`
@@ -522,10 +518,10 @@ export function registerCommandHandlers(bot, userState) {
             }
 
             keyboard.push([
-                Markup.button.callback("🔍 ค้นหาอีก", "SEARCH"),
-                Markup.button.callback("➕ เพิ่ม", "ADD"),
-                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                Markup.button.callback("🏠 เมนูหลัก", "HOME"),
+                Markup.button.callback(t("cmd.btn.searchMore"), "SEARCH"),
+                Markup.button.callback(t("cmd.menu.add"), "ADD"),
+                Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
+                Markup.button.callback(t("cmd.btn.home"), "HOME"),
             ])
 
             return ctx.reply(msg, {
@@ -535,7 +531,7 @@ export function registerCommandHandlers(bot, userState) {
         } catch (err) {
             logger.error("/search:", err)
             return ctx.reply(
-                `❌ ${safeBold("ค้นหาไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.errors.notFound"))}\n${t("cmd.errors.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -546,7 +542,7 @@ export function registerCommandHandlers(bot, userState) {
             const pages = await fetchActive()
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านอาทิตย์นี้เลย!")}\nพักผ่อนได้ 🏆`,
+                    `🎉 ${safeBold(t("cmd.week.empty"))}\n${t("cmd.week.emptyLine2")} 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -557,7 +553,7 @@ export function registerCommandHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("/week:", err)
-            const errMsg = errorWithRetry("โหลดตารางไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("cmd.errors.loadWeek"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -568,7 +564,7 @@ export function registerCommandHandlers(bot, userState) {
             const result = buildDeadline(pages)
             if (!result) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
+                    `🎉 ${safeBold(t("cmd.deadline.empty"))}\n${t("cmd.deadline.emptyLine2")} 🏆`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -578,7 +574,7 @@ export function registerCommandHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("/deadline:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("cmd.errors.loadData"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -589,7 +585,7 @@ export function registerCommandHandlers(bot, userState) {
             const result = buildProgress(activePages, donePages)
             if (!result) {
                 return ctx.reply(
-                    `📊 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    `📊 ${safeBold(t("cmd.progress.empty"))}\n${t("cmd.progress.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -599,7 +595,7 @@ export function registerCommandHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("/progress:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("cmd.errors.loadData"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -617,14 +613,14 @@ export function registerCommandHandlers(bot, userState) {
             `💬 "${escapeMarkdown(quote.text)}"\n\n` +
             `— ${escapeMarkdown(quote.author)}\n` +
             `\n\n` +
-            `💪 ${safeBold("สู้ๆ นะ!")}`
+            `💪 ${safeBold(t("cmd.quote.cheer"))}`
 
         const keyboard = [
             [
-                Markup.button.callback("💬 อีกคำคม", "QUOTE"),
-                Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                Markup.button.callback(t("cmd.quote.another"), "QUOTE"),
+                Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+            [Markup.button.callback(t("cmd.btn.home"), "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
