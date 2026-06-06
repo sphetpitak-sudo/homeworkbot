@@ -33,33 +33,33 @@ describe('buildHomeworkPreview', () => {
     expect(result).toContain('🔴 High')
     expect(result).toContain('สอบ')
     expect(result).toContain('ด่วน')
-    expect(result).toContain('AI ช่วยตรวจจับ')
+    expect(result).toContain('AI-detected')
   })
 
   test('handles undefined parseSource gracefully', () => {
     const result = buildHomeworkPreview({ title: 'งาน', subject: 'ไทย' })
     expect(result).toContain('งาน')
     expect(result).toContain('ไทย')
-    expect(result).not.toContain('AI ช่วยตรวจจับ')
-    expect(result).not.toContain('ตรวจจับอัตโนมัติ')
+    expect(result).not.toContain('AI-detected')
+    expect(result).not.toContain('Auto-detected')
   })
 
   test('handles missing fields gracefully', () => {
     const result = buildHomeworkPreview({})
-    expect(result).toContain('ทั่วไป')
-    expect(result).toContain('ไม่มีชื่อ')
-    expect(result).toContain('ไม่มีกำหนดส่ง')
+    expect(result).toContain('General')
+    expect(result).toContain('Untitled')
+    expect(result).toContain('No due date')
   })
 
   test('handles undefined input (reports edge case)', () => {
     const result = buildHomeworkPreview({})
-    expect(result).toContain('ทั่วไป')
+    expect(result).toContain('General')
   })
 
   test('shows regex badge for regex source', () => {
     const parsed = { title: 'งาน', subject: 'ไทย', parseSource: 'regex' }
     const result = buildHomeworkPreview(parsed)
-    expect(result).toContain('ตรวจจับอัตโนมัติ')
+    expect(result).toContain('Auto-detected')
   })
 
   test('handles Thai special characters in title', () => {
@@ -83,7 +83,7 @@ describe('buildHomeworkPreview', () => {
   test('handles null due date', () => {
     const parsed = { title: 'งาน', subject: 'ไทย', due: null, parseSource: 'regex' }
     const result = buildHomeworkPreview(parsed)
-    expect(result).toContain('ไม่มีกำหนดส่ง')
+    expect(result).toContain('No due date')
   })
 
   test('handles null priority', () => {
@@ -108,8 +108,8 @@ describe('buildHomeworkPreview', () => {
   test('prioritizes AI badge over regex badge', () => {
     const aiParsed = { title: 'งาน', subject: 'ไทย', parseSource: 'ai' }
     const regexParsed = { title: 'งาน', subject: 'ไทย', parseSource: 'regex' }
-    expect(buildHomeworkPreview(aiParsed)).toContain('AI ช่วยตรวจจับ')
-    expect(buildHomeworkPreview(regexParsed)).toContain('ตรวจจับอัตโนมัติ')
+    expect(buildHomeworkPreview(aiParsed)).toContain('AI-detected')
+    expect(buildHomeworkPreview(regexParsed)).toContain('Auto-detected')
   })
 })
 
@@ -298,7 +298,7 @@ describe('errorWithRetry', () => {
 
   test('retry button has correct text', () => {
     const result = errorWithRetry('เกิดข้อผิดพลาด', 'RETRY_FETCH_ACTIVE')
-    expect(result.reply_markup.inline_keyboard[0][0].text).toBe('🔁 ลองอีกครั้ง')
+    expect(result.reply_markup.inline_keyboard[0][0].text).toBe('🔁 Retry')
   })
 
   test('falls back to HOME for invalid retry action', () => {
@@ -308,7 +308,7 @@ describe('errorWithRetry', () => {
 
   test('home button has correct text', () => {
     const result = errorWithRetry('test', 'RETRY')
-    expect(result.reply_markup.inline_keyboard[0][1].text).toBe('🏠 เมนูหลัก')
+    expect(result.reply_markup.inline_keyboard[0][1].text).toBe('🏠 Home')
   })
 
   test('prefixes message with error emoji', () => {
@@ -318,7 +318,7 @@ describe('errorWithRetry', () => {
 
   test('appends retry instruction', () => {
     const result = errorWithRetry('test', 'RETRY')
-    expect(result.text).toContain('กรุณาลองใหม่')
+    expect(result.text).toContain('Please try again')
   })
 
   test('sets parse_mode to Markdown', () => {

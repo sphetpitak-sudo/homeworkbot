@@ -24,6 +24,7 @@ import {
     safeCode,
 } from "../utils/telegramFormat.js";
 import { STATUS, PRIORITY, priorityWeight } from "../utils/constants.js";
+import { t } from "../utils/i18n.js";
 
 
 const WEB_URL = process.env.WEB_URL
@@ -111,12 +112,12 @@ function isValidRetryAction(retryAction) {
 export function errorWithRetry(message, retryAction) {
     const safeAction = isValidRetryAction(retryAction) ? retryAction : "HOME"
     return {
-        text: `❌ *${escapeMarkdown(message)}*\nกรุณาลองใหม่`,
+        text: `❌ *${escapeMarkdown(message)}*\n${t("cmd.error.retry")}`,
         parse_mode: "Markdown",
         reply_markup: {
             inline_keyboard: [[
-                { text: "🔁 ลองอีกครั้ง", callback_data: safeAction },
-                { text: "🏠 เมนูหลัก", callback_data: "HOME" },
+                { text: t("cmd.error.retryBtn"), callback_data: safeAction },
+                { text: t("cmd.error.homeBtn"), callback_data: "HOME" },
             ]],
         },
     };
@@ -134,15 +135,15 @@ function isUnambiguous(parsed, rawText) {
  * Shows subject, title, due date, priority, tags, and an AI/regex source badge.
  */
 export function buildHomeworkPreview(parsed) {
-    const subject = parsed?.subject || "ทั่วไป";
-    const title = parsed?.title || "ไม่มีชื่อ";
-    const due = parsed?.due ? formatDueDisplay(parsed.due) : "ไม่มีกำหนดส่ง 📅";
+    const subject = parsed?.subject || t("fallback.subject");
+    const title = parsed?.title || t("bot.fallbackTitle");
+    const due = parsed?.due ? formatDueDisplay(parsed.due) : `${t("bot.fallbackDue")} 📅`;
     const priority = parsed?.priority || "🟡 Medium";
     const tags = parsed?.tags?.length ? parsed.tags.join("  ") : null;
     const badge = parsed?.parseSource === "ai"
-        ? `\n🤖 ${safeItalic("AI ช่วยตรวจจับ — ถ้าไม่ตรงแก้ไขได้ด้านล่าง")}`
+        ? `\n🤖 ${safeItalic(t("badge.ai") + " — " + t("badge.aiHint"))}`
         : parsed?.parseSource === "regex"
-        ? `\n📝 ${safeItalic("ตรวจจับอัตโนมัติ — กรุณาตรวจสอบความถูกต้อง")}`
+        ? `\n📝 ${safeItalic(t("badge.regex") + " — " + t("badge.regexHint"))}`
         : "";
     let msg =
         `${subjectEmoji(subject)} ${safeBold(title)}\n` +
