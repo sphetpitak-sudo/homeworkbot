@@ -5,6 +5,7 @@ import {
     detectSubject,
     cleanTitle,
     subjectEmoji,
+    canonSubj,
 } from "../utils/subjectDetector.js";
 import { parseHomework, isAIReady } from "../services/aiService.js";
 import { isQaReady, askAI } from "../services/qaService.js";
@@ -635,29 +636,29 @@ export function registerCommandHandlers(bot, userState) {
 
             if (!activePages.length && !donePages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    `📭 ${safeBold(t("cmd.export.empty"))}\n${t("cmd.progress.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
 
-            let text = `📋 รายการการบ้าน (export ${today})\n`
+            let text = `${t("cmd.export.header", { date: today })}\n`
             text += `=====================================\n\n`
 
             if (activePages.length) {
-                text += `📌 ยังไม่เสร็จ (${activePages.length}):\n`
+                text += `📌 ${t("cmd.export.active")} (${activePages.length}):\n`
                 activePages.forEach((p, i) => {
                     const { title, subject, due, priority } = getPageProps(p)
-                    const dueStr = due ? `ส่ง ${due.slice(5).replace("-", "/")}` : "ไม่มีกำหนด"
+                    const dueStr = due ? `${t("cmd.export.due")} ${due.slice(5).replace("-", "/")}` : t("bot.fallbackDue")
                     text += `  ${i + 1}. [${subject}] ${title} — ${dueStr} ${priority}\n`
                 })
                 text += `\n`
             }
 
             if (donePages.length) {
-                text += `✅ ทำเสร็จแล้ว (${donePages.length}):\n`
+                text += `✅ ${t("cmd.export.done")} (${donePages.length}):\n`
                 donePages.forEach((p, i) => {
                     const { title, subject, completed, priority } = getPageProps(p)
-                    const doneStr = completed ? `เสร็จ ${completed.slice(5).replace("-", "/")}` : "เสร็จแล้ว"
+                    const doneStr = completed ? `${t("cmd.export.completedAt")} ${completed.slice(5).replace("-", "/")}` : t("cmd.export.doneShort")
                     text += `  ${i + 1}. [${subject}] ${title} — ${doneStr} ${priority}\n`
                 })
                 text += `\n`
@@ -666,7 +667,7 @@ export function registerCommandHandlers(bot, userState) {
             const total = activePages.length + donePages.length
             const pct = total > 0 ? Math.round((donePages.length / total) * 100) : 0
             text += `=====================================\n`
-            text += `รวม ${total} รายการ | เสร็จ ${pct}%\n`
+            text += `${t("cmd.export.total", { total, pct })}\n`
 
             /* M2: Telegram rejects messages longer than 4096 chars
                with "Bad Request: message is too long". For large
@@ -681,27 +682,27 @@ export function registerCommandHandlers(bot, userState) {
                     filename: `homework_export_${today}.txt`,
                 })
                 return ctx.reply(
-                    `📋 ${safeBold(`ส่งออก ${total} รายการ`)}\n` +
+                    `📋 ${safeBold(t("cmd.export.exported", { total }))}\n` +
                     `\n` +
-                    `📎 ไฟล์แนบอยู่ด้านบน (${(buffer.length / 1024).toFixed(1)} KB)\n` +
-                    `เสร็จแล้ว ${pct}%`,
+                    `📎 ${t("cmd.export.attached", { size: (buffer.length / 1024).toFixed(1) })}\n` +
+                    `${t("cmd.export.completedPct", { pct })}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
 
             const msg =
-                `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
+                `📋 ${safeBold(t("cmd.export.title"))}\n` +
                 `\n` +
                 `${safeCode(text)}\n` +
                 `\n` +
-                `💡 คัดลอกข้อความในกรอบไปแชร์ต่อได้เลย!`
+                `💡 ${t("cmd.export.shareHint")}`
 
             const keyboard = [
                 [
-                    Markup.button.callback("➕ เพิ่ม", "ADD"),
-                    Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+                    Markup.button.callback(t("cmd.menu.add"), "ADD"),
+                    Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
                 ],
-                [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+                [Markup.button.callback(t("cmd.btn.home"), "HOME")],
             ]
             return ctx.reply(msg, {
                 parse_mode: "Markdown",
@@ -710,7 +711,7 @@ export function registerCommandHandlers(bot, userState) {
         } catch (err) {
             logger.error("/export:", err)
             return ctx.reply(
-                `❌ ${safeBold("ส่งออกไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.export.err"))}\n${t("cmd.errors.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -720,10 +721,10 @@ export function registerCommandHandlers(bot, userState) {
         const args = ctx.message.text.split(" ").slice(1).join(" ").trim()
         if (!args) {
             return ctx.reply(
-                `📝 ${safeBold("การใช้งาน: /noted [ชื่องาน] [โน๊ต]")}\n` +
+                `📝 ${safeBold(t("cmd.noted.usage"))}\n` +
                 `\n` +
-                `เช่น ${safeCode("/noted แคลคูลัส ใช้หนังสือเล่มแดง")}\n` +
-                `${safeCode("/noted ฟิสิกส์ ส่งที่โต๊ะครู")}`,
+                `${t("cmd.noted.example1Label")} ${safeCode(t("cmd.noted.example1"))}\n` +
+                `${safeCode(t("cmd.noted.example2"))}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -731,9 +732,9 @@ export function registerCommandHandlers(bot, userState) {
         const firstSpace = args.indexOf(" ")
         if (firstSpace === -1) {
             return ctx.reply(
-                `📝 ${safeBold("กรุณาระบุโน๊ตด้วย")}\n` +
+                `📝 ${safeBold(t("cmd.noted.missing"))}\n` +
                 `\n` +
-                `เช่น ${safeCode("/noted แคลคูลัส ใช้หนังสือเล่มแดง")}`,
+                `${t("cmd.noted.example1Label")} ${safeCode(t("cmd.noted.example1"))}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -751,16 +752,16 @@ export function registerCommandHandlers(bot, userState) {
 
             if (!matched.length) {
                 return ctx.reply(
-                    `🔍 ${safeBold(`ไม่พบ "${escapeMarkdown(keyword)}"`)} ในระบบ\n` +
+                    `🔍 ${safeBold(t("cmd.noted.notFound", { term: escapeMarkdown(keyword) }))}\n` +
                     `\n` +
-                    `ลองค้นหาด้วยคำอื่น`,
+                    `${t("cmd.noted.tryAnother")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
 
             if (matched.length > 1) {
                 userState.set(ctx.from.id, { mode: "NOTED_SELECT", _pendingNoted: { keyword, note, matched }, _timestamp: Date.now() })
-                let msg = `📝 ${safeBold(`เจอหลายรายการ (${matched.length})`)}\n`
+                let msg = `📝 ${safeBold(t("cmd.noted.multiple", { count: matched.length }))}\n`
                 msg += `\n\n`
                 const keyboard = []
                 for (let i = 0; i < matched.length; i++) {
@@ -769,8 +770,8 @@ export function registerCommandHandlers(bot, userState) {
                     keyboard.push([Markup.button.callback(`${i + 1}. ${title.slice(0, 25)}`, `NOTED_SEL_${i}`)])
                 }
                 msg += `\n`
-                msg += `เลือกรายการที่ต้องการเพิ่มโน๊ต`
-                keyboard.push([Markup.button.callback("❌ ยกเลิก", "CANCEL")])
+                msg += `${t("cmd.noted.pickOne")}`
+                keyboard.push([Markup.button.callback(t("cmd.menu.cancel"), "CANCEL")])
                 return ctx.reply(msg, {
                     parse_mode: "Markdown",
                     ...Markup.inlineKeyboard(keyboard),
@@ -782,7 +783,7 @@ export function registerCommandHandlers(bot, userState) {
             await updateHomework(page.id, { note })
 
             return ctx.reply(
-                `📝 ${safeBold("เพิ่มโน๊ตแล้ว!")}\n` +
+                `📝 ${safeBold(t("cmd.noted.added"))}\n` +
                 `\n` +
                 `📌 "${escapeMarkdown(title)}"\n` +
                 `📝 ${escapeMarkdown(note)}`,
@@ -791,7 +792,7 @@ export function registerCommandHandlers(bot, userState) {
         } catch (err) {
             logger.error("/noted:", err)
             return ctx.reply(
-                `❌ ${safeBold("เพิ่มโน๊ตไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.noted.err"))}\n${t("cmd.errors.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -799,34 +800,34 @@ export function registerCommandHandlers(bot, userState) {
 
     bot.command("hint", async (ctx) => {
         const args = ctx.message.text.split(" ").slice(1).join(" ").trim()
-        const subject = args ? detectSubject(args) : null
+        const subject = args ? canonSubj(detectSubject(args)) : null
 
-        if (!subject || subject === "ทั่วไป") {
+        if (!subject || subject === "General") {
             if (args) {
                 return ctx.reply(
-                    `🤔 ${safeBold(`ไม่รู้จักวิชา "${escapeMarkdown(args)}"`)}\n` +
+                    `🤔 ${safeBold(t("cmd.hint.unknown", { term: escapeMarkdown(args) }))}\n` +
                     `\n` +
-                    `วิชาที่มี: คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม, สุขศึกษา`,
+                    `${t("cmd.hint.list")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
             const keyboard = [
                 [
-                    Markup.button.callback("🔢 คณิต", "HINT_คณิต"),
-                    Markup.button.callback("📖 ไทย", "HINT_ไทย"),
-                    Markup.button.callback("🔤 อังกฤษ", "HINT_อังกฤษ"),
+                    Markup.button.callback("🔢 Math", "HINT_คณิต"),
+                    Markup.button.callback("📖 Thai", "HINT_ไทย"),
+                    Markup.button.callback("🔤 English", "HINT_อังกฤษ"),
                 ],
                 [
-                    Markup.button.callback("⚛️ ฟิสิกส์", "HINT_ฟิสิกส์"),
-                    Markup.button.callback("🧪 เคมี", "HINT_เคมี"),
-                    Markup.button.callback("🧬 ชีวะ", "HINT_ชีวะ"),
+                    Markup.button.callback("⚛️ Physics", "HINT_ฟิสิกส์"),
+                    Markup.button.callback("🧪 Chemistry", "HINT_เคมี"),
+                    Markup.button.callback("🧬 Biology", "HINT_ชีวะ"),
                 ],
                 [
-                    Markup.button.callback("🌏 สังคม", "HINT_สังคม"),
-                    Markup.button.callback("🏛️ ประวัติ", "HINT_ประวัติ"),
-                    Markup.button.callback("💻 คอม", "HINT_คอม"),
+                    Markup.button.callback("🌏 Social", "HINT_สังคม"),
+                    Markup.button.callback("🏛️ History", "HINT_ประวัติ"),
+                    Markup.button.callback("💻 Computer", "HINT_คอม"),
                 ],
-                [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
+                [Markup.button.callback(t("cmd.menu.cancel"), "CANCEL")],
             ]
             return ctx.reply(
                 `🧠 ${safeBold("เลือกวิชาที่ต้องการคำแนะนำ")}\n` +
