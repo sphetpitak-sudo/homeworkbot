@@ -15,29 +15,84 @@ const CACHE_TTL = 30000;
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTH = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const COLORS = {todo:"#e85d5d",prog:"#e8c84a",done:"#3db89e",amber:"#e8c84a",red:"#e85d5d",green:"#3db89e"};
-const PRI_COLORS = {"🔴 สูง":"#e85d5d","🟡 กลาง":"#e8c84a","🟢 ต่ำ":"#3db89e"};
-const PRI_CLASS = {"🔴 สูง":"high","🟡 กลาง":"med","🟢 ต่ำ":"low"};
-const PRI_ORDER = ["🔴 สูง","🟡 กลาง","🟢 ต่ำ"];
+
+const PRI_HIGH = "🔴 High";
+const PRI_MED = "🟡 Medium";
+const PRI_LOW = "🟢 Low";
+const PRI_COLORS = {[PRI_HIGH]:"#e85d5d",[PRI_MED]:"#e8c84a",[PRI_LOW]:"#3db89e"};
+const PRI_CLASS = {[PRI_HIGH]:"high",[PRI_MED]:"med",[PRI_LOW]:"low"};
+const PRI_ORDER = [PRI_HIGH, PRI_MED, PRI_LOW];
+
+/* Backward-compat: legacy Thai priority keys (stored in Notion before
+   the English migration). We translate on the fly so the UI still
+   recognizes them until the migration script runs. */
+const PRI_LEGACY = {"🔴 สูง": PRI_HIGH, "🟡 กลาง": PRI_MED, "🟢 ต่ำ": PRI_LOW};
+function priCanon(p) { return PRI_LEGACY[p] || p || PRI_MED; }
+
 const STATUS = {TODO:"Todo",PROG:"In Progress",DONE:"Done"};
 const STATUS_KEY = {[STATUS.TODO]:"todo",[STATUS.PROG]:"prog",[STATUS.DONE]:"done"};
 const LABELS = {todo:"To Do",prog:"In Progress",done:"Done"};
-const SUBJ_EMOJI = {คณิต:"🔢",อังกฤษ:"🔤",ฟิสิกส์:"⚛️",เคมี:"🧪",ชีวะ:"🧬",ไทย:"📜",สังคม:"🌏",ประวัติ:"🏛️",คอม:"💻",สุขศึกษา:"🏃",ทั่วไป:"📖"};
-const TAGS = ["สอบ", "โครงการ", "กลุ่ม", "ด่วน", "อ่าน", "ใบงาน"];
+
+/* Subject translation table: Thai legacy values → English labels.
+   After the Notion migration, subjects are stored in English, but
+   pre-migration data (and user-typed input) may still use Thai — we
+   look up the emoji and display name through this map. */
+const SUBJ_LABEL = {
+  "คณิต": "Math", "คณิตศาสตร์": "Math",
+  "อังกฤษ": "English", "อิ้ง": "English", "ENG": "English",
+  "ฟิสิกส์": "Physics", "ฟิสิก": "Physics",
+  "เคมี": "Chemistry",
+  "ชีวะ": "Biology", "ชีววิทยา": "Biology",
+  "ไทย": "Thai", "ภาษาไทย": "Thai",
+  "สังคม": "Social Studies", "สังคมศึกษา": "Social Studies",
+  "ประวัติ": "History", "ประวัติศาสตร์": "History",
+  "คอม": "Computer", "คอมพิวเตอร์": "Computer", "CS": "Computer",
+  "สุขศึกษา": "Health", "พละ": "PE",
+  "ทั่วไป": "General",
+  "Math": "Math", "English": "English", "Physics": "Physics",
+  "Chemistry": "Chemistry", "Biology": "Biology", "Thai": "Thai",
+  "Social Studies": "Social Studies", "History": "History",
+  "Computer": "Computer", "Health": "Health", "PE": "PE",
+  "General": "General",
+};
+
+const SUBJ_EMOJI = {
+  "Math": "🔢", "คณิต": "🔢", "คณิตศาสตร์": "🔢",
+  "English": "🔤", "อังกฤษ": "🔤", "อิ้ง": "🔤",
+  "Physics": "⚛️", "ฟิสิกส์": "⚛️", "ฟิสิก": "⚛️",
+  "Chemistry": "🧪", "เคมี": "🧪",
+  "Biology": "🧬", "ชีวะ": "🧬", "ชีววิทยา": "🧬",
+  "Thai": "📜", "ไทย": "📜", "ภาษาไทย": "📜",
+  "Social Studies": "🌏", "สังคม": "🌏", "สังคมศึกษา": "🌏",
+  "History": "🏛️", "ประวัติ": "🏛️", "ประวัติศาสตร์": "🏛️",
+  "Computer": "💻", "คอม": "💻", "คอมพิวเตอร์": "💻",
+  "Health": "🏃", "สุขศึกษา": "🏃", "PE": "🏃", "พละ": "🏃",
+  "General": "📖", "ทั่วไป": "📖",
+};
+
+const TAGS = ["Exam", "Project", "Group", "Urgent", "Reading", "Worksheet"];
+
+const SUBJ_OPTIONS = [
+  "Math", "English", "Physics", "Chemistry", "Biology",
+  "Thai", "Social Studies", "History", "Computer",
+  "Health", "PE", "General",
+];
+
 const VIEWS = ["homeView","dashView","calView","listView","badgesView"];
 
 const FAKE_TOKEN = "demo";
 const FAKE_DATA = {
-  stats: {todo:4,prog:2,done:3,total:9,pct:33,bySubject:{คณิต:2,อังกฤษ:1,ฟิสิกส์:1,ไทย:1,สังคม:1},byPriority:{"🔴 สูง":2,"🟡 กลาง":3,"🟢 ต่ำ":1},byTags:{สอบ:2,โครงการ:1,กลุ่ม:2,อ่าน:1,ใบงาน:2,ด่วน:2},urgent:2,overdue:0},
+  stats: {todo:4,prog:2,done:3,total:9,pct:33,bySubject:{Math:2,English:1,Physics:1,Thai:1,"Social Studies":1},byPriority:{[PRI_HIGH]:2,[PRI_MED]:3,[PRI_LOW]:1},byTags:{Exam:2,Project:1,Group:2,Reading:1,Worksheet:2,Urgent:2},urgent:2,overdue:0},
   homework:[
-    {id:"d1",title:"แบบฝึกหัดเลข exponential",status:"Todo",due:"2026-05-20",subject:"คณิต",priority:"🔴 สูง",note:"ทำข้อ 1-15 ในหนังสือ",tags:["สอบ","ด่วน"],url:"#"},
-    {id:"d2",title:"รายงานสังคม ประเทศในอาเซียน",status:"In Progress",due:"2026-05-25",subject:"สังคม",priority:"🟡 กลาง",note:"ส่งเป็น PDF ขั้นต่ำ 10 หน้า",tags:["โครงการ","กลุ่ม"],url:"#"},
-    {id:"d3",title:"ท่องอาขยานบทที่ 5",status:"Todo",due:"2026-06-15",subject:"ไทย",priority:"🟡 กลาง",note:"",tags:["อ่าน"],url:"#"},
-    {id:"d4",title:"การทดลอง pH สารต่างๆ",status:"Done",due:"2026-05-10",subject:"เคมี",priority:"🟢 ต่ำ",note:"บันทึกผลการทดลองลงตาราง",tags:[],url:"#"},
-    {id:"d5",title:"ปริศนาคำศัพท์บทที่ 3",status:"Todo",due:"2026-05-22",subject:"อังกฤษ",priority:"🟡 กลาง",note:"",tags:["ใบงาน"],url:"#"},
-    {id:"d6",title:"ฟิสิกส์การเคลื่อนที่แนวตรง",status:"In Progress",due:"2026-05-19",subject:"ฟิสิกส์",priority:"🔴 สูง",note:"ส่งพรุ่งนี้ก่อนเที่ยง!",tags:["สอบ","ด่วน"],url:"#"},
-    {id:"d7",title:"งานนำเสนอกลุ่มห้องเรียน",status:"Done",due:"2026-05-08",subject:"อังกฤษ",priority:"🟢 ต่ำ",note:"Present หน้าชั้น 5 นาที",tags:["กลุ่ม"],url:"#"},
-    {id:"d8",title:"แยกตัวประกอบพหุนาม",status:"Todo",due:null,subject:"คณิต",priority:"🟢 ต่ำ",note:"ส่งเมื่อไหร่ก็ได้",tags:[],url:"#"},
-    {id:"d9",title:"ความน่าจะเป็นเพิ่มเติม",status:"Done",due:"2026-05-12",subject:"คณิต",priority:"🟡 กลาง",note:"ตรวจคำตอบจากเฉลย",tags:["ใบงาน"],url:"#"}
+    {id:"d1",title:"Math exercise: exponential",status:"Todo",due:"2026-05-20",subject:"Math",priority:PRI_HIGH,note:"Questions 1-15 in the textbook",tags:["Exam","Urgent"],url:"#"},
+    {id:"d2",title:"Social Studies report: ASEAN countries",status:"In Progress",due:"2026-05-25",subject:"Social Studies",priority:PRI_MED,note:"Submit as PDF, minimum 10 pages",tags:["Project","Group"],url:"#"},
+    {id:"d3",title:"Memorize Thai poem, chapter 5",status:"Todo",due:"2026-06-15",subject:"Thai",priority:PRI_MED,note:"",tags:["Reading"],url:"#"},
+    {id:"d4",title:"Chemistry lab: pH of various substances",status:"Done",due:"2026-05-10",subject:"Chemistry",priority:PRI_LOW,note:"Record results in a table",tags:[],url:"#"},
+    {id:"d5",title:"English vocabulary puzzle, ch. 3",status:"Todo",due:"2026-05-22",subject:"English",priority:PRI_MED,note:"",tags:["Worksheet"],url:"#"},
+    {id:"d6",title:"Physics: linear motion",status:"In Progress",due:"2026-05-19",subject:"Physics",priority:PRI_HIGH,note:"Due tomorrow before noon!",tags:["Exam","Urgent"],url:"#"},
+    {id:"d7",title:"Class group presentation",status:"Done",due:"2026-05-08",subject:"English",priority:PRI_LOW,note:"Present for 5 minutes",tags:["Group"],url:"#"},
+    {id:"d8",title:"Factor polynomials",status:"Todo",due:null,subject:"Math",priority:PRI_LOW,note:"Submit any time",tags:[],url:"#"},
+    {id:"d9",title:"Advanced probability",status:"Done",due:"2026-05-12",subject:"Math",priority:PRI_MED,note:"Check answers against the solution key",tags:["Worksheet"],url:"#"}
   ],
   trend: Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return{label:`${d.getDate()}/${d.getMonth()+1}`,count:Math.floor(Math.random()*3)}})
 };
@@ -49,9 +104,10 @@ function esc(t){const d=document.createElement("div");d.textContent=String(t??""
 function safeUrl(u){const s=String(u||"").trim();if(s.startsWith("https://")||s.startsWith("/")||s.startsWith("#"))return s;return "#"}
 function now(){return Date.now()}
 function fmtTime(){return new Date().toLocaleString("en-US")}
-function subjEmoji(s){return SUBJ_EMOJI[s]||"📖"}
-function priColor(pri){return PRI_COLORS[pri]||"#9e9690"}
-function priCls(pri){return PRI_CLASS[pri]||"med"}
+function subjEmoji(s){return SUBJ_EMOJI[s]||SUBJ_EMOJI[SUBJ_LABEL[s]]||"📖"}
+function subjLabel(s){return SUBJ_LABEL[s]||s||"General"}
+function priColor(pri){return PRI_COLORS[priCanon(pri)]||"#9e9690"}
+function priCls(pri){return PRI_CLASS[priCanon(pri)]||"med"}
 function statusKey(st){return STATUS_KEY[st]||"todo"}
 function daysDiff(dueStr){if(!dueStr)return null;const t=new Date();t.setHours(0,0,0,0);const d=new Date(dueStr+"T00:00:00");return Math.ceil((d-t)/86400000)}
 function dueClass(due){const d=daysDiff(due);if(d===null)return"";if(d<0)return"overdue";if(d<=3)return"soon";return"safe"}
@@ -161,7 +217,7 @@ const iconSVG=(stroke,icon)=>`<svg viewBox="0 0 24 24" style="stroke:${stroke};f
 const icons={todo:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',prog:'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',done:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',total:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>',urgent:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',overdue:'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'};
 qs("homeStats").innerHTML=`<div class="stat"><div class="stat-icon" style="background:${COLORS.todo}15;">${iconSVG(COLORS.todo,icons.todo)}</div><div class="val" style="color:${COLORS.todo}">${s.todo}</div><div class="lbl">To Do</div></div><div class="stat"><div class="stat-icon" style="background:${COLORS.prog}15;">${iconSVG(COLORS.prog,icons.prog)}</div><div class="val" style="color:${COLORS.prog}">${s.prog}</div><div class="lbl">In Progress</div></div><div class="stat"><div class="stat-icon" style="background:${COLORS.done}15;">${iconSVG(COLORS.done,icons.done)}</div><div class="val" style="color:${COLORS.done}">${s.done}</div><div class="lbl">Done</div></div><div class="stat"><div class="stat-icon" style="background:var(--accent-soft);">${iconSVG('var(--accent)',icons.total)}</div><div class="val" style="color:var(--accent)">${s.total}</div><div class="lbl">Total</div></div><div class="stat"><div class="stat-icon" style="background:rgba(232,133,74,0.1);">${iconSVG('var(--accent)',icons.urgent)}</div><div class="val" style="color:var(--accent)">${s.urgent}</div><div class="lbl">Urgent</div></div><div class="stat"><div class="stat-icon" style="background:rgba(232,93,93,0.1);">${iconSVG('var(--coral)',icons.overdue)}</div><div class="val" style="color:var(--coral)">${s.overdue||0}</div><div class="lbl">Overdue</div></div>`;
 const byDate=indexByDate(S.items);const todayKey=fmtLocalDate(new Date());const todayItems=(byDate.get(todayKey)||[]).filter(i=>i.status!==STATUS.DONE);const tomorrowKey=fmtLocalDate(new Date(Date.now()+86400000));const tomorrowItems=(byDate.get(tomorrowKey)||[]).filter(i=>i.status!==STATUS.DONE);const nowDate=new Date();qs("homeTodayDate").textContent=`(${DOW[nowDate.getDay()]}. ${nowDate.getDate()} ${MONTH[nowDate.getMonth()]})`;
-if(todayItems.length||tomorrowItems.length){let h="";if(todayItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;">Today (${todayItems.length})</div>`;h+=todayItems.map(i=>{const pr=i.priority||"🟡 กลาง";return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}if(tomorrowItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;margin-top:8px;">Tomorrow (${tomorrowItems.length})</div>`;h+=tomorrowItems.map(i=>{const pr=i.priority||"🟡 กลาง";return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}qs("homeTodayList").innerHTML=h}else{qs("homeTodayList").innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:10px 0;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Nothing due today or tomorrow</div>'}
+if(todayItems.length||tomorrowItems.length){let h="";if(todayItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;">Today (${todayItems.length})</div>`;h+=todayItems.map(i=>{const pr=priCanon(i.priority);return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}if(tomorrowItems.length){h+=`<div style="font-size:10px;color:var(--text3);margin-bottom:4px;margin-top:8px;">Tomorrow (${tomorrowItems.length})</div>`;h+=tomorrowItems.map(i=>{const pr=priCanon(i.priority);return`<div class="today-item" onclick="showDetail('${i.id}')"><span class="ti-pri" style="color:${priColor(pr)}">${pr}</span><span class="ti-title">${esc(i.title)}</span><span class="ti-sub">${subjEmoji(i.subject)} ${esc(i.subject)}</span></div>`}).join("")}qs("homeTodayList").innerHTML=h}else{qs("homeTodayList").innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:10px 0;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Nothing due today or tomorrow</div>'}
 if(s.overdue>0){qs("homeOverdueCount").textContent=`${s.overdue} task${s.overdue>1?'s':''}`;qs("homeOverdueAlert").classList.remove("hide");qs("homeNoOverdue").style.display="none"}else{qs("homeOverdueAlert").classList.add("hide");qs("homeNoOverdue").style.display="flex"}qs("homeTs").textContent=fmtTime();loadQuote();renderPanic();renderSubjectProgress()}catch(e){qs("homeStats").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
 function refreshHome(){S.ts=0;loadHome();showToast("Updated!")}
 
@@ -186,7 +242,7 @@ function renderPanic(){
   if(!top3.length){row.style.display="none";return}
   row.style.display="grid";
   qs("homePanicList").innerHTML=top3.map((i,idx)=>{
-    const pr=i.priority||"🟡 กลาง";
+    const pr=priCanon(i.priority);
     const d=daysDiff(i.due);
     const urgent=d!==null&&d<=3;
     return`<div class="today-item" onclick="showDetail('${i.id}')">
@@ -243,7 +299,7 @@ async function renderDashCharts(s){
   const legendHTML1=[["To Do","#e85d5d"],["In Progress","#e8c84a"],["Done","#3db89e"]].map(([l,c])=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);margin:0 6px;"><span style="width:8px;height:8px;border-radius:50%;background:${c};display:inline-block;"></span>${l}</span>`).join("");
   qs("statusLegend").innerHTML=legendHTML1;
 
-  destroyChart("priorityChart");const bp=s.byPriority||{};const PRI_LABELS={"🔴 สูง":"High","🟡 กลาง":"Medium","🟢 ต่ำ":"Low"};const pLabels=Object.keys(bp).map(k=>PRI_LABELS[k]||k),pVals=Object.values(bp);const pTotal=pVals.reduce((a,b)=>a+b,0);const c2=qs("priorityChart").getContext("2d");
+  destroyChart("priorityChart");const bp=s.byPriority||{};const PRI_LABELS={[PRI_HIGH]:"High",[PRI_MED]:"Medium",[PRI_LOW]:"Low"};const pLabels=Object.keys(bp).map(k=>PRI_LABELS[k]||k),pVals=Object.values(bp);const pTotal=pVals.reduce((a,b)=>a+b,0);const c2=qs("priorityChart").getContext("2d");
   const ch2=new Chart(c2,{type:"doughnut",data:{labels:pLabels,datasets:[{data:pVals.length?pVals:[0],backgroundColor:["#e85d5d","#e8c84a","#3db89e"],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:"72%",plugins:{legend:{display:false},tooltip:{...chartTooltip(),callbacks:{label:function(ctx){const val=ctx.parsed||0;const pct=pTotal>0?Math.round(val/pTotal*100):0;return`${ctx.label}: ${val} (${pct}%)`}}}}}});saveChart("priorityChart",ch2);
   const pColorMap={"High":"#e85d5d","Medium":"#e8c84a","Low":"#3db89e"};const legendHTML2=pLabels.map(l=>{const c=pColorMap[l]||"#9e9690";return`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text2);margin:0 6px;"><span style="width:8px;height:8px;border-radius:50%;background:${c};display:inline-block;"></span>${l}</span>`}).join("");
   qs("priorityLegend").innerHTML=legendHTML2;
@@ -275,9 +331,9 @@ function loadCal(){loadAll().then(d=>{if(!d?.error)renderCal();else{qs("calGrid"
 function renderCal(){const cy=S.calDate.getFullYear(),cm=S.calDate.getMonth();qs("calTitle").textContent=`${MONTH[cm]} ${cy}`;const first=new Date(cy,cm,1).getDay();const days=new Date(cy,cm+1,0).getDate();const prevDays=new Date(cy,cm,0).getDate();const todayKey=fmtLocalDate(new Date());const byDate=indexByDate(S.items);let html='';for(let i=0;i<7;i++)html+=`<div class="cal-header">${DOW[i].slice(0,3)}</div>`;for(let i=first-1;i>=0;i--)html+=`<div class="cal-cell other-month"><div class="day-num">${prevDays-i}</div></div>`;for(let d=1;d<=days;d++){const key=`${cy}-${String(cm+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;const items=byDate.get(key)||[];const isToday=key===todayKey;const isSel=key===S.calSel;const hasEvent=items.some(i=>i.status!==STATUS.DONE);html+=`<div class="cal-cell${isToday?" today":""}${hasEvent?" has-event":""}${isSel?" selected":""}" onclick="showCalDay('${key}')"><div class="day-num">${d}</div>`;if(items.length){const dots=[];const todo=items.filter(i=>i.status===STATUS.TODO).length;const prog=items.filter(i=>i.status===STATUS.PROG).length;if(todo)dots.push(`<span style="display:inline-block;width:3px;height:3px;border-radius:50%;background:${COLORS.todo};margin:0 1px;"></span>`.repeat(Math.min(todo,3)));if(prog)dots.push(`<span style="display:inline-block;width:3px;height:3px;border-radius:50%;background:${COLORS.prog};margin:0 1px;"></span>`.repeat(Math.min(prog,2)));if(dots.length)html+=`<div style="margin-top:1px;">${dots.join("")}</div>`}html+=`</div>`}const lastDay=new Date(cy,cm,days).getDay();for(let i=1;i<7-lastDay;i++)html+=`<div class="cal-cell other-month"><div class="day-num">${i}</div></div>`;qs("calGrid").innerHTML=html;if(!S.calSel)showCalDay(todayKey)}
 function calMove(n){S.calDate.setMonth(S.calDate.getMonth()+n);renderCal()}
 function calToday(){S.calDate=new Date();renderCal()}
-function showCalDay(key){S.calSel=key;const byDate=indexByDate(S.items);const items=byDate.get(key)||[];const d=key?new Date(key+"T00:00:00"):new Date();qs("calDayLabel").textContent=key?`${DOW[d.getDay()]}. ${d.getDate()} ${MONTH[d.getMonth()]} ${d.getFullYear()}`:"-";if(!items.length){qs("calDayList").innerHTML='<div class="empty"><svg viewBox="0 0 24 24" style="width:32px;height:32px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:6px;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div>No tasks scheduled</div><span style="font-size:11px;color:var(--text3);">Enjoy the free time!</span></div>';return}qs("calDayList").innerHTML=items.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";const pc=priColor(pri);const pcls=priCls(pri);return`<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="showDetail('${i.id}')"><span class="dot ${sc}"></span><span style="flex:1;font-size:12px;">${subjEmoji(i.subject)} ${esc(i.title)}</span><span class="pri-grad ${pcls}" style="font-size:9px;padding:2px 6px;">${pri}</span><span style="font-size:10px;color:var(--text3);">${sl}</span></div>`}).join("");renderCal()}
+function showCalDay(key){S.calSel=key;const byDate=indexByDate(S.items);const items=byDate.get(key)||[];const d=key?new Date(key+"T00:00:00"):new Date();qs("calDayLabel").textContent=key?`${DOW[d.getDay()]}. ${d.getDate()} ${MONTH[d.getMonth()]} ${d.getFullYear()}`:"-";if(!items.length){qs("calDayList").innerHTML='<div class="empty"><svg viewBox="0 0 24 24" style="width:32px;height:32px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:6px;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div>No tasks scheduled</div><span style="font-size:11px;color:var(--text3);">Enjoy the free time!</span></div>';return}qs("calDayList").innerHTML=items.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=priCanon(i.priority);const pc=priColor(pri);const pcls=priCls(pri);return`<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="showDetail('${i.id}')"><span class="dot ${sc}"></span><span style="flex:1;font-size:12px;">${subjEmoji(i.subject)} ${esc(i.title)}</span><span class="pri-grad ${pcls}" style="font-size:9px;padding:2px 6px;">${pri}</span><span style="font-size:10px;color:var(--text3);">${sl}</span></div>`}).join("");renderCal()}
 
-async function loadList(){try{const d=await loadAll();if(d?.error){qs("listTable").innerHTML=`<tr><td colspan="9" class="empty">${esc(d.error)}</td></tr>`;return}const subs=[...new Set(S.items.map(i=>i.subject))].sort();qs("subjectFilter").innerHTML='<option value="">All</option>'+subs.map(s=>`<option value="${esc(s)}">${subjEmoji(s)} ${esc(s)}</option>`).join("");const tags=[...new Set(S.items.flatMap(i=>i.tags||[]))].sort();qs("tagFilter").innerHTML='<option value="">All Tags</option>'+tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");listRenderFilters();listFilter();qs("listTs").textContent=fmtTime()}catch(e){qs("listTable").innerHTML=`<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`}}
+async function loadList(){try{const d=await loadAll();if(d?.error){qs("listTable").innerHTML=`<tr><td colspan="9" class="empty">${esc(d.error)}</td></tr>`;return}const subs=[...new Set(S.items.map(i=>i.subject))].sort();qs("subjectFilter").innerHTML='<option value="">All</option>'+subs.map(s=>`<option value="${esc(s)}">${subjEmoji(s)} ${esc(subjLabel(s))}</option>`).join("");const tags=[...new Set(S.items.flatMap(i=>i.tags||[]))].sort();qs("tagFilter").innerHTML='<option value="">All Tags</option>'+tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");listRenderFilters();listFilter();qs("listTs").textContent=fmtTime()}catch(e){qs("listTable").innerHTML=`<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`}}
 function listSort(key){if(S.sortKey===key)S.sortDir*=-1;else{S.sortKey=key;S.sortDir=1}document.querySelectorAll(".sort").forEach(el=>el.classList.remove("active"));const el=qs("sort-"+key);if(el)el.classList.add("active");listFilter()}
 function listRenderFilters(){const counts={all:S.items.length,overdue:0};const today=new Date();today.setHours(0,0,0,0);for(const i of S.items){const sk=statusKey(i.status);counts[sk]=(counts[sk]||0)+1;if(i.status!==STATUS.DONE&&i.due&&new Date(i.due+"T00:00:00")<today)counts.overdue++}const tabs=[["all","All"],["overdue","Overdue"],["todo","To Do"],["prog","In Progress"],["done","Done"]];qs("listFilters").innerHTML=tabs.map(([k])=>`<button class="filter-btn${S.filter===k?" active":""}" onclick="setListFilter('${k}')">${tabs.find(t=>t[0]===k)[1]} ${counts[k]||0}</button>`).join("")}
 function setListFilter(f){S.filter=f;listRenderFilters();listFilter()}
@@ -313,7 +369,7 @@ function listFilter(){
   renderFilterChips();
 }
 function tagsHtml(t){return(t||[]).map(v=>`<span class="tag-pill">${esc(v)}</span>`).join("")}
-function listRenderTable(items){const today=new Date();today.setHours(0,0,0,0);const tbody=qs("listTable");const totalPages=Math.max(1,Math.ceil(items.length/S.pageSize));const pg=Math.min(S.page,totalPages-1);const start=pg*S.pageSize;const pageItems=items.slice(start,start+S.pageSize);if(!items.length){S.page=0;tbody.innerHTML='<tr><td colspan="9" class="empty"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>No matching tasks<br><span style="font-size:11px;">Try adjusting your search or filters</span></td></tr>';renderPagination(0,0);return}const groups={overdue:[],thisWeek:[],nextWeek:[],later:[],noDate:[],done:[]};const eow=new Date(today);eow.setDate(today.getDate()+(7-today.getDay()));const enw=new Date(eow);enw.setDate(eow.getDate()+7);for(const i of pageItems){if(i.status===STATUS.DONE){groups.done.push(i);continue}if(!i.due){groups.noDate.push(i);continue}const dt=new Date(i.due+"T00:00:00");if(dt<today)groups.overdue.push(i);else if(dt<=eow)groups.thisWeek.push(i);else if(dt<=enw)groups.nextWeek.push(i);else groups.later.push(i)}const config=[["Overdue",groups.overdue],["This Week",groups.thisWeek],["Next Week",groups.nextWeek],["Later",groups.later],["No Date",groups.noDate],["Done",groups.done]];let html="";for(const [hdr,g] of config){if(!g.length)continue;html+=`<tr class="grp"><td colspan="9">${hdr} (${g.length})</td></tr>`;html+=g.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=i.priority||"🟡 กลาง";const pc=priColor(pri);const pcls=priCls(pri);const dr=dueClass(i.due);const checked=S.selected?.has(i.id)?"checked":"";const statusBtns=`<div class="status-btns"><button class="status-btn s-todo${i.status===STATUS.TODO?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.TODO}')" title="To Do"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></button><button class="status-btn s-prog${i.status===STATUS.PROG?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.PROG}')" title="In Progress"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="status-btn s-done${i.status===STATUS.DONE?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.DONE}')" title="Done"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button></div>`;return`<tr onclick="showDetail('${i.id}')"${i.status===STATUS.DONE?' class="done-row"':''}><td><input type="checkbox" ${checked} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="cursor:pointer;"></td><td>${statusBtns}</td><td>${subjEmoji(i.subject)} ${esc(i.title)}</td><td><span class="tag">${esc(i.subject)}</span></td><td style="color:${pc};font-weight:600;" class="pri-${pcls}">${pri}</td><td class="${dr}">${i.due||"-"}</td><td class="${dr}">${i.due?dueLabel(i.due):"-"}</td><td>${completedLabel(i.completed)}</td><td>${tagsHtml(i.tags)}</td></tr>`}).join("")}tbody.innerHTML=html;renderPagination(items.length,totalPages)}
+function listRenderTable(items){const today=new Date();today.setHours(0,0,0,0);const tbody=qs("listTable");const totalPages=Math.max(1,Math.ceil(items.length/S.pageSize));const pg=Math.min(S.page,totalPages-1);const start=pg*S.pageSize;const pageItems=items.slice(start,start+S.pageSize);if(!items.length){S.page=0;tbody.innerHTML='<tr><td colspan="9" class="empty"><svg viewBox="0 0 24 24" style="width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>No matching tasks<br><span style="font-size:11px;">Try adjusting your search or filters</span></td></tr>';renderPagination(0,0);return}const groups={overdue:[],thisWeek:[],nextWeek:[],later:[],noDate:[],done:[]};const eow=new Date(today);eow.setDate(today.getDate()+(7-today.getDay()));const enw=new Date(eow);enw.setDate(eow.getDate()+7);for(const i of pageItems){if(i.status===STATUS.DONE){groups.done.push(i);continue}if(!i.due){groups.noDate.push(i);continue}const dt=new Date(i.due+"T00:00:00");if(dt<today)groups.overdue.push(i);else if(dt<=eow)groups.thisWeek.push(i);else if(dt<=enw)groups.nextWeek.push(i);else groups.later.push(i)}const config=[["Overdue",groups.overdue],["This Week",groups.thisWeek],["Next Week",groups.nextWeek],["Later",groups.later],["No Date",groups.noDate],["Done",groups.done]];let html="";for(const [hdr,g] of config){if(!g.length)continue;html+=`<tr class="grp"><td colspan="9">${hdr} (${g.length})</td></tr>`;html+=g.map(i=>{const sc=statusKey(i.status);const sl=LABELS[sc];const pri=priCanon(i.priority);const pc=priColor(pri);const pcls=priCls(pri);const dr=dueClass(i.due);const checked=S.selected?.has(i.id)?"checked":"";const statusBtns=`<div class="status-btns"><button class="status-btn s-todo${i.status===STATUS.TODO?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.TODO}')" title="To Do"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></button><button class="status-btn s-prog${i.status===STATUS.PROG?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.PROG}')" title="In Progress"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><button class="status-btn s-done${i.status===STATUS.DONE?' active':''}" onclick="event.stopPropagation();changeStatus('${i.id}','${STATUS.DONE}')" title="Done"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button></div>`;return`<tr onclick="showDetail('${i.id}')"${i.status===STATUS.DONE?' class="done-row"':''}><td><input type="checkbox" ${checked} onclick="event.stopPropagation();toggleSelect('${i.id}')" style="cursor:pointer;"></td><td>${statusBtns}</td><td>${subjEmoji(i.subject)} ${esc(i.title)}</td><td><span class="tag">${esc(i.subject)}</span></td><td style="color:${pc};font-weight:600;" class="pri-${pcls}">${pri}</td><td class="${dr}">${i.due||"-"}</td><td class="${dr}">${i.due?dueLabel(i.due):"-"}</td><td>${completedLabel(i.completed)}</td><td>${tagsHtml(i.tags)}</td></tr>`}).join("")}tbody.innerHTML=html;renderPagination(items.length,totalPages)}
 function renderPagination(total,totalPages){
   const info=qs("pageInfo");const btns=qs("pageBtns");
   if(total<=S.pageSize){info.textContent="";btns.innerHTML="";return}
@@ -336,10 +392,10 @@ function listGoPage(n){
 }
 
 function fmtDate(d){if(!d)return"";const dt=new Date(d+"T00:00:00");return dt.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}
-function showDetail(id){const item=S.items.find(i=>i.id===id);if(!item)return;const sc=statusKey(item.status);const sl=LABELS[sc];const pri=item.priority||"🟡 กลาง";const pc=PRI_COLORS[pri]||"#9e9690";const pcls=PRI_CLASS[pri]||"med";const dd=daysDiff(item.due);let remainStr,remainCl,remainPct;if(dd===null){remainStr="No due date";remainCl="safe";remainPct=null}else if(dd<0){remainStr=`Overdue ${-dd}d`;remainCl="overdue";remainPct=0}else if(dd===0){remainStr="Due Today";remainCl="overdue";remainPct=100}else if(dd===1){remainStr="Due Tomorrow";remainCl="soon";remainPct=90}else if(dd<=3){remainStr=`${dd}d left`;remainCl="soon";remainPct=dd<=2?80:60}else{remainStr=`${dd}d left`;remainCl="safe";remainPct=Math.max(5,100-dd*3)}const statusIcon=sc==="todo"?"📌":sc==="prog"?"🔄":"✅";qs("detailContent").innerHTML=`<div style="margin-bottom:16px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><span class="pri-grad ${pcls}" style="color:${pc};">${pri}</span><span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:99px;">${subjEmoji(item.subject)} ${esc(item.subject)}</span></div><div style="font-size:18px;font-weight:700;line-height:1.3;">${esc(item.title)}</div></div><div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Time Remaining</div><div style="font-size:16px;font-weight:700;" class="${remainCl}">${remainStr}</div>${remainPct!==null?`<div style="margin-top:4px;width:80px;height:3px;background:var(--border);border-radius:99px;overflow:hidden;"><div style="height:100%;width:${remainPct}%;border-radius:99px;background:${remainPct<30?'var(--coral)':remainPct<70?'var(--accent)':'var(--green)'};"></div></div>`:''}</div><div style="text-align:right;"><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Status</div><div style="font-size:14px;display:flex;align-items:center;gap:4px;font-weight:600;"><span class="dot ${sc}"></span>${sl}</div></div></div><div class="detail-field"><div class="detail-label">Subject</div><div class="detail-value">${subjEmoji(item.subject)} ${esc(item.subject)}</div></div><div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value" style="color:${pc};font-weight:600;">${pri}</div></div><div class="detail-field"><div class="detail-label">Due Date</div><div class="detail-value">${item.due?fmtDate(item.due):"<span style='color:var(--text3);'>Not set</span>"}</div></div><div class="detail-field"><div class="detail-label">Completed</div><div class="detail-value">${item.completed?fmtDate(item.completed):"<span style='color:var(--text3);'>Not done</span>"}</div></div><div class="detail-field"><div class="detail-label">Tags</div><div class="detail-value">${item.tags?.length?tagsHtml(item.tags):"<span style='color:var(--text3);font-style:italic;'>No tags</span>"}</div></div><div class="detail-field"><div class="detail-label">Note</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.5;font-size:12px;">${item.note?esc(item.note):"<span style='color:var(--text3);font-style:italic;'>No notes</span>"}</div></div><div class="detail-field"><div class="detail-label">Notion</div><div class="detail-value"><a href="${safeUrl(item.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:12px;font-weight:500;">Open in Notion →</a></div></div><div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);"><button class="btn" onclick="openEditModal('${item.id}')" style="flex:1;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-right:4px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button><button class="btn" onclick="deleteHomework('${item.id}')" style="flex:1;color:var(--coral);border-color:var(--coral);"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button></div>`;qs("detailOverlay").classList.add("open");qs("detailPanel").classList.add("open")}
+function showDetail(id){const item=S.items.find(i=>i.id===id);if(!item)return;const sc=statusKey(item.status);const sl=LABELS[sc];const pri=priCanon(item.priority);const pc=PRI_COLORS[priCanon(pri)]||"#9e9690";const pcls=PRI_CLASS[priCanon(pri)]||"med";const dd=daysDiff(item.due);let remainStr,remainCl,remainPct;if(dd===null){remainStr="No due date";remainCl="safe";remainPct=null}else if(dd<0){remainStr=`Overdue ${-dd}d`;remainCl="overdue";remainPct=0}else if(dd===0){remainStr="Due Today";remainCl="overdue";remainPct=100}else if(dd===1){remainStr="Due Tomorrow";remainCl="soon";remainPct=90}else if(dd<=3){remainStr=`${dd}d left`;remainCl="soon";remainPct=dd<=2?80:60}else{remainStr=`${dd}d left`;remainCl="safe";remainPct=Math.max(5,100-dd*3)}const statusIcon=sc==="todo"?"📌":sc==="prog"?"🔄":"✅";qs("detailContent").innerHTML=`<div style="margin-bottom:16px;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><span class="pri-grad ${pcls}" style="color:${pc};">${pri}</span><span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:99px;">${subjEmoji(item.subject)} ${esc(item.subject)}</span></div><div style="font-size:18px;font-weight:700;line-height:1.3;">${esc(item.title)}</div></div><div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);"><div><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Time Remaining</div><div style="font-size:16px;font-weight:700;" class="${remainCl}">${remainStr}</div>${remainPct!==null?`<div style="margin-top:4px;width:80px;height:3px;background:var(--border);border-radius:99px;overflow:hidden;"><div style="height:100%;width:${remainPct}%;border-radius:99px;background:${remainPct<30?'var(--coral)':remainPct<70?'var(--accent)':'var(--green)'};"></div></div>`:''}</div><div style="text-align:right;"><div style="font-size:8px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:3px;">Status</div><div style="font-size:14px;display:flex;align-items:center;gap:4px;font-weight:600;"><span class="dot ${sc}"></span>${sl}</div></div></div><div class="detail-field"><div class="detail-label">Subject</div><div class="detail-value">${subjEmoji(item.subject)} ${esc(item.subject)}</div></div><div class="detail-field"><div class="detail-label">Priority</div><div class="detail-value" style="color:${pc};font-weight:600;">${pri}</div></div><div class="detail-field"><div class="detail-label">Due Date</div><div class="detail-value">${item.due?fmtDate(item.due):"<span style='color:var(--text3);'>Not set</span>"}</div></div><div class="detail-field"><div class="detail-label">Completed</div><div class="detail-value">${item.completed?fmtDate(item.completed):"<span style='color:var(--text3);'>Not done</span>"}</div></div><div class="detail-field"><div class="detail-label">Tags</div><div class="detail-value">${item.tags?.length?tagsHtml(item.tags):"<span style='color:var(--text3);font-style:italic;'>No tags</span>"}</div></div><div class="detail-field"><div class="detail-label">Note</div><div class="detail-value" style="white-space:pre-wrap;line-height:1.5;font-size:12px;">${item.note?esc(item.note):"<span style='color:var(--text3);font-style:italic;'>No notes</span>"}</div></div><div class="detail-field"><div class="detail-label">Notion</div><div class="detail-value"><a href="${safeUrl(item.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:12px;font-weight:500;">Open in Notion →</a></div></div><div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);"><button class="btn" onclick="openEditModal('${item.id}')" style="flex:1;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-right:4px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button><button class="btn" onclick="deleteHomework('${item.id}')" style="flex:1;color:var(--coral);border-color:var(--coral);"><svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;vertical-align:middle;margin-right:4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</button></div>`;qs("detailOverlay").classList.add("open");qs("detailPanel").classList.add("open")}
 function closeDetail(){qs("detailOverlay").classList.remove("open");qs("detailPanel").classList.remove("open")}
 
-function exportCSV(){const csvCell=v=>`"${String(v??"").replace(/"/g,'""').replace(/\n/g,' ').replace(/\r/g,'')}"`;const headers=["Title","Subject","Status","Priority","Due Date","Completed Date","Tags","Note","Notion URL"];const rows=S.items.map(i=>[csvCell(i.title),csvCell(i.subject),csvCell(LABELS[statusKey(i.status)]),csvCell(i.priority||" กลาง"),i.due||"",i.completed||"",csvCell((i.tags||[]).join(", ")),csvCell(i.note),i.url||""]);const csv=[headers.join(","),...rows.map(r=>r.join(","))].join("\n");const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`homework_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);showToast("CSV downloaded!")}
+function exportCSV(){const csvCell=v=>`"${String(v??"").replace(/"/g,'""').replace(/\n/g,' ').replace(/\r/g,'')}"`;const headers=["Title","Subject","Status","Priority","Due Date","Completed Date","Tags","Note","Notion URL"];const rows=S.items.map(i=>[csvCell(i.title),csvCell(i.subject),csvCell(LABELS[statusKey(i.status)]),csvCell(priCanon(i.priority)),i.due||"",i.completed||"",csvCell((i.tags||[]).join(", ")),csvCell(i.note),i.url||""]);const csv=[headers.join(","),...rows.map(r=>r.join(","))].join("\n");const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`homework_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);showToast("CSV downloaded!")}
 
 function applyTheme(isDark){document.body.classList.toggle("dark",isDark);localStorage.setItem("dark",isDark?"1":"0");const icon=qs("darkIcon");if(icon)icon.innerHTML=isDark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'}
 function toggleDark(){applyTheme(!document.body.classList.contains("dark"))}
@@ -350,24 +406,23 @@ if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js").then(
 
 /* ── Quick Add Modal ─ */
 function recalcPriority(dueStr){
-  if(!dueStr)return"🟢 ต่ำ";
+  if(!dueStr)return PRI_LOW;
   const today=new Date();today.setHours(0,0,0,0);
   const due=new Date(dueStr+"T00:00:00");
   const diff=Math.ceil((due-today)/86400000);
-  if(diff<-30)return"🟢 ต่ำ";
-  if(diff<0)return"🔴 สูง";
-  if(diff<=3)return"🔴 สูง";
-  if(diff<=14)return"🟡 กลาง";
-  return"🟢 ต่ำ";
+  if(diff<-30)return PRI_LOW;
+  if(diff<0)return PRI_HIGH;
+  if(diff<=3)return PRI_HIGH;
+  if(diff<=14)return PRI_MED;
+  return PRI_LOW;
 }
 function buildSubjectOptions(){
-  const subs=Object.keys(SUBJ_EMOJI).sort();
-  return'<option value="">Select subject</option>'+subs.map(s=>`<option value="${s}">${SUBJ_EMOJI[s]} ${s}</option>`).join('');
+  return '<option value="">Select subject</option>' + SUBJ_OPTIONS.map(s => `<option value="${s}">${SUBJ_EMOJI[s]} ${s}</option>`).join('');
 }
 function updatePriorityPreview(){
   const due=qs("addDue").value||null;
   const pri=recalcPriority(due);
-  const cls=pri==="🔴 สูง"?"overdue":pri==="🟡 กลาง"?"soon":"safe";
+  const cls=priCanon(pri)===PRI_HIGH?"overdue":priCanon(pri)===PRI_MED?"soon":"safe";
   qs("addPriorityPreview").innerHTML=`<span class="${cls}">Auto: ${pri}</span>`;
   qs("addPriority").value=pri;
 }
@@ -390,7 +445,7 @@ async function submitHomework(e){
   e.preventDefault();
   const data={
     title:qs("addTitle").value.trim(),
-    subject:qs("addSubject").value||"ทั่วไป",
+    subject:qs("addSubject").value||"General",
     due:qs("addDue").value||null,
     priority:qs("addPriority").value,
     note:qs("addNote").value.trim(),
@@ -430,9 +485,9 @@ function openEditModal(id){
   qs("editDue").value=item.due||"";
   qs("editNote").value=item.note||"";
   renderTagsPicker("editTags",item.tags||[]);
-  const pri=item.priority||"🟡 กลาง";
+  const pri=priCanon(item.priority);
   qs("editPriority").value=pri;
-  qs("editPriorityPreview").innerHTML=`<span class="${pri==="🔴 สูง"?"overdue":pri==="🟡 กลาง"?"soon":"safe"}">${pri}</span>`;
+  qs("editPriorityPreview").innerHTML=`<span class="${priCanon(pri)===PRI_HIGH?"overdue":priCanon(pri)===PRI_MED?"soon":"safe"}">${pri}</span>`;
   closeDetail();
   qs("editOverlay").classList.add("open");
   qs("editPanel").classList.add("open");
@@ -445,7 +500,7 @@ function closeEditModal(){
 function updateEditPriorityPreview(){
   const due=qs("editDue").value||null;
   const pri=recalcPriority(due);
-  const cls=pri==="🔴 สูง"?"overdue":pri==="🟡 กลาง"?"soon":"safe";
+  const cls=priCanon(pri)===PRI_HIGH?"overdue":priCanon(pri)===PRI_MED?"soon":"safe";
   qs("editPriorityPreview").innerHTML=`<span class="${cls}">Auto: ${pri}</span>`;
   qs("editPriority").value=pri;
 }
@@ -454,7 +509,7 @@ async function submitEdit(e){
   const data={
     id:qs("editId").value,
     title:qs("editTitle").value.trim(),
-    subject:qs("editSubject").value||"ทั่วไป",
+    subject:qs("editSubject").value||"General",
     due:qs("editDue").value||null,
     priority:qs("editPriority").value,
     note:qs("editNote").value.trim(),

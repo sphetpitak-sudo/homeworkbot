@@ -203,7 +203,7 @@ function computeStats(activePages, donePages) {
         if (status === STATUS.TODO) todo++;
         else if (status === STATUS.IN_PROGRESS) prog++;
 
-        const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "ทั่วไป";
+        const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || "General";
         bySubject[sub] = (bySubject[sub] || 0) + 1;
 
         const pri = p.properties.Priority?.select?.name || PRIORITY_DEFAULT;
@@ -353,7 +353,7 @@ export function startWebServer(port = 8080) {
             return next()
         }
         res.setHeader("Content-Type", "text/html; charset=utf-8")
-        return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>ต้องเข้าสู่ระบบผ่านบอท Telegram ก่อน</p><div class="hint">1. เปิดบอท Homework Bot ใน Telegram<br>2. กดปุ่ม 🌐 Web Dashboard<br>3. ทำตามขั้นตอนในลิงก์</div></div></body></html>`)
+        return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left;line-height:1.6}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>Please sign in via the Telegram bot first</p><div class="hint">1. Open the Homework Bot in Telegram<br>2. Tap the 🌐 Web Dashboard button<br>3. Follow the link the bot sends</div></div></body></html>`)
     })
 
     /* Vite: serve built assets from dist/ if it exists, otherwise fall
@@ -430,7 +430,7 @@ export function startWebServer(port = 8080) {
         /* Validate preliminary token (HMAC + expiry, but NOT consumed) */
         if (!validatePrelimTicket(prelimToken)) {
             res.setHeader("Content-Type", "text/html; charset=utf-8")
-            return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
+            return res.status(401).send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; Link expired</h2><p>Request a new link from the bot</p></div></body></html>`)
         }
 
         /* Generate a real (consumable) ticket */
@@ -438,7 +438,7 @@ export function startWebServer(port = 8080) {
 
         const escaped = realTicket.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
         res.setHeader("Content-Type", "text/html; charset=utf-8")
-        res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>กดปุ่มด้านล่างเพื่อเปิดแดชบอร์ด</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">เข้าแดชบอร์ด</button></form></div></body></html>`)
+        res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}button{background:#4361ee;color:#fff;border:none;padding:.75rem 2rem;border-radius:8px;font-size:1rem;cursor:pointer;width:100%}button:hover{background:#3a56d4}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>Click the button below to open your dashboard</p><form method="POST" action="/api/exchange"><input type="hidden" name="ticket" value="${escaped}"><button type="submit">Open Dashboard</button></form></div></body></html>`)
     })
 
     /* Stage 2: POST consumes the real ticket → sets cookie → redirect */
@@ -450,7 +450,7 @@ export function startWebServer(port = 8080) {
         const ok = await consumeTicketAtomic(ticket)
         if (!ok) {
             res.setHeader("Content-Type", "text/html; charset=utf-8")
-            return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
+            return res.status(401).send(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; Link expired</h2><p>Request a new link from the bot</p></div></body></html>`)
         }
         res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
             httpOnly: true,
@@ -525,7 +525,7 @@ export function startWebServer(port = 8080) {
             const effectivePriority = priority || recalcPriority(due || null);
             await createHomework({
                 title: title.trim(),
-                subject: subject || "ทั่วไป",
+                subject: subject || "General",
                 due: due || null,
                 priority: effectivePriority,
                 note: note?.trim() || "",

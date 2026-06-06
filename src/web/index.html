@@ -71,7 +71,7 @@
   </div>
   <div class="grid-2" id="homePanicRow" style="display:none;">
     <div class="card">
-      <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Urgent — 3 งานด่วนที่สุด</div>
+      <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Top 3 Urgent Tasks</div>
       <div id="homePanicList"></div>
     </div>
     <div class="card">
@@ -230,9 +230,9 @@
     <label>Due <input type="date" id="editDue"></label>
     <label>Priority <span id="editPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
       <select id="editPriority">
-        <option value="🔴 สูง">🔴 สูง</option>
-        <option value="🟡 กลาง" selected>🟡 กลาง</option>
-        <option value="🟢 ต่ำ">🟢 ต่ำ</option>
+        <option value="🔴 High">🔴 High</option>
+        <option value="🟡 Medium" selected>🟡 Medium</option>
+        <option value="🟢 Low">🟢 Low</option>
       </select>
     </label>
     <label>Note <textarea id="editNote" rows="2" placeholder="Optional note..."></textarea></label>
@@ -249,14 +249,14 @@
   <button class="detail-close" onclick="closeAddModal()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Add Homework</h2>
   <form onsubmit="submitHomework(event)">
-    <label>Title <input id="addTitle" required placeholder="e.g. แบบฝึกหัดเลข บทที่ 5"></label>
+    <label>Title <input id="addTitle" required placeholder="e.g. Math exercises ch. 5"></label>
     <label>Subject <select id="addSubject"></select></label>
     <label>Due <input type="date" id="addDue"></label>
     <label>Priority <span id="addPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
       <select id="addPriority">
-        <option value="🔴 สูง">🔴 สูง</option>
-        <option value="🟡 กลาง" selected>🟡 กลาง</option>
-        <option value="🟢 ต่ำ">🟢 ต่ำ</option>
+        <option value="🔴 High">🔴 High</option>
+        <option value="🟡 Medium" selected>🟡 Medium</option>
+        <option value="🟢 Low">🟢 Low</option>
       </select>
     </label>
     <label>Note <textarea id="addNote" rows="2" placeholder="Optional note..."></textarea></label>
