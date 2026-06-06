@@ -47,16 +47,16 @@ const COLLAB_TOKEN_TTL = SHARE_TOKEN_TTL
 
 export const mainMenu = Markup.inlineKeyboard([
     [
-        Markup.button.callback("➕ เพิ่มการบ้าน", "ADD"),
-        Markup.button.callback("📋 งานค้าง", "LIST_ACTIVE"),
+        Markup.button.callback(t("cmd.menu.add"), "ADD"),
+        Markup.button.callback(t("cmd.menu.active"), "LIST_ACTIVE"),
     ],
     [
-        Markup.button.callback("✅ เสร็จ", "LIST_DONE"),
-        Markup.button.callback("📊 Dashboard", "DASHBOARD"),
+        Markup.button.callback(t("cmd.menu.done"), "LIST_DONE"),
+        Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
     ],
     [
-        Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
-        Markup.button.callback("🚨 ฉุกเฉิน", "PANIC"),
+        Markup.button.callback(t("cmd.menu.ask"), "ASK_AI"),
+        Markup.button.callback(t("cmd.menu.panic"), "PANIC"),
     ],
     ...(WEB_URL
         ? [[Markup.button.url("🌐 Web Dashboard", createDashboardUrl(WEB_URL) || WEB_URL)]]
@@ -64,32 +64,32 @@ export const mainMenu = Markup.inlineKeyboard([
 ]);
 
 export const cancelMenu = Markup.inlineKeyboard([
-    [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
+    [Markup.button.callback(t("cmd.menu.cancel"), "CANCEL")],
 ]);
 
 export const compactConfirmMenu = Markup.inlineKeyboard([
     [
-        Markup.button.callback("✅ บันทึก", "CONFIRM_SAVE"),
-        Markup.button.callback("✏️ แก้ไข", "CONFIRM_EDIT"),
+        Markup.button.callback(t("cmd.menu.save"), "CONFIRM_SAVE"),
+        Markup.button.callback(t("cmd.menu.edit"), "CONFIRM_EDIT"),
     ],
     [
-        Markup.button.callback("📚 วิชา", "EDIT_SUBJECT"),
-        Markup.button.callback("📅 วันที่", "EDIT_DATE"),
+        Markup.button.callback(t("cmd.menu.subject"), "EDIT_SUBJECT"),
+        Markup.button.callback(t("cmd.menu.date"), "EDIT_DATE"),
     ],
     [
-        Markup.button.callback("🎯 เพิ่มเติม ▼", "MORE_OPTIONS"),
-        Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+        Markup.button.callback(t("cmd.menu.more"), "MORE_OPTIONS"),
+        Markup.button.callback(t("cmd.menu.cancel"), "CANCEL"),
     ],
 ]);
 
 export const moreOptionsMenu = Markup.inlineKeyboard([
     [
-        Markup.button.callback("🎯 สำคัญ", "EDIT_PRIORITY"),
-        Markup.button.callback("🏷️ Tags", "EDIT_TAGS"),
+        Markup.button.callback(t("cmd.menu.priority"), "EDIT_PRIORITY"),
+        Markup.button.callback(t("cmd.menu.tags"), "EDIT_TAGS"),
     ],
     [
-        Markup.button.callback("🔙 กลับ", "BACK_TO_CONFIRM"),
-        Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+        Markup.button.callback(t("cmd.menu.back"), "BACK_TO_CONFIRM"),
+        Markup.button.callback(t("cmd.menu.cancel"), "CANCEL"),
     ],
 ]);
 
@@ -155,19 +155,19 @@ export function buildHomeworkPreview(parsed) {
 
 function buildWelcomeMessage(name) {
     return (
-        `👋 ${safeBold("สวัสดี " + name + "!")}\n` +
-        `🤖 พิมพ์การบ้านมาที่แชทเลย\n` +
-        `${safeItalic("เช่น")} ${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n` +
-        `หรือกด /menu เพื่อดูคำสั่งอื่นๆ`
+        `👋 ${safeBold(t("cmd.welcome.greet", { name }))}\n` +
+        `🤖 ${t("cmd.welcome.line1")}\n` +
+        `${safeItalic(t("cmd.welcome.example"))} ${safeCode(t("cmd.welcome.exampleText"))}\n` +
+        `${t("cmd.welcome.line2")}`
     );
 }
 
 function buildMenuMessage() {
     return (
-        `🏠 ${safeBold("เมนูหลัก")}\n\n` +
-        `พิมพ์การบ้านมาที่แชทได้เลย เช่น\n` +
-        `${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n\n` +
-        `หรือเลือกเมนูด้านล่าง`
+        `🏠 ${safeBold(t("cmd.menuMsg.title"))}\n\n` +
+        `${t("cmd.menuMsg.line1")}\n` +
+        `${safeCode(t("cmd.menuMsg.exampleText"))}\n\n` +
+        `${t("cmd.menuMsg.line2")}`
     );
 }
 
@@ -183,13 +183,13 @@ export function showConfirm(ctx, pending, parseSource = "") {
     const srcPending = { ...pending, parseSource: parseSource || pending?.parseSource };
     let dateHint = "";
     if (pending?.due && isPossiblyLastMonth(pending.due, pending?.rawText)) {
-        dateHint = "\n📅 ตีความเป็นเดือนหน้า — ถ้าต้องการเดือนนี้ให้แก้วันที่\n";
+        dateHint = `\n📅 ${t("cmd.confirm.dateHint")}\n`;
     }
     return ctx.reply(
-        `📝 ${safeBold("ตรวจสอบก่อนบันทึก")}\n\n` +
+        `📝 ${safeBold(t("cmd.confirm.title"))}\n\n` +
             `${buildHomeworkPreview(srcPending)}` +
             `${dateHint}` +
-            `\n✅ กดบันทึก หรือ ✏️ แก้ไข`,
+            `\n✅ ${t("cmd.confirm.actions")}`,
         {
             parse_mode: "Markdown",
             ...compactConfirmMenu,

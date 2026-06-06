@@ -35,6 +35,8 @@ export default {
       priority: "🎯 Priority",
       tags: "🏷️ Tags",
       note: "📝 Note",
+      more: "🎯 More ▼",
+      back: "🔙 Back",
     },
     errors: {
       generic: "Sorry, something went wrong",
@@ -46,6 +48,24 @@ export default {
     added: " added",
     status: " in progress",
     success: " done",
+    welcome: {
+      greet: "Hi {name}!",
+      line1: "Just send me your homework in chat",
+      example: "e.g.",
+      exampleText: "Math exercise page 20 tomorrow",
+      line2: "or press /menu to see other commands",
+    },
+    menuMsg: {
+      title: "Main Menu",
+      line1: "Just send me your homework in chat, e.g.",
+      exampleText: "Math exercise page 20 tomorrow",
+      line2: "or pick a menu below",
+    },
+    confirm: {
+      title: "Review before saving",
+      dateHint: "Interpreted as next month — edit the date if you meant this month",
+      actions: "Tap Save or Edit",
+    },
   },
   hint: {
     today: "Today's tip",
