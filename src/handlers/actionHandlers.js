@@ -410,7 +410,7 @@ export function registerActionHandlers(bot, userState) {
             const safeSubject = escapeMarkdown(subject);
             const dueText = formatDueDisplay(due);
 
-            const priText = priority || "🟡 กลาง";
+            const priText = priority || "🟡 Medium";
             await ctx.editMessageText(
                 `🎉 ${safeBold("บันทึกสำเร็จ!")}\n` +
                     `\n` +
@@ -612,7 +612,7 @@ export function registerActionHandlers(bot, userState) {
         let msg = `📋 ${safeBold("งานค้าง")} (${pages.length})\n\n${items.join("\n")}`;
         if (totalPages > 1) msg += `\n\nหน้า ${page + 1}/${totalPages}`;
         if (page === 0 && showOncePerSession(uid, "PRIORITY_LEGEND")) {
-            msg += `\n\n🔴 สูง  🟡 กลาง  🟢 ต่ำ`;
+            msg += `\n\n🔴 High  🟡 Medium  🟢 Low`;
         }
         return msg;
     }
@@ -1473,7 +1473,7 @@ export function registerActionHandlers(bot, userState) {
             `📝 ${safeBold("ตั้งค่าเพิ่มเติม")}\n` +
             `\n` +
             `${subjectEmoji(subject)} ${safeBold(title)}\n` +
-            `🎯 ${priority || "🟡 กลาง"}  |  📅 ${dueText}\n` +
+            `🎯 ${priority || "🟡 Medium"}  |  📅 ${dueText}\n` +
             `\n` +
             `เลือกรายการด้านล่าง`;
 

@@ -9,3 +9,7 @@ credentials.json
 npm-debug.log*
 homebot.json
 .dashboard_token
+backups
+src/web/dist
+src/web/.vite
+*.log

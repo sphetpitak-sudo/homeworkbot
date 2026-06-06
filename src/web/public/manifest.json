@@ -1,7 +1,7 @@
 {
   "name": "Homework Bot",
   "short_name": "Homework",
-  "description": "Manage your homework with AI",
+  "description": "AI-powered homework tracker and study planner",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f2ede7",

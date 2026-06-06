@@ -235,15 +235,15 @@ describe('Web Dashboard API E2E', () => {
       );
     });
 
-    test('creates homework with defaults (subject=ทั่วไป, due=null)', async () => {
+    test('creates homework with defaults (subject=General, due=null)', async () => {
       const res = await fetch(`${baseUrl}/api/homework`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ title: 'งานไม่ระบุวิชา' }),
+        body: JSON.stringify({ title: 'No-subject homework' }),
       });
       expect(res.status).toBe(200);
       expect(mockCreateHomework).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'งานไม่ระบุวิชา', subject: 'ทั่วไป', due: null }),
+        expect.objectContaining({ title: 'No-subject homework', subject: 'General', due: null }),
       );
     });
 
@@ -512,7 +512,7 @@ describe('Web Dashboard API E2E', () => {
       });
       expect(res.status).toBe(200);
       expect(mockCreateHomework).toHaveBeenCalledWith(
-        expect.objectContaining({ priority: '🔴 สูง' }),
+        expect.objectContaining({ priority: '🔴 High' }),
       );
     });
   });

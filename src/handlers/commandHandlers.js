@@ -137,7 +137,7 @@ export function buildHomeworkPreview(parsed) {
     const subject = parsed?.subject || "ทั่วไป";
     const title = parsed?.title || "ไม่มีชื่อ";
     const due = parsed?.due ? formatDueDisplay(parsed.due) : "ไม่มีกำหนดส่ง 📅";
-    const priority = parsed?.priority || "🟡 กลาง";
+    const priority = parsed?.priority || "🟡 Medium";
     const tags = parsed?.tags?.length ? parsed.tags.join("  ") : null;
     const badge = parsed?.parseSource === "ai"
         ? `\n🤖 ${safeItalic("AI ช่วยตรวจจับ — ถ้าไม่ตรงแก้ไขได้ด้านล่าง")}`
@@ -230,14 +230,14 @@ async function parseText(text) {
             due: aiResult.dueDate,
             subject,
             title: shortenTitle(aiResult.title || cleanTitle(text) || text, subject),
-            priority: hasDue ? (aiResult.priority || "🟡 กลาง") : "🟢 ต่ำ",
+            priority: hasDue ? (aiResult.priority || "🟡 Medium") : "🟢 Low",
             tags: aiResult.tags,
             parseSource: "ai",
         };
     }
     const due = parseThaiDate(text);
     const subject = detectSubject(text);
-    const priority = due ? "🟡 กลาง" : "🟢 ต่ำ";
+    const priority = due ? "🟡 Medium" : "🟢 Low";
     return {
         due,
         subject,

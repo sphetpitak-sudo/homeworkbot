@@ -7,9 +7,9 @@ export const STATUS = {
 
 // ── Priority ──
 export const PRIORITY = {
-    HIGH: "🔴 สูง",
-    MEDIUM: "🟡 กลาง",
-    LOW: "🟢 ต่ำ",
+    HIGH: "🔴 High",
+    MEDIUM: "🟡 Medium",
+    LOW: "🟢 Low",
 };
 export const PRIORITY_ORDER = [PRIORITY.HIGH, PRIORITY.MEDIUM, PRIORITY.LOW];
 export const PRIORITY_DEFAULT = PRIORITY.MEDIUM;
@@ -19,13 +19,13 @@ export function priorityWeight(p) {
     return idx === -1 ? 1 : PRIORITY_ORDER.length - idx;
 }
 
-/** Map a Notion status value to a human-readable Thai label. */
+/** Map a Notion status value to a human-readable label. */
 export function statusLabel(status) {
     return status === STATUS.DONE
-        ? "เสร็จแล้ว"
+        ? "Done"
         : status === STATUS.IN_PROGRESS
-          ? "กำลังทำ"
-          : "ยังไม่ทำ";
+          ? "In Progress"
+          : "To Do";
 }
 
 // ── Dashboard limits ──

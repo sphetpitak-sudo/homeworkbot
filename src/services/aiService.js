@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { logger } from "../utils/logger.js";
 import { formatDate, parseThaiDate } from "../utils/dateParser.js";
-import { detectSubject, cleanTitle } from "../utils/subjectDetector.js";
+import { detectSubject, cleanTitle, canonSubj } from "../utils/subjectDetector.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
 import { getAICache, setAICache } from "./aiCache.js";
 
@@ -148,7 +148,7 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         "Return ONLY JSON:",
         '  {"title": "short descriptive title (max 50 chars, e.g. แบบฝึกหัดที่ 1, ใบงานเคมี, รายงานวิทย์)", "subject": "subject", "dueDate": "YYYY-MM-DD or null", "priority": "สูง or กลาง or ต่ำ"}',
         "",
-        "subject: one of คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม, ทั่วไป",
+        "subject: one of: Math, Thai, English, Physics, Chemistry, Biology, Social Studies, History, Computer, Health, General (output in English)",
         "",
         "priority rules:",
         '- "สูง" if due is urgent (≤3 days), or words like "ด่วน", "สำคัญ", "สอบ", "ส่งพรุ่งนี้"',
@@ -163,15 +163,15 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
         "",
         "Examples:",
         `Input: "คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้"`,
-        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"คณิต","dueDate":"${tomorrow}","priority":"สูง"}`,
+        `Output: {"title":"แบบฝึกหัดหน้า 20","subject":"Math","dueDate":"${tomorrow}","priority":"สูง"}`,
         `Input: "สอบคนิด พุทหน้า"`,
-        `Output: {"title":"สอบคณิต","subject":"คณิต","dueDate":"${nextWed}","priority":"สูง"}`,
+        `Output: {"title":"สอบคณิต","subject":"Math","dueDate":"${nextWed}","priority":"สูง"}`,
         `Input: "รายงานอังกฤษส่งอาทิตย์หน้า วันศุกร์"`,
-        `Output: {"title":"รายงานอังกฤษ","subject":"อังกฤษ","dueDate":"${nextFri}","priority":"กลาง"}`,
+        `Output: {"title":"รายงานอังกฤษ","subject":"English","dueDate":"${nextFri}","priority":"กลาง"}`,
         `Input: "งานกลุ่มสังคม อีก 2 อาทิตย์"`,
-        `Output: {"title":"งานกลุ่มสังคม","subject":"สังคม","dueDate":"...","priority":"ต่ำ"}`,
+        `Output: {"title":"งานกลุ่มสังคม","subject":"Social Studies","dueDate":"...","priority":"ต่ำ"}`,
         `Input: "ท่องอาขยานบทที่ 5"`,
-        `Output: {"title":"ท่องอาขยานบทที่ 5","subject":"ไทย","dueDate":null,"priority":"ต่ำ"}`,
+        `Output: {"title":"ท่องอาขยานบทที่ 5","subject":"Thai","dueDate":null,"priority":"ต่ำ"}`,
         "",
         "IMPORTANT: Always output a subject if text relates to homework/exam.",
     ].join("\n");
@@ -185,7 +185,7 @@ export async function parseHomework(text, opts = {}) {
         logger.info(`AI cache hit: "${text.slice(0, 30)}..." (${cached.source})`);
         return {
             title: cached.title || cleanTitle(text) || text,
-            subject: cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text),
+            subject: canonSubj(cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text)),
             dueDate: cached.dueDate || parseThaiDate(text),
             priority: cached.priority,
             model: cached.source,
@@ -226,7 +226,7 @@ export async function parseHomework(text, opts = {}) {
 
         const result = {
             title: parsed.title || cleanTitle(text) || text,
-            subject: parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text),
+            subject: canonSubj(parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text)),
             dueDate: parsed.dueDate || parseThaiDate(text),
             priority,
             model,

@@ -117,6 +117,28 @@ export function detectSubject(text) {
     return "ทั่วไป";
 }
 
+const SUBJECT_THAI_TO_EN = {
+    "คณิต": "Math",
+    "คณิตศาสตร์": "Math",
+    "ไทย": "Thai",
+    "ภาษาไทย": "Thai",
+    "อังกฤษ": "English",
+    "ฟิสิกส์": "Physics",
+    "เคมี": "Chemistry",
+    "ชีวะ": "Biology",
+    "สังคม": "Social Studies",
+    "ประวัติ": "History",
+    "คอม": "Computer",
+    "สุขศึกษา": "Health",
+    "ทั่วไป": "General",
+};
+const SUBJECT_EN_CANON = new Set(Object.values(SUBJECT_THAI_TO_EN));
+export function canonSubj(s) {
+    if (!s) return "General";
+    if (SUBJECT_EN_CANON.has(s)) return s;
+    return SUBJECT_THAI_TO_EN[s] || s;
+}
+
 export function subjectEmoji(sub) {
     return SUBJECT_EMOJI[sub] || "📖";
 }

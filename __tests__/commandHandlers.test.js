@@ -23,14 +23,14 @@ describe('buildHomeworkPreview', () => {
       title: 'แบบฝึกหัดหน้า 20',
       subject: 'คณิต',
       due: '2026-05-30',
-      priority: '🔴 สูง',
+      priority: '🔴 High',
       tags: ['สอบ', 'ด่วน'],
       parseSource: 'ai',
     }
     const result = buildHomeworkPreview(parsed)
     expect(result).toContain('แบบฝึกหัดหน้า 20')
     expect(result).toContain('คณิต')
-    expect(result).toContain('🔴 สูง')
+    expect(result).toContain('🔴 High')
     expect(result).toContain('สอบ')
     expect(result).toContain('ด่วน')
     expect(result).toContain('AI ช่วยตรวจจับ')
@@ -225,7 +225,7 @@ describe('buildPanicCard', () => {
     const result = buildPanicCard(page)
     expect(result).toContain('🚨')
     expect(result).toContain('Overdue')
-    expect(result).toContain('🔴 สูง')
+    expect(result).toContain('🔴 High')
   })
 
   test('renders urgent badge for ≤3 days', () => {
@@ -267,7 +267,7 @@ describe('buildPanicCard', () => {
     const page = makePage({ title: 'Test', due: getDateStr(14), subject: 'อังกฤษ', priority: PRIORITY.LOW })
     const result = buildPanicCard(page)
     expect(result).toContain('อังกฤษ')
-    expect(result).toContain('🟢 ต่ำ')
+    expect(result).toContain('🟢 Low')
   })
 
   test('handles exactly 3 days due (urgent threshold)', () => {
