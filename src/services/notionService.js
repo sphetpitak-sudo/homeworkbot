@@ -42,13 +42,18 @@ const REQUIRED_PROPS = [
     { name: "EventId", type: "rich_text" },
 ]
 
-let schemaChecked = false
+let schemaResult = null
+let nextSchemaRetry = 0
+const SCHEMA_RETRY_MS = 60 * 60 * 1000 // 1h
 
-export async function validateNotionSchema() {
-    if (schemaChecked) return { ok: true, missing: [] }
-    schemaChecked = true
+export async function validateNotionSchema(force = false) {
+    const now = Date.now()
+    if (!force && schemaResult && (schemaResult.ok || now < nextSchemaRetry)) {
+        return schemaResult
+    }
     if (!DB) {
-        return { ok: false, missing: REQUIRED_PROPS.map((p) => p.name) }
+        schemaResult = { ok: false, missing: REQUIRED_PROPS.map((p) => p.name) }
+        return schemaResult
     }
     try {
         const db = await notionWithRetry(() => notion.databases.retrieve({ database_id: DB }))
@@ -63,10 +68,17 @@ export async function validateNotionSchema() {
         if (wrongType.length) {
             logger.warn(`Notion schema property type mismatches: ${wrongType.join(", ")}`)
         }
-        return { ok: !missing.length && !wrongType.length, missing: [...missing, ...wrongType] }
+        schemaResult = { ok: !missing.length && !wrongType.length, missing: [...missing, ...wrongType] }
+        return schemaResult
     } catch (err) {
         logger.warn("Notion schema check failed:", err?.message || err)
-        return { ok: false, missing: ["<unreachable>"] }
+        /* Don't cache failures — schedule a retry in 1h so transient
+           outages (network blip, rate limit) don't permanently mask
+           a healthy schema. C2: previously `schemaChecked` was set
+           to true before the try, locking in the failure forever. */
+        schemaResult = { ok: false, missing: ["<unreachable>"] }
+        nextSchemaRetry = now + SCHEMA_RETRY_MS
+        return schemaResult
     }
 }
 
@@ -86,6 +98,13 @@ async function queryAll(params) {
         cursor = res.has_more ? res.next_cursor : undefined;
         pages++;
     } while (cursor && pages < MAX_QUERY_PAGES);
+
+    /* H8: if we hit the safety cap, log a clear warning so the operator
+       knows results may be truncated. Notion's default sort order can
+       hide items beyond the cap. */
+    if (cursor && pages >= MAX_QUERY_PAGES) {
+        logger.warn(`queryAll hit MAX_QUERY_PAGES (${MAX_QUERY_PAGES}) — results may be truncated (${results.length} items)`)
+    }
 
     return results;
 }
@@ -242,6 +261,13 @@ export async function updateStatus(pageId, status) {
         page_id: pageId,
         properties: props,
     }));
+    /* C1: pageCache is keyed per-page with a 5s TTL and is invalidated
+       only by the "notion:" prefix here. That means a subsequent
+       getPageStatus/getPageTitle within 5s reads the OLD status, which
+       breaks /undo (reverts to wrong status) and double-toggle logic
+       (clicking Done twice succeeds because the second call still sees
+       Todo from cache). Invalidate the per-page entry too. */
+    pageCache.delete(pageId);
     cacheInvalidate("notion:");
     logger.info(`Status updated: ${pageId} → ${status}`);
 }
@@ -255,6 +281,7 @@ export async function updateHomework(pageId, { title, subject, due, priority, no
     if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };
     if (tags !== undefined) props.Tags = { multi_select: tags.map(name => ({ name })) };
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, properties: props }));
+    pageCache.delete(pageId);
     cacheInvalidate("notion:");
     logger.info(`Homework updated: ${pageId}`);
 }
@@ -264,6 +291,7 @@ export async function updatePriority(pageId, priority) {
         page_id: pageId,
         properties: { Priority: { select: { name: priority } } },
     }));
+    pageCache.delete(pageId);
     cacheInvalidate("notion:");
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
@@ -301,12 +329,14 @@ export async function getPageTitle(pageId) {
 
 export async function archivePage(pageId) {
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: true }));
+    pageCache.delete(pageId);
     cacheInvalidate("notion:");
     logger.info(`Archived: ${pageId}`);
 }
 
 export async function restorePage(pageId) {
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: false }));
+    pageCache.delete(pageId);
     cacheInvalidate("notion:");
     logger.info(`Restored: ${pageId}`);
 }

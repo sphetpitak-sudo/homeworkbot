@@ -15,15 +15,36 @@ import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim() || crypto.randomBytes(32).toString("hex");
-if (process.env.DASHBOARD_TOKEN) {
-    logger.info("Dashboard auth enabled (DASHBOARD_TOKEN from env)");
+/* C3: DASHBOARD_TOKEN resolution.
+   - If env is set, use it (production).
+   - Otherwise, generate a random token and persist to .dashboard_token
+     so it survives restarts. This way the bot's createDashboardUrl()
+     embeds a ticket that stays valid across deploys even on the first
+     boot. The file is .gitignored. */
+const DASHBOARD_TOKEN_FILE = path.join(__dirname, "..", "..", ".dashboard_token")
+let DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN?.trim()
+if (DASHBOARD_TOKEN) {
+    logger.info("Dashboard auth enabled (DASHBOARD_TOKEN from env)")
 } else {
-    logger.info("DASHBOARD_TOKEN not set — auto-generated random token (resets on restart)");
-}
-
-export function getDashboardToken() {
-    return DASHBOARD_TOKEN;
+    try {
+        if (fs.existsSync(DASHBOARD_TOKEN_FILE)) {
+            const persisted = fs.readFileSync(DASHBOARD_TOKEN_FILE, "utf-8").trim()
+            if (persisted && persisted.length >= 32) {
+                DASHBOARD_TOKEN = persisted
+                logger.info("Dashboard auth enabled (DASHBOARD_TOKEN from .dashboard_token)")
+            }
+        }
+    } catch { /* fall through to generate */ }
+    if (!DASHBOARD_TOKEN) {
+        DASHBOARD_TOKEN = crypto.randomBytes(32).toString("hex")
+        try {
+            fs.writeFileSync(DASHBOARD_TOKEN_FILE, DASHBOARD_TOKEN, { mode: 0o600 })
+            logger.info("Dashboard auth enabled (auto-generated, persisted to .dashboard_token)")
+        } catch (err) {
+            logger.warn("Could not persist DASHBOARD_TOKEN to .dashboard_token:", err.message)
+            logger.info("Dashboard auth enabled (auto-generated, in-memory only — will reset on restart)")
+        }
+    }
 }
 
 /* ── one-time access tickets ──
@@ -35,7 +56,15 @@ export function getDashboardToken() {
    Set prevents replay within the same process lifetime. */
 const TICKET_TTL_MS = 300_000 // 5 minutes (up from 60s to give users time)
 const SESSION_COOKIE = "hb_session"
+/* H2: Ticket consumption is a read-then-write that previously allowed
+   a TOCTOU race (concurrent exchanges of the same ticket both passed
+   the `has` check). We now serialize per-ticket via a Promise chain:
+   if two requests for the same ticket arrive in quick succession,
+   the second waits for the first to settle, then sees the ticket is
+   consumed and rejects. This keeps the Set-based storage but adds
+   atomicity. */
 const consumedTickets = new Set()
+const ticketLocks = new Map()
 
 /* Derive a deterministic HMAC key from DASHBOARD_TOKEN so signed
    tickets survive restarts. If auth is disabled (no token), fall
@@ -50,6 +79,18 @@ function createSignedTicket(ttl) {
     const data = Buffer.from(payload).toString("base64url")
     const sig = crypto.createHmac("sha256", TICKET_HMAC_KEY).update(data).digest("base64url").slice(0, 12)
     return `${data}.${sig}`
+}
+
+/* H7: timing-safe comparison for session cookies/bearer tokens.
+   Plain `===` short-circuits on the first differing character, which
+   leaks a tiny amount of timing information per byte. For 32-byte
+   random tokens the attack window is academic, but defense-in-depth
+   is cheap. Handles null/undefined and length mismatch without
+   throwing. */
+function tokensEqual(a, b) {
+    if (typeof a !== "string" || typeof b !== "string") return false
+    if (a.length !== b.length) return false
+    return crypto.timingSafeEqual(Buffer.from(a, "utf-8"), Buffer.from(b, "utf-8"))
 }
 
 function consumeTicket(token) {
@@ -69,10 +110,39 @@ function consumeTicket(token) {
         payload = JSON.parse(Buffer.from(data, "base64url").toString("utf-8"))
     } catch { return false }
     if (Date.now() > payload.exp) return false
-    /* Replay protection (in-memory only — reset on restart, acceptable) */
+    /* Replay protection (in-memory only — reset on restart, acceptable).
+       H2: serialize per-ticket to close the TOCTOU window — if two
+       requests for the same id arrive concurrently, the second sees
+       the consumed set and is rejected. */
     if (consumedTickets.has(payload.id)) return false
     consumedTickets.add(payload.id)
     return true
+}
+
+/* H2: wrap a consumeTicket call in a per-ticket-id promise chain so
+   concurrent exchanges are serialized. Returns the same boolean as
+   consumeTicket, but two simultaneous calls for the same ticket will
+   see the second one fail with the ticket already consumed. */
+async function consumeTicketAtomic(token) {
+    const parts = token.split(".")
+    if (parts.length !== 2) return false
+    const data = parts[0]
+    let payload
+    try {
+        payload = JSON.parse(Buffer.from(data, "base64url").toString("utf-8"))
+    } catch { return false }
+    if (!payload?.id) return false
+    const id = payload.id
+    const prev = ticketLocks.get(id) || Promise.resolve()
+    const next = prev.then(() => consumeTicket(token))
+    /* Swallow rejection for the chain (real result is delivered via `next`). */
+    const chained = next.catch(() => false)
+    ticketLocks.set(id, chained)
+    /* Best-effort cleanup once this lock resolves. */
+    chained.finally(() => {
+        if (ticketLocks.get(id) === chained) ticketLocks.delete(id)
+    })
+    return next
 }
 
 /* Validate a preliminary ticket (HMAC + expiry) WITHOUT consuming it.
@@ -220,6 +290,17 @@ export function startWebServer(port = 8080) {
         message: { error: "Too many requests, slow down" },
     });
 
+    /* H2: tighter limiter on the ticket exchange endpoint so a single
+       IP can't brute-force a 16-byte ticket id within the 5-minute
+       TTL. 30 attempts/5min/IP. Tickets are also single-use (consumed
+       Set), so this is belt-and-suspenders. */
+    const exchangeLimiter = rateLimit({
+        windowMs: 5 * 60_000,
+        max: 30,
+        standardHeaders: true,
+        message: "Too many attempts, slow down",
+    });
+
     app.use(express.json({ limit: "1mb" }));
     app.use(cookieParser());
     app.use("/api", apiLimiter);
@@ -251,13 +332,16 @@ export function startWebServer(port = 8080) {
        dashboard (which would fail all API calls with 401). */
     app.get("/", (req, res, next) => {
         const cookie = req.cookies?.[SESSION_COOKIE]
-        if (cookie === DASHBOARD_TOKEN) return next()
+        if (tokensEqual(cookie, DASHBOARD_TOKEN)) return next()
         const queryToken = req.query.token
-        if (queryToken === DASHBOARD_TOKEN) {
+        if (tokensEqual(queryToken, DASHBOARD_TOKEN)) {
             res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
                 httpOnly: true,
                 sameSite: "lax",
-                maxAge: 365 * 24 * 60 * 60 * 1000,
+                /* H5: 24h cookie lifetime (was 1 year). The dashboard is
+                   a low-stakes tool; reducing lifetime limits the damage
+                   of a stolen cookie. Users re-authenticate via the bot. */
+                maxAge: 24 * 60 * 60 * 1000,
                 path: "/",
             })
             return next()
@@ -303,7 +387,7 @@ export function startWebServer(port = 8080) {
     function requireAuth(req, res, next) {
         const header = req.headers["authorization"]?.replace("Bearer ", "");
         const cookie = req.cookies?.[SESSION_COOKIE];
-        if (header === DASHBOARD_TOKEN || cookie === DASHBOARD_TOKEN) return next();
+        if (tokensEqual(header, DASHBOARD_TOKEN) || tokensEqual(cookie, DASHBOARD_TOKEN)) return next();
         return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -323,7 +407,7 @@ export function startWebServer(port = 8080) {
     }
 
     /* Stage 1: validate preliminary ticket → show confirmation with real ticket */
-    app.get("/api/exchange", (req, res) => {
+    app.get("/api/exchange", exchangeLimiter, (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const prelimToken = String(req.query.ticket || "")
         if (!prelimToken) return res.status(400).send("Missing ticket")
@@ -343,17 +427,20 @@ export function startWebServer(port = 8080) {
     })
 
     /* Stage 2: POST consumes the real ticket → sets cookie → redirect */
-    app.post("/api/exchange", express.urlencoded({ extended: false }), (req, res) => {
+    app.post("/api/exchange", exchangeLimiter, express.urlencoded({ extended: false }), async (req, res) => {
         if (!DASHBOARD_TOKEN) return res.redirect("/")
         const ticket = String(req.body?.ticket || "")
-        if (!consumeTicket(ticket)) {
+        /* H2: use the atomic variant so concurrent POSTs of the same
+           ticket are serialized — only the first wins. */
+        const ok = await consumeTicketAtomic(ticket)
+        if (!ok) {
             res.setHeader("Content-Type", "text/html; charset=utf-8")
             return res.status(401).send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1.5rem;font-size:.9rem}</style></head><body><div class="card"><h2>&#128257; ลิงก์หมดอายุ</h2><p>ขอลิงก์ใหม่จากบอทได้เลย</p></div></body></html>`)
         }
         res.cookie(SESSION_COOKIE, DASHBOARD_TOKEN, {
             httpOnly: true,
             sameSite: "lax",
-            maxAge: 24 * 3600 * 1000,
+            maxAge: 24 * 60 * 60 * 1000,
             path: "/",
         })
         return res.redirect("/")
@@ -366,12 +453,23 @@ export function startWebServer(port = 8080) {
                 fetchActive(),
                 fetchDone(),
             ]);
-            res.json({
+            const payload = JSON.stringify({
                 stats: computeStats(activePages, donePages),
                 homework: buildHomeworkList(activePages, donePages),
                 trend: computeTrend(donePages),
                 weeklyDone: computeWeeklyDone(donePages),
             });
+            /* L10: serve a 5s max-age + ETag so the SPA can cache
+               identical responses. ETag is a weak hash of the body;
+               on match Express sends 304 with no body. */
+            const etag = `W/"${crypto.createHash("sha1").update(payload).digest("base64url").slice(0, 16)}"`
+            if (req.headers["if-none-match"] === etag) {
+                res.setHeader("Cache-Control", "private, max-age=5")
+                return res.status(304).end()
+            }
+            res.setHeader("Cache-Control", "private, max-age=5")
+            res.setHeader("ETag", etag)
+            res.type("application/json").send(payload);
         } catch (err) {
             logger.error("API /api/all:", err);
             res.status(500).json({ error: "Internal server error" });

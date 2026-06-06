@@ -5,7 +5,7 @@ const POMODOROS_FILE = ".pomodoros.json"
 const MAX_ENTRIES = 5000
 const SESSION_DURATION = 25 * 60 * 1000   // 25 minutes
 const BREAK_DURATION = 5 * 60 * 1000      // 5 minutes
-const AUTO_CLOSE_MS = 5 * 60 * 1000       // 5 min inactivity
+const AUTO_CLOSE_MS = 5 * 60 * 1000       // 5 min inactivity (used by startup recovery)
 
 const POMO_MILESTONES = [
     { threshold: 10,  badge: "POMO_10" },
@@ -15,6 +15,83 @@ const POMO_MILESTONES = [
 ]
 
 const jsonStore = createJsonStore(POMODOROS_FILE, {})
+
+/* H1: in-flight pomodoro persistence.
+   In-memory `setTimeout` was lost on restart, silently dropping a
+   session the user thought was running. We persist the in-flight
+   session in the same JSON store under `_in_flight` and offer a
+   recovery hook (`recoverInterruptedSessions`) the boot sequence
+   can call to fire phase transitions that would have happened
+   during downtime. */
+function inFlightBucket() {
+    if (!jsonStore.data._in_flight) jsonStore.data._in_flight = {}
+    return jsonStore.data._in_flight
+}
+
+export function persistInFlightSession(userId, session) {
+    const bucket = inFlightBucket()
+    bucket[String(userId)] = {
+        startedAt: session.startedAt,
+        duration: session.duration,
+        phase: session.phase,
+        homeworkTitle: session.homeworkTitle || null,
+    }
+    jsonStore.scheduleWrite()
+}
+
+export function clearInFlightSession(userId) {
+    const bucket = inFlightBucket()
+    if (bucket[String(userId)]) {
+        delete bucket[String(userId)]
+        jsonStore.scheduleWrite()
+    }
+}
+
+export function getInFlightSession(userId) {
+    const bucket = inFlightBucket()
+    return bucket[String(userId)] || null
+}
+
+export function listInFlightSessions() {
+    const bucket = inFlightBucket()
+    return Object.entries(bucket).map(([userId, session]) => ({ userId, ...session }))
+}
+
+/* Recover sessions that should have transitioned during downtime.
+   Returns a list of { userId, action: "completed" | "ended" }
+   so the caller can notify the user. Idempotent: clearing a
+   session ensures we don't re-fire on the next boot. */
+export function recoverInterruptedSessions() {
+    const now = Date.now()
+    const recovered = []
+    const bucket = inFlightBucket()
+    for (const [userId, session] of Object.entries(bucket)) {
+        const elapsed = now - session.startedAt
+        /* "ended" is stricter than "completed" — we mark a session
+           ended only if downtime has exceeded BOTH the work phase
+           AND the break phase AND the auto-close grace window
+           (i.e. the entire session is in the past). */
+        if (elapsed >= session.duration + BREAK_DURATION + AUTO_CLOSE_MS) {
+            if (session.phase === "work") {
+                /* The work phase ended during downtime — credit it. */
+                savePomodoro(userId)
+                recovered.push({ userId, action: "completed", homeworkTitle: session.homeworkTitle })
+            }
+            delete bucket[userId]
+            recovered.push({ userId, action: "ended", homeworkTitle: session.homeworkTitle })
+        } else if (session.phase === "work" && elapsed >= session.duration) {
+            /* Work phase finished during downtime but the break
+               window is still active — credit the work, keep the
+               in-flight marker gone, and let the next boot
+               re-evaluate. */
+            savePomodoro(userId)
+            delete bucket[userId]
+            recovered.push({ userId, action: "completed", homeworkTitle: session.homeworkTitle })
+        }
+    }
+    if (recovered.length) jsonStore.scheduleWrite()
+    return recovered
+}
 
 function getToday() {
     return new Date().toISOString().slice(0, 10)

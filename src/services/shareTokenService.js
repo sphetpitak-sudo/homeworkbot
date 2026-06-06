@@ -74,5 +74,14 @@ export async function flushShareTokens() {
     await jsonStore.flush()
 }
 
+/* M4: scheduled prune hook called by the index.js boot sequence.
+   Runs at startup and can be called periodically to keep the JSON
+   file from accumulating expired tokens that are never read. */
+export function pruneShareTokens() {
+    const changed = pruneExpired()
+    if (changed) jsonStore.scheduleWrite()
+    return changed
+}
+
 export const SHARE_TOKEN_TTL = COLLAB_TOKEN_TTL
 

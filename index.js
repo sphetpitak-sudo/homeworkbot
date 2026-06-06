@@ -16,13 +16,20 @@ import { registerActionHandlers, cleanupPomoTimers }  from "./src/handlers/actio
 import { startWebServer, setBotReady } from "./src/web/server.js";
 import { flushCorrections }    from "./src/services/aiCache.js";
 import { flushBadges }         from "./src/services/badgeService.js";
-import { flushPomodoros }       from "./src/services/pomodoroService.js";
-import { flushShareTokens }    from "./src/services/shareTokenService.js";
+import { flushPomodoros, recoverInterruptedSessions }       from "./src/services/pomodoroService.js";
+import { flushShareTokens, pruneShareTokens }    from "./src/services/shareTokenService.js";
 
 /* ── validate env + Notion schema ── */
 validateEnv();
-import("./src/services/notionService.js").then((m) => m.validateNotionSchema())
-    .catch((err) => logger.warn("Notion schema check skipped:", err?.message || err));
+/* M15: schema check now runs synchronously at boot with a 3s
+   timeout. If the database is misconfigured, the bot starts up
+   knowing about it (logged warning + /api endpoints return clear
+   errors) instead of discovering the problem in the first 200ms
+   of user traffic. Failure is non-fatal: the bot still starts. */
+await Promise.race([
+    import("./src/services/notionService.js").then((m) => m.validateNotionSchema()),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+]).catch((err) => logger.warn("Notion schema check skipped:", err?.message || err));
 
 /* ── startup banner ── */
 import { readFileSync } from "fs";
@@ -40,6 +47,27 @@ logger.info(`🏠 Homework Bot v${version} starting (node ${process.version}, TZ
 const PORT = process.env.PORT || 8080;
 const server = startWebServer(PORT);
 
+/* ── H1: recover pomodoro sessions that were interrupted by the
+   previous process exit. Runs synchronously at boot, before the bot
+   starts accepting updates, so notifications can be sent on the
+   next incoming message. ── */
+try {
+    const recovered = recoverInterruptedSessions()
+    if (recovered.length) {
+        logger.info(`Recovered ${recovered.length} interrupted pomodoro session(s)`)
+    }
+} catch (err) {
+    logger.warn("Pomodore recovery failed:", err?.message || err)
+}
+
+/* ── M4: prune expired share tokens at boot so the JSON file
+   doesn't grow unbounded when tokens are never read. ── */
+try {
+    pruneShareTokens()
+} catch (err) {
+    logger.warn("Share token prune failed:", err?.message || err)
+}
+
 /* ── init ── */
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 const userState = new Map();
@@ -47,7 +75,10 @@ const userState = new Map();
 initAI();
 
 /* ── bot commands (Telegram menu) ── */
-bot.telegram.setMyCommands([
+/* L15: register Thai descriptions with language_code so users with
+   a Thai Telegram UI see the localized list, and an English
+   fallback for everyone else. */
+const BOT_COMMANDS_TH = [
     { command: "menu", description: "📋 เปิดเมนูหลัก" },
     { command: "stats", description: "📊 สถิติการบ้าน" },
     { command: "panic", description: "🚨 โหมดฉุกเฉิน — 3 งานด่วนที่สุด" },
@@ -70,6 +101,34 @@ bot.telegram.setMyCommands([
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
     { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
+]
+const BOT_COMMANDS_EN = [
+    { command: "menu", description: "📋 Main menu" },
+    { command: "stats", description: "📊 Stats" },
+    { command: "panic", description: "🚨 Panic mode — top 3 urgent tasks" },
+    { command: "tomorrow", description: "📅 Tomorrow's tasks" },
+    { command: "week", description: "📅 Weekly schedule" },
+    { command: "deadline", description: "⏰ Countdown to nearest deadline" },
+    { command: "progress", description: "📊 Progress by subject" },
+    { command: "hint", description: "🧠 Tip for getting started" },
+    { command: "search", description: "🔍 Search homework" },
+    { command: "quote", description: "💬 Motivational quote" },
+    { command: "export", description: "📋 Export list" },
+    { command: "noted", description: "📝 Attach a note" },
+    { command: "focus", description: "🎯 Focus on one task" },
+    { command: "badges", description: "🏅 Achievement badges" },
+    { command: "review", description: "📋 Review completed tasks" },
+    { command: "collab", description: "👥 Share with friends" },
+    { command: "smartbook", description: "📚 AI study schedule" },
+    { command: "pomodoro", description: "🍅 Pomodoro timer" },
+    { command: "suggest", description: "💡 AI suggestion" },
+    { command: "ask", description: "🤖 Ask the bot" },
+    { command: "undo", description: "↩️ Undo last action" },
+    { command: "help", description: "🆘 How to use" },
+]
+Promise.all([
+    bot.telegram.setMyCommands(BOT_COMMANDS_TH, { language_code: "th" }),
+    bot.telegram.setMyCommands(BOT_COMMANDS_EN),
 ]).catch((err) => logger.error("Failed to set bot commands:", err?.message));
 
 /* ── register handlers ── */
@@ -344,7 +403,11 @@ const shutdown = async (sig) => {
         })
         logger.info(`Shutdown complete (flushed ${ok}/${results.length}, ${fail} failed)`)
     })
-    setTimeout(() => process.exit(0), 10000).unref();
+    /* L17: 30s hard timeout (was 10s). The flushes are atomic
+       (tmp + rename) but a slow disk or large JSON could push a
+       flush past 10s on first boot. 30s still kills runaway
+       processes without dropping pending writes. */
+    setTimeout(() => process.exit(0), 30000).unref();
 };
 process.once("SIGINT",  () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));

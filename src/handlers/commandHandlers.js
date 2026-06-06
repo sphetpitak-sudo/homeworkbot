@@ -477,15 +477,27 @@ export function registerCommandHandlers(bot, userState) {
                 )
             }
 
-            const total = matchedActive.length + matchedDone.length
+            /* M2: cap how many results we render per page. Telegram
+               silently rejects messages with more than 100 inline
+               keyboard buttons, and 200+ results can blow past the
+               4096-char message limit. We paginate 8 active at a time
+               and always show the count so the user knows. */
+            const PAGE_SIZE = 8
+            const totalActive = matchedActive.length
+            const totalDone = matchedDone.length
+            const total = totalActive + totalDone
+
+            const activePage = matchedActive.slice(0, PAGE_SIZE)
+            const remainingActive = Math.max(0, totalActive - activePage.length)
+
             let msg = `🔍 ${safeBold(`ผลค้นหา: "${escapeMarkdown(args)}"`)} (${total} รายการ)\n`
             msg += `\n\n`
 
             const keyboard = []
 
-            if (matchedActive.length) {
-                msg += `📌 ${safeBold("ยังไม่เสร็จ")} (${matchedActive.length}):\n`
-                for (const p of matchedActive) {
+            if (activePage.length) {
+                msg += `📌 ${safeBold("ยังไม่เสร็จ")} (${totalActive}):\n`
+                for (const p of activePage) {
                     const { title, status, due, subject, priority } = getPageProps(p)
                     msg += `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n`
                     keyboard.push([
@@ -493,11 +505,14 @@ export function registerCommandHandlers(bot, userState) {
                         Markup.button.callback("🔄 กำลังทำ", `prog_${p.id}`),
                     ])
                 }
+                if (remainingActive > 0) {
+                    msg += `\n_…แสดง ${activePage.length} จาก ${totalActive} — ลองค้นหาให้แคบลง_`
+                }
                 msg += `\n`
             }
 
             if (matchedDone.length) {
-                msg += `✅ ${safeBold("เสร็จแล้ว")} (${matchedDone.length}):\n`
+                msg += `✅ ${safeBold("เสร็จแล้ว")} (${totalDone}):\n`
                 for (const p of matchedDone) {
                     const props = getPageProps(p)
                     msg += `${statusEmoji(props.status)} ${safeBold(props.title)} ${subjectEmoji(props.subject)} ${props.priority} — ✅ ${formatDateLabel(props.completed, "completed")}\n`
@@ -655,6 +670,27 @@ export function registerCommandHandlers(bot, userState) {
             const pct = total > 0 ? Math.round((donePages.length / total) * 100) : 0
             text += `=====================================\n`
             text += `รวม ${total} รายการ | เสร็จ ${pct}%\n`
+
+            /* M2: Telegram rejects messages longer than 4096 chars
+               with "Bad Request: message is too long". For large
+               lists, send the full text as a .txt file (no length
+               limit) and reply with a short summary. Threshold picked
+               to leave headroom for the Markdown wrapper. */
+            const TELEGRAM_MAX = 3500
+            if (text.length > TELEGRAM_MAX) {
+                const buffer = Buffer.from(text, "utf-8")
+                await ctx.replyWithDocument({
+                    source: buffer,
+                    filename: `homework_export_${today}.txt`,
+                })
+                return ctx.reply(
+                    `📋 ${safeBold(`ส่งออก ${total} รายการ`)}\n` +
+                    `\n` +
+                    `📎 ไฟล์แนบอยู่ด้านบน (${(buffer.length / 1024).toFixed(1)} KB)\n` +
+                    `เสร็จแล้ว ${pct}%`,
+                    { parse_mode: "Markdown", ...mainMenu },
+                )
+            }
 
             const msg =
                 `📋 ${safeBold("รายการการบ้าน (export)")}\n` +

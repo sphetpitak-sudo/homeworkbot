@@ -1,3 +1,7 @@
+/* Telegram MarkdownV1 special characters that must be escaped when
+   embedded inside bold/italic/code spans. The test suite
+   (__tests__/telegramFormat.test.js) pins the exact set; adding
+   additional characters here will require updating the tests. */
 const MARKDOWN_SPECIALS = /([_*`\[])/g;
 
 export function escapeMarkdown(value) {

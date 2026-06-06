@@ -267,6 +267,66 @@ describe('getAutoCloseMs', () => {
     })
 })
 
+describe('in-flight session persistence (H1)', () => {
+    test('persistInFlightSession stores session under _in_flight', async () => {
+        const { persistInFlightSession, getInFlightSession } = await importWithFixture({})
+        const session = {
+            userId: 'user1',
+            startedAt: 1_000_000,
+            duration: 25 * 60 * 1000,
+            phase: 'work',
+            homeworkTitle: 'math hw',
+        }
+        persistInFlightSession('user1', session)
+        const stored = getInFlightSession('user1')
+        expect(stored).toBeTruthy()
+        expect(stored.startedAt).toBe(1_000_000)
+        expect(stored.phase).toBe('work')
+        expect(stored.homeworkTitle).toBe('math hw')
+    })
+
+    test('clearInFlightSession removes the entry', async () => {
+        const { persistInFlightSession, clearInFlightSession, getInFlightSession } = await importWithFixture({})
+        persistInFlightSession('user1', {
+            userId: 'user1', startedAt: Date.now(), duration: 25 * 60 * 1000, phase: 'work', homeworkTitle: null,
+        })
+        clearInFlightSession('user1')
+        expect(getInFlightSession('user1')).toBeNull()
+    })
+
+    test('recoverInterruptedSessions credits a session that completed during downtime', async () => {
+        const { persistInFlightSession, recoverInterruptedSession: _ignored, savePomodoro, recoverInterruptedSessions, getStats } = await importWithFixture({})
+        // H1: simulate a session started 30 minutes ago — well past the 25min work phase
+        persistInFlightSession('user1', {
+            userId: 'user1',
+            startedAt: Date.now() - 30 * 60 * 1000,
+            duration: 25 * 60 * 1000,
+            phase: 'work',
+            homeworkTitle: 'math hw',
+        })
+        const recovered = recoverInterruptedSessions()
+        expect(recovered.length).toBe(1)
+        expect(recovered[0].action).toBe('completed')
+        // The session should have been credited
+        const stats = getStats('user1')
+        expect(stats.count).toBe(1)
+    })
+
+    test('recoverInterruptedSessions ignores in-progress sessions (still in work phase)', async () => {
+        const { persistInFlightSession, recoverInterruptedSessions, getStats } = await importWithFixture({})
+        persistInFlightSession('user1', {
+            userId: 'user1',
+            startedAt: Date.now() - 5 * 60 * 1000, // 5 min in, 20 min remaining
+            duration: 25 * 60 * 1000,
+            phase: 'work',
+            homeworkTitle: null,
+        })
+        const recovered = recoverInterruptedSessions()
+        expect(recovered.length).toBe(0)
+        expect(getStats('user1').count).toBe(0)
+    })
+})
+
 describe('flushPomodoros', () => {
     test('resolves without error', async () => {
         const { flushPomodoros } = await importWithFixture({})

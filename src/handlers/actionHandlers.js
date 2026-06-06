@@ -43,7 +43,7 @@ import { setCorrection } from "../services/aiCache.js";
 import { QUOTES } from "../utils/quotes.js";
 import { getStudyTip } from "../services/hintService.js";
 import { checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
-import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges } from "../services/pomodoroService.js";
+import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges, persistInFlightSession, clearInFlightSession } from "../services/pomodoroService.js";
 
 /* ── pomodoro timer tracking for graceful shutdown ── */
 const pomoTimers = new Set()
@@ -65,16 +65,19 @@ const HINT_MAX_ENTRIES = 1000;
 // Periodic cleanup to prevent unbounded memory growth.
 // Idempotent: only one interval is ever scheduled, even if
 // registerActionHandlers is called more than once (e.g. hot reload).
-let cleanupIntervalStarted = false
-function startCleanupInterval() {
-    if (cleanupIntervalStarted) return
-    cleanupIntervalStarted = true
+// M1: use a globalThis flag so hot reload / re-evaluation can't
+// start a second interval. Mirrors the pattern in src/web/server.js.
+if (!globalThis.__hbActionCleanupStarted) {
+    globalThis.__hbActionCleanupStarted = true
     setInterval(() => {
         pruneHints(hintsShown)
         pruneHints(sessionHints)
         const now = Date.now()
-        for (const [uid, item] of deletedItems) {
-            if (now - item._timestamp > 10000) deletedItems.delete(uid)
+        /* H3: deletedItems is now keyed by pageId, not uid, so a user
+           can delete multiple items in quick succession and recover
+           each independently. */
+        for (const [pageId, item] of deletedItems) {
+            if (now - item._timestamp > 10000) deletedItems.delete(pageId)
         }
         if (hintsShown.size > HINT_MAX_ENTRIES) {
             const sorted = [...hintsShown.entries()].sort((a, b) => a[1].ts - b[1].ts)
@@ -88,7 +91,6 @@ function startCleanupInterval() {
         }
     }, HINT_TTL).unref()
 }
-startCleanupInterval()
 
 /* ── session-scoped hint tracking ── */
 const sessionHints = new Map(); // uid -> { keys: Set, ts: number }
@@ -133,6 +135,106 @@ function sectionHeader(icon, title, meta = "") {
     return `${icon} ${safeBold(title)}${meta ? ` ${safeItalic(meta)}` : ""}`;
 }
 
+/* H4: iCal builder. Escapes per RFC 5545 §3.3.11 (TEXT values)
+   and folds long lines per §3.1. The DTSTART is 09:00 Bangkok time
+   (the typical study start) and DTEND is DTSTART + duration_min;
+   the start is 09:00 local Bangkok. */
+const ICS_TZID = "Asia/Bangkok"
+const ICS_LOCAL_TZDEF = [
+    "BEGIN:VTIMEZONE",
+    "TZID:Asia/Bangkok",
+    "BEGIN:STANDARD",
+    "DTSTART:19700101T000000",
+    "TZOFFSETFROM:+0700",
+    "TZOFFSETTO:+0700",
+    "TZNAME:+07",
+    "END:STANDARD",
+    "END:VTIMEZONE",
+].join("\r\n")
+
+function icsEscapeText(value) {
+    return String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/;/g, "\\;")
+        .replace(/,/g, "\\,")
+        .replace(/\r?\n/g, "\\n")
+}
+
+function icsFoldLine(line) {
+    /* RFC 5545: lines MUST be ≤75 octets; continuation lines start
+       with a single whitespace. We fold on UTF-8 byte boundaries to
+       avoid splitting multi-byte characters. */
+    const bytes = Buffer.byteLength(line, "utf-8")
+    if (bytes <= 75) return line
+    const out = []
+    let buf = ""
+    let bufBytes = 0
+    /* First chunk gets the full 75; continuation chunks get 74
+       (75 minus the leading space we add later). */
+    const limit = (out.length === 0) ? 75 : 74
+    for (const ch of line) {
+        const chBytes = Buffer.byteLength(ch, "utf-8")
+        if (bufBytes + chBytes > limit) {
+            out.push(buf)
+            buf = ch
+            bufBytes = chBytes
+        } else {
+            buf += ch
+            bufBytes += chBytes
+        }
+    }
+    if (buf) out.push(buf)
+    return out.map((seg, i) => i === 0 ? seg : " " + seg).join("\r\n")
+}
+
+function icsDateAddOneDay(ymd) {
+    const [y, m, d] = ymd.split("-").map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    dt.setUTCDate(dt.getUTCDate() + 1)
+    const yy = dt.getUTCFullYear()
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0")
+    const dd = String(dt.getUTCDate()).padStart(2, "0")
+    return `${yy}${mm}${dd}`
+}
+
+function buildSmartbookIcs(days) {
+    const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//HomeworkBot//Smartbook//EN",
+        "CALSCALE:GREGORIAN",
+        ICS_LOCAL_TZDEF,
+    ]
+    const nowStamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
+    for (const day of days) {
+        if (!day.date) continue
+        const ymd = String(day.date)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
+        const dateCompact = ymd.replace(/-/g, "")
+        const startTime = "T090000" /* 09:00 Bangkok */
+        const summary = `[${day.focus || "study"}] ${(day.tasks || []).join(", ")}`
+        const description = (day.tasks || []).join("\n")
+        const durationMin = day.duration_min || 120
+        const endDt = new Date(`${ymd}T09:00:00+07:00`)
+        endDt.setMinutes(endDt.getMinutes() + durationMin)
+        const endCompact = endDt.toISOString().slice(0, 10).replace(/-/g, "")
+        const endTime = endDt.toISOString().slice(11, 19).replace(/:/g, "")
+        const uid = `${dateCompact}-${Math.random().toString(36).slice(2, 10)}@homeworkbot`
+        lines.push(
+            "BEGIN:VEVENT",
+            `UID:${uid}`,
+            `DTSTAMP:${nowStamp}`,
+            `DTSTART;TZID=${ICS_TZID}:${dateCompact}${startTime}`,
+            `DTEND;TZID=${ICS_TZID}:${endCompact}${endTime}`,
+            `SUMMARY:${icsEscapeText(summary)}`,
+            `DESCRIPTION:${icsEscapeText(description)}`,
+            "END:VEVENT",
+        )
+    }
+    lines.push("END:VCALENDAR")
+    return lines.map(icsFoldLine).join("\r\n") + "\r\n"
+}
+
 /* ── menus ── */
 function dashboardMenu() {
     return Markup.inlineKeyboard([
@@ -145,16 +247,6 @@ function dashboardMenu() {
             Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
             Markup.button.callback("🏠 เมนูหลัก", "HOME"),
         ],
-    ]);
-}
-
-function listFooterMenu() {
-    return Markup.inlineKeyboard([
-        [
-            Markup.button.callback("➕ เพิ่ม", "ADD"),
-            Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-        ],
-        [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
     ]);
 }
 
@@ -174,25 +266,6 @@ function actionButtons(pageId, mode = "active") {
             Markup.button.callback("🗑️ ลบ", `del_${pageId}`),
         ],
     ]);
-}
-
-/* ── card builder (compact, no box art) ── */
-function buildHomeworkCard(page, mode = "active") {
-    const { title, status, due, subject, priority, tags, completed } = getPageProps(page);
-    const dateLabel = status === STATUS.DONE && completed
-        ? formatDateLabel(completed, "completed")
-        : formatDateLabel(due, "due");
-    const tagsStr = tags?.length ? tags.join("  ") : null;
-
-    let text = `${statusEmoji(status)} ${safeBold(title)} ${subjectEmoji(subject)} ${priority} — ${dateLabel}`;
-    if (tagsStr) text += `\n${tagsStr}`;
-
-    return { text, extra: { parse_mode: "Markdown", ...actionButtons(page.id, mode) } };
-}
-
-async function sendPageCard(ctx, page, mode = "active") {
-    const card = buildHomeworkCard(page, mode);
-    await ctx.reply(card.text, card.extra);
 }
 
 /* ── compact dashboard builder ── */
@@ -1320,7 +1393,11 @@ export function registerActionHandlers(bot, userState) {
             await archivePage(pageId);
             await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
-            deletedItems.set(uid, { pageId, name, _timestamp: Date.now() });
+            /* H3: key by pageId, not uid, so a user can delete
+               multiple items in quick succession and recover each
+               independently. The 10s recovery window still applies
+               to each entry. uid is stored for the response. */
+            deletedItems.set(pageId, { pageId, uid, name, _timestamp: Date.now() });
 
             const recoveryMsg = await ctx.reply(
                 `🗑️ ${safeBold("ลบแล้ว")}\n` +
@@ -1335,7 +1412,7 @@ export function registerActionHandlers(bot, userState) {
             );
 
             setTimeout(() => {
-                deletedItems.delete(uid);
+                deletedItems.delete(pageId);
                 ctx.telegram.editMessageReplyMarkup(
                     ctx.chat.id, recoveryMsg.message_id, undefined, { inline_keyboard: [] },
                 ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
@@ -1359,13 +1436,15 @@ export function registerActionHandlers(bot, userState) {
     bot.action(/RECOVER_DELETE_(.+)/, async (ctx) => {
         const pageId = ctx.match[1];
         const uid = ctx.from.id;
-        const item = deletedItems.get(uid);
-        if (!item || item.pageId !== pageId || Date.now() - item._timestamp > 10000) {
+        /* H3: look up by pageId (the recovery button carries it) and
+           verify the clicker matches the user who deleted it. */
+        const item = deletedItems.get(pageId);
+        if (!item || item.uid !== uid || Date.now() - item._timestamp > 10000) {
             return ctx.answerCbQuery("⏱️ หมดเวลากู้คืนแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         try {
             await restorePage(pageId);
-            deletedItems.delete(uid);
+            deletedItems.delete(pageId);
             await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             return ctx.reply(
                 `↩️ ${safeBold("กู้คืนแล้ว")}\n` +
@@ -1668,12 +1747,21 @@ export function registerActionHandlers(bot, userState) {
 
         const homeworkTitle = state._focusTitle || null
         const session = pomoStartSession(uid, homeworkTitle)
+        /* H1: persist the in-flight session so a restart mid-pomodoro
+           can be detected and the work phase can be credited instead
+           of silently lost. */
+        persistInFlightSession(uid, session)
 
         const timeout = setTimeout(async () => {
             pomoTimers.delete(timeout)
             try {
                 const userStateNow = userState.get(uid) || {}
                 savePomodoro(uid)
+                /* H1: work phase is over — clear the in-flight marker
+                   (a new break session would be tracked separately, but
+                   we don't persist break phases since they don't earn
+                   a pomodoro count). */
+                clearInFlightSession(uid)
                 const breakTimeout = setTimeout(() => {
                     pomoTimers.delete(breakTimeout)
                     const s = userState.get(uid) || {}
@@ -1776,6 +1864,9 @@ export function registerActionHandlers(bot, userState) {
 
         if (state._pomoTimeout) clearTimeout(state._pomoTimeout)
         if (state._pomoBreakTimeout) clearTimeout(state._pomoBreakTimeout)
+        /* H1: clear the persisted in-flight marker so we don't credit
+           a session the user explicitly cancelled. */
+        clearInFlightSession(uid)
 
         userState.set(uid, {
             ...state,
@@ -1883,24 +1974,15 @@ export function registerActionHandlers(bot, userState) {
             )
         }
 
+        /* H4: build an RFC 5545-compliant iCal feed.
+           - Escape `\`, `;`, `,`, newline in SUMMARY/DESCRIPTION
+           - Fold long lines (≥75 octets) with CRLF + single space
+           - Use TZID on timed events and include a VTIMEZONE block
+             so calendar apps in other zones don't shift the events
+           - DTEND for an all-day event is exclusive (start + 1 day) */
+        const ics = buildSmartbookIcs(plan.plan)
+        const buffer = Buffer.from(ics, "utf-8")
         try {
-            let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HomeworkBot//Smartbook//EN\r\n"
-            for (const day of plan.plan) {
-                if (!day.date) continue
-                const startDate = day.date.replace(/-/g, "")
-                const endDate = startDate
-                const duration = day.duration_min || 120
-                const summary = `[${day.focus}] ${(day.tasks || []).join(", ")}`
-                ics += "BEGIN:VEVENT\r\n"
-                ics += `DTSTART;VALUE=DATE:${startDate}\r\n`
-                ics += `DTEND;VALUE=DATE:${endDate}\r\n`
-                ics += `SUMMARY:${summary.replace(/,/g, "\\,")}\r\n`
-                ics += `DESCRIPTION:${(day.tasks || []).join("\\n")}\r\n`
-                ics += "END:VEVENT\r\n"
-            }
-            ics += "END:VCALENDAR\r\n"
-
-            const buffer = Buffer.from(ics, "utf-8")
             await ctx.replyWithDocument({
                 source: buffer,
                 filename: "smartbook_plan.ics",
