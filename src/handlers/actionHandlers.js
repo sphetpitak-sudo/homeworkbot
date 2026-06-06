@@ -44,6 +44,7 @@ import { QUOTES } from "../utils/quotes.js";
 import { getStudyTip } from "../services/hintService.js";
 import { checkTaskBadges, checkUsageBadgeOnAction, awardBadges, buildBadgeMessage } from "../services/badgeService.js";
 import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStats, getStreak as pomoGetStreak, getSessionDuration, getBreakDuration, checkPomoBadges, persistInFlightSession, clearInFlightSession } from "../services/pomodoroService.js";
+import { t } from "../utils/i18n.js";
 
 /* ── pomodoro timer tracking for graceful shutdown ── */
 const pomoTimers = new Set()
@@ -239,13 +240,13 @@ function buildSmartbookIcs(days) {
 function dashboardMenu() {
     return Markup.inlineKeyboard([
         [
-            Markup.button.callback("➕ เพิ่ม", "ADD"),
-            Markup.button.callback("📋 ค้าง", "LIST_ACTIVE"),
-            Markup.button.callback("✅ เสร็จ", "LIST_DONE"),
+            Markup.button.callback(t("cmd.btn.add"), "ADD"),
+            Markup.button.callback(t("cmd.btn.active"), "LIST_ACTIVE"),
+            Markup.button.callback("✅ " + t("cmd.btn.done"), "LIST_DONE"),
         ],
         [
-            Markup.button.callback("🤖 ถาม AI", "ASK_AI"),
-            Markup.button.callback("🏠 เมนูหลัก", "HOME"),
+            Markup.button.callback(t("cmd.btn.askAi"), "ASK_AI"),
+            Markup.button.callback(t("cmd.btn.home"), "HOME"),
         ],
     ]);
 }
@@ -254,16 +255,16 @@ function actionButtons(pageId, mode = "active") {
     if (mode === "done") {
         return Markup.inlineKeyboard([
             [
-                Markup.button.callback("↩️ คืนกลับ", `todo_${pageId}`),
-                Markup.button.callback("🗑️ ลบทิ้ง", `del_${pageId}`),
+                Markup.button.callback("↩️ " + t("action.cancelSuccess"), `todo_${pageId}`),
+                Markup.button.callback("🗑️ " + t("action.deleted"), `del_${pageId}`),
             ],
         ]);
     }
     return Markup.inlineKeyboard([
         [
-            Markup.button.callback("✅ เสร็จ", `done_${pageId}`),
-            Markup.button.callback("🔄 กำลังทำ", `prog_${pageId}`),
-            Markup.button.callback("🗑️ ลบ", `del_${pageId}`),
+            Markup.button.callback(t("cmd.btn.done"), `done_${pageId}`),
+            Markup.button.callback(t("cmd.btn.inProgress"), `prog_${pageId}`),
+            Markup.button.callback(t("cmd.btn.delete"), `del_${pageId}`),
         ],
     ]);
 }
