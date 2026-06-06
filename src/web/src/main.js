@@ -759,3 +759,19 @@ setInterval(()=>{
 },30000);
 
 showHome();
+
+/* Expose onclick handlers to global scope.
+   Vite uses <script type="module"> so top-level function declarations are
+   module-scoped, not on window. Inline onclick="showHome()" in the HTML
+   requires these to be on window. */
+Object.assign(globalThis, {
+  showHome, showCalendar, showDashboard, showList, showBadges,
+  refreshHome, refreshDash, loadBadges,
+  calMove, calToday,
+  listSort, listFilter,
+  closeDetail, closeEditModal, openAddModal, closeAddModal,
+  submitHomework, submitEdit,
+  exportCSV, toggleDark,
+  toggleSelectAll, clearSelection,
+  bulkDelete, bulkStatus,
+});
