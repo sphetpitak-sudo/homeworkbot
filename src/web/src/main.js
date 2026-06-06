@@ -1,3 +1,5 @@
+import "./style.css";
+
 /* Token (legacy ?token= URL param) is only used as a fallback when no
    session cookie is present. The recommended path is /api/exchange?ticket=…
    which sets an httpOnly session cookie, after which the cookie alone
