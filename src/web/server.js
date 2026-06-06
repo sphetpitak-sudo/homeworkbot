@@ -308,8 +308,14 @@ export function startWebServer(port = 8080) {
     /* Service worker: inject package.json version into CACHE_NAME so
        each deploy automatically invalidates stale caches without
        requiring a manual code change. Must be registered BEFORE
-       express.static so it takes precedence over the raw file. */
-    const swPath = path.join(__dirname, "public", "sw.js")
+       express.static so it takes precedence over the raw file.
+       In Vite build mode, sw.js lives in public/ (copied to dist/
+       by Vite), so check both locations. */
+    const swCandidates = [
+        path.join(__dirname, "dist", "sw.js"),
+        path.join(__dirname, "public", "sw.js"),
+    ]
+    const swPath = swCandidates.find((p) => { try { fs.accessSync(p); return true } catch { return false } }) || swCandidates[0]
     let swSource = ""
     try {
         swSource = fs.readFileSync(swPath, "utf-8")
@@ -350,7 +356,16 @@ export function startWebServer(port = 8080) {
         return res.send(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homework Bot</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f0f2f5}.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:360px;width:90%}h2{margin:0 0 .5rem;color:#1a1a2e}p{color:#666;margin:0 0 1rem;font-size:.9rem}.hint{background:#f0f2f5;border-radius:8px;padding:12px;font-size:.85rem;color:#555;text-align:left}</style></head><body><div class="card"><h2>&#127891; Homework Bot</h2><p>ต้องเข้าสู่ระบบผ่านบอท Telegram ก่อน</p><div class="hint">1. เปิดบอท Homework Bot ใน Telegram<br>2. กดปุ่ม 🌐 Web Dashboard<br>3. ทำตามขั้นตอนในลิงก์</div></div></body></html>`)
     })
 
-    app.use(express.static(path.join(__dirname, "public")));
+    /* Vite: serve built assets from dist/ if it exists, otherwise fall
+       back to public/ (legacy single-file SPA). dist/ is the output of
+       `npm run build` inside src/web/; public/ is still used for
+       manifest.json and the dev fallback. */
+    const staticCandidates = [
+        path.join(__dirname, "dist"),
+        path.join(__dirname, "public"),
+    ]
+    const staticDir = staticCandidates.find((p) => { try { fs.accessSync(p); return true } catch { return false } }) || staticCandidates[0]
+    app.use(express.static(staticDir));
 
     /* Security headers — defense-in-depth without adding helmet.
        CSP allows the inline scripts/styles used by the SPA and the

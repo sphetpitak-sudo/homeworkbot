@@ -20,3 +20,6 @@ AGENTS.md
 start.sh
 commu.md
 .orchestrator
+src/web/dist/
+src/web/.vite/
+backups/

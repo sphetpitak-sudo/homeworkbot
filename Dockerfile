@@ -1,3 +1,14 @@
+FROM --platform=linux/amd64 node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build:web
+
+# ───────────── runtime ─────────────
 FROM --platform=linux/amd64 node:20-alpine
 
 WORKDIR /app
@@ -5,7 +16,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY . .
+COPY --from=build /app .
 RUN chown -R node:node /app
 
 ENV PORT=8080
