@@ -304,14 +304,14 @@ function buildDashboard(activePages, donePages) {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const bar = progressBar(pct);
 
-    let msg = `📊 ${safeBold("ภาพรวมการบ้าน")}\n\n`;
+    let msg = `📊 ${safeBold(t("action.dashboard"))}\n\n`;
     msg += `${bar} ${pct}%\n`;
     msg += `📌 ${todo}  🔄 ${prog}  ✅ ${done}`;
     if (overduePages.length) msg += `  🚨 ${overduePages.length}`;
     msg += `\n`;
 
     if (urgent.length) {
-        msg += `\n⚡ ใกล้ครบ (${URGENT_DAYS} วัน)\n`;
+        msg += `\n⚡ ${t("action.nearDue")} (${URGENT_DAYS} ${t("action.nearDueDays")})\n`;
         for (const p of urgent.slice(0, URGENT_DISPLAY_MAX)) {
             const { title, due, status, subject, priority } = getPageProps(p);
             msg += `${statusEmoji(status)} ${escapeMarkdown(title)}  ${priority} ${subjectEmoji(subject)}${formatDueDisplay(due)}\n`;
@@ -321,10 +321,10 @@ function buildDashboard(activePages, donePages) {
         }
     }
 
-    msg += `\n📖 วิชาที่ค้าง\n`;
+    msg += `\n📖 ${t("action.subjectsPending")}\n`;
     const sorted = Object.entries(bySubject).sort((a, b) => b[1] - a[1]);
     if (!sorted.length) {
-        msg += `🎉 ไม่มีค้าง\n`;
+        msg += `🎉 ${t("action.noPending")}\n`;
     } else {
         for (const [subject, count] of sorted.slice(0, SUBJECT_DISPLAY_MAX)) {
             msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)}  ${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
@@ -351,12 +351,12 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "ADD", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch(() => {});
         return ctx.reply(
-            `✏️ ${safeBold("เพิ่มการบ้านใหม่")}\n\n` +
-                `พิมพ์การบ้าน เช่น\n` +
-                `${safeCode("คณิต แบบฝึกหัดหน้า 20 พรุ่งนี้")}\n` +
-                `${safeCode("รายงานอังกฤษ วันศุกร์")}\n` +
-                `${safeCode("ชีวะ บทที่ 3 อีก 3 วัน")}\n\n` +
-                `🤖 ระบบเดาวิชา + วันที่ให้อัตโนมัติ`,
+            `✏️ ${safeBold(t("action.addNew"))}\n\n` +
+                `${t("action.typeHomework")}\n` +
+                `${safeCode(t("action.example1"))}\n` +
+                `${safeCode(t("action.example2"))}\n` +
+                `${safeCode(t("action.example3"))}\n\n` +
+                t("action.autoDetect"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -364,15 +364,15 @@ export function registerActionHandlers(bot, userState) {
     /* CANCEL */
     bot.action("CANCEL", async (ctx) => {
         userState.delete(ctx.from.id);
-        await ctx.answerCbQuery("ยกเลิกแล้ว ✅").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+        await ctx.answerCbQuery(t("action.cancelSuccessEmoji")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.editMessageText(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n`,
+                `❌ ${safeBold(t("action.cancelSuccess"))}\n`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         } catch {
             await ctx.reply(
-                `❌ ${safeBold("ยกเลิกแล้ว")}\n`,
+                `❌ ${safeBold(t("action.cancelSuccess"))}\n`,
                 { parse_mode: "Markdown", ...mainMenu },
             );
         }
@@ -385,12 +385,12 @@ export function registerActionHandlers(bot, userState) {
 
         if (!state?.pending) {
             return ctx
-                .answerCbQuery("❌ ไม่มีข้อมูลที่รอบันทึก")
+                .answerCbQuery(t("action.noData"))
                 .catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         if (state._saving) {
-            return ctx.answerCbQuery("⏳ กำลังบันทึก…").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.saving")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         state._saving = true;
         userState.set(uid, state);
@@ -413,31 +413,30 @@ export function registerActionHandlers(bot, userState) {
 
             const priText = priority || "🟡 Medium";
             await ctx.editMessageText(
-                `🎉 ${safeBold("บันทึกสำเร็จ!")}\n` +
+                `🎉 ${safeBold(t("action.saveSuccess"))}\n` +
                     `\n` +
                     `${subjectEmoji(subject)} ${safeBold(title)}\n` +
                     `📚 ${safeSubject} • ${priText}\n` +
                     `📅 ${dueText}\n` +
                     `\n` +
-                    `เลือกเมนูด้านล่างเพื่อไปต่อ`,
+                    t("action.saveSuccessLine2"),
                 { parse_mode: "Markdown", ...dashboardMenu() },
             ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
-            const tip = showHintOnce(uid, "post_save",
-                `💡 *เคล็ดลับ:* พิมพ์ /ask เพื่อถาม AI เกี่ยวกับการบ้าน`);
+            const tip = showHintOnce(uid, "post_save", t("action.saveHint"));
             if (tip) ctx.reply(tip.text, { parse_mode: "Markdown" }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         } catch (err) {
             logger.error("CONFIRM_SAVE:", err);
             await ctx.editMessageText(
-                `❌ ${safeBold("บันทึกไม่สำเร็จ")}\n` +
+                `❌ ${safeBold(t("action.saveErr"))}\n` +
                     `\n` +
-                    `เกิดข้อผิดพลาด กรุณาลองใหม่`,
+                    t("action.saveErrLine2"),
                 {
                     parse_mode: "Markdown",
                     ...Markup.inlineKeyboard([
                         [
-                            Markup.button.callback("🔁 ลองใหม่", "CONFIRM_SAVE"),
-                            Markup.button.callback("❌ ยกเลิก", "CANCEL"),
+                            Markup.button.callback(t("action.retrySave"), "CONFIRM_SAVE"),
+                            Markup.button.callback(t("action.cancelSuccess"), "CANCEL"),
                         ],
                     ]),
                 },
@@ -451,15 +450,15 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { mode: "EDIT_TITLE", pending: state.pending, _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `✏️ ${safeBold("แก้ชื่อการบ้าน")}\n` +
+            `✏️ ${safeBold(t("action.editTitle"))}\n` +
                 `\n` +
-                `ส่งชื่อใหม่มาได้เลย`,
+                t("action.editTitleLine2"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -470,16 +469,16 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_SUBJECT", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `📚 ${safeBold("แก้ไขวิชา")}\n` +
+            `📚 ${safeBold(t("action.editSubject"))}\n` +
                 `\n` +
-                `พิมพ์ชื่อวิชาที่ถูกต้อง\n` +
-                `เช่น คณิต, ไทย, อังกฤษ, ฟิสิกส์, เคมี, ชีวะ, สังคม, ประวัติ, คอม`,
+                t("action.editSubjectLine2") + "\n" +
+                t("action.editSubjectExamples"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -490,16 +489,16 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_DATE", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `📅 ${safeBold("แก้วันกำหนดส่ง")}\n` +
+            `📅 ${safeBold(t("action.editDate"))}\n` +
                 `\n` +
-                `พิมพ์วันที่ใหม่\n` +
-                `เช่น พรุ่งนี้, 15/06/2026, อีก 3 วัน, พุธหน้า`,
+                t("action.editDateLine2") + "\n" +
+                t("action.editDateExamples"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -510,7 +509,7 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         const current = state.pending.priority || PRIORITY.MEDIUM;
@@ -524,15 +523,15 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "EDIT_PRIORITY", pending: state.pending, _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `🎯 ${safeBold("เลือกความสำคัญ")}\n` +
+            `🎯 ${safeBold(t("action.editPriority"))}\n` +
                 `\n` +
-                `ปัจจุบัน: ${current}\n\n` +
-                "เลือกระดับความสำคัญด้านล่าง",
+                `${t("action.editPriorityLine1")} ${current}\n\n` +
+                t("action.editPriorityLine2"),
             {
                 parse_mode: "Markdown",
                 ...Markup.inlineKeyboard([
                     options,
-                    [Markup.button.callback("❌ ยกเลิก", "CANCEL")],
+                    [Markup.button.callback(t("action.cancelDelete"), "CANCEL")],
                 ]),
             },
         );
@@ -544,19 +543,17 @@ export function registerActionHandlers(bot, userState) {
         const state = userState.get(uid);
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         userState.set(uid, { ...state, mode: "EDIT_TAGS", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `🏷️ ${safeBold("แก้ไขแท็ก")}\n` +
+            `🏷️ ${safeBold(t("cmd.menu.tags"))}\n` +
                 `\n` +
-                `แท็กที่มี: ${VALID_TAGS.join(", ")}\n\n` +
-                `พิมพ์แท็กที่ต้องการ คั่นด้วยช่องว่าง\n` +
-                `เช่น สอบ ด่วน อ่าน\n` +
-                `หรือพิมพ์ \`-\` เพื่อล้างแท็ก\n` +
-                ``,
+                `${t("noted.usage")}\n\n` +
+                `${VALID_TAGS.join(", ")}\n` +
+                t("hint.pickSubjectLine2"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -568,16 +565,16 @@ export function registerActionHandlers(bot, userState) {
         const priority = ctx.match[1];
 
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         if (!PRIORITY_ORDER.includes(priority)) {
-            return ctx.answerCbQuery("❌ ค่าความสำคัญไม่ถูกต้อง").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.invalidPriority")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
 
         const pending = { ...state.pending, priority, _manualPriority: true };
         userState.set(uid, { ...state, mode: "CONFIRM", pending, _timestamp: Date.now() });
-        await ctx.answerCbQuery(`✅ ตั้งค่า: ${priority}`).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+        await ctx.answerCbQuery(t("action.setPrioritySuccess", { })).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
         } catch { logger.debug("Non-critical: delete confirm message failed") }
@@ -590,11 +587,11 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "ASK_AI", _timestamp: Date.now() });
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         return ctx.reply(
-            `🤖 ${safeBold("ถามเกี่ยวกับการบ้าน")}\n\n` +
-                `พิมพ์คำถาม เช่น\n` +
-                `${safeCode("งานคณิตส่งวันไหนบ้าง")}\n` +
-                `${safeCode("อาทิตย์นี้มีงานกี่ชิ้น")}\n\n` +
-                `หรือกดยกเลิก`,
+            `🤖 ${safeBold(t("action.askAiTitle"))}\n\n` +
+                `${t("action.askAiLine1")}\n` +
+                `${safeCode(t("action.askAiEx1"))}\n` +
+                `${safeCode(t("action.askAiEx2"))}\n\n` +
+                t("action.askAiLine2"),
             { parse_mode: "Markdown", ...cancelMenu },
         );
     });
@@ -610,8 +607,8 @@ export function registerActionHandlers(bot, userState) {
             return `${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}  ${formatDateLabel(due, "due")}`;
         });
         const totalPages = Math.ceil(pages.length / ITEMS_PER_PAGE);
-        let msg = `📋 ${safeBold("งานค้าง")} (${pages.length})\n\n${items.join("\n")}`;
-        if (totalPages > 1) msg += `\n\nหน้า ${page + 1}/${totalPages}`;
+        let msg = `📋 ${safeBold(t("cmd.menu.active"))} (${pages.length})\n\n${items.join("\n")}`;
+        if (totalPages > 1) msg += `\n\n${t("text.searchCount", { count: `${page + 1}/${totalPages}` })}`;
         if (page === 0 && showOncePerSession(uid, "PRIORITY_LEGEND")) {
             msg += `\n\n🔴 High  🟡 Medium  🟢 Low`;
         }
@@ -627,22 +624,22 @@ export function registerActionHandlers(bot, userState) {
             return `${statusEmoji(status)} ${escapeMarkdown(title)}  ${subjectEmoji(subject)}${priority}  ${formatDateLabel(completed, "completed")}`;
         });
         const totalPages = Math.ceil(pages.length / ITEMS_PER_PAGE);
-        let msg = `✅ ${safeBold("งานเสร็จ")} (${pages.length})\n\n${items.join("\n")}`;
-        if (totalPages > 1) msg += `\n\nหน้า ${page + 1}/${totalPages}`;
+        let msg = `✅ ${safeBold(t("cmd.menu.done"))} (${pages.length})\n\n${items.join("\n")}`;
+        if (totalPages > 1) msg += `\n\n${t("text.searchCount", { count: `${page + 1}/${totalPages}` })}`;
         return msg;
     }
 
     function listKeyboard(type, page, totalPages) {
         const buttons = [];
         const nav = [];
-        if (page > 0) nav.push(Markup.button.callback("◀ ก่อนหน้า", `LIST_PAGE_${type}_${page - 1}`));
-        if (page < totalPages - 1) nav.push(Markup.button.callback("หน้าถัดไป ▶", `LIST_PAGE_${type}_${page + 1}`));
+        if (page > 0) nav.push(Markup.button.callback(t("text.searchAgain"), `LIST_PAGE_${type}_${page - 1}`));
+        if (page < totalPages - 1) nav.push(Markup.button.callback(t("cmd.menu.back"), `LIST_PAGE_${type}_${page + 1}`));
         if (nav.length) buttons.push(nav);
         buttons.push([
-            Markup.button.callback("➕ เพิ่ม", "ADD"),
+            Markup.button.callback(t("cmd.menu.add"), "ADD"),
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
         ]);
-        buttons.push([Markup.button.callback("🏠 เมนูหลัก", "HOME")]);
+        buttons.push([Markup.button.callback(t("cmd.menu.back"), "HOME")]);
         return Markup.inlineKeyboard(buttons);
     }
 
@@ -663,7 +660,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านค้าง")}\n\nพักผ่อนได้เต็มที่เลย 🏆`,
+                    `🎉 ${safeBold(t("vb.noPendingLong"))}\n\n${t("vb.cheer")}`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
@@ -678,7 +675,7 @@ export function registerActionHandlers(bot, userState) {
             });
         } catch (err) {
             logger.error("LIST_ACTIVE:", err);
-            const errMsg = errorWithRetry("โหลดรายการงานค้างไม่ได้", "RETRY_FETCH_ACTIVE");
+            const errMsg = errorWithRetry(t("retry.activeFail"), "RETRY_FETCH_ACTIVE");
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
@@ -691,7 +688,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!pages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีงานที่ทำเสร็จ")}\n\nสู้ต่ออีกนิด 💪`,
+                    `📭 ${safeBold(t("vb.noDoneLong"))}\n\n${t("quote.cheer")}`,
                     { parse_mode: "Markdown", ...dashboardMenu() },
                 );
             }
@@ -706,7 +703,7 @@ export function registerActionHandlers(bot, userState) {
             });
         } catch (err) {
             logger.error("LIST_DONE:", err);
-            const errMsg = errorWithRetry("โหลดรายการงานเสร็จไม่ได้", "RETRY_FETCH_DONE");
+            const errMsg = errorWithRetry(t("retry.doneFail"), "RETRY_FETCH_DONE");
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
@@ -719,7 +716,7 @@ export function registerActionHandlers(bot, userState) {
         const page = parseInt(ctx.match[2]);
 
         if (!state?.listItems || Date.now() - state._timestamp > 300_000) {
-            return ctx.reply("⏱️ หมดเวลา กรุณากดรายการใหม่อีกครั้ง", {
+            return ctx.reply(t("retry.retrying"), {
                 parse_mode: "Markdown",
                 ...mainMenu,
             });
@@ -761,7 +758,7 @@ export function registerActionHandlers(bot, userState) {
             });
         } catch (err) {
             logger.error("DASHBOARD:", err);
-            const errMsg = errorWithRetry("โหลด Dashboard ไม่ได้", "RETRY_FETCH_DASHBOARD");
+            const errMsg = errorWithRetry(t("retry.dashboardFail"), "RETRY_FETCH_DASHBOARD");
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
@@ -773,7 +770,7 @@ export function registerActionHandlers(bot, userState) {
             const pages = await fetchActive()
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านด่วน!")}\nพักผ่อนได้เลย 🏆`,
+                    `🎉 ${safeBold(t("panic.empty"))}\n${t("panic.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -800,7 +797,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("PANIC action:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("retry.activeFail"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -817,7 +814,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!dueTomorrow.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("พรุ่งนี้ไม่มีการบ้านส่ง!")}\nไปเที่ยวได้เลย 🏆`,
+                    `🎉 ${safeBold(t("tomorrow.empty"))}\n${t("tomorrow.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -829,7 +826,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("TOMORROW action:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("retry.activeFail"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -840,10 +837,9 @@ export function registerActionHandlers(bot, userState) {
         userState.set(uid, { mode: "SEARCH", _timestamp: Date.now() })
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         return ctx.reply(
-            `🔍 ${safeBold("ค้นหาการบ้าน")}\n` +
+            `🔍 ${safeBold(t("text.searchPrompt"))}\n` +
             `\n` +
-            `พิมพ์คำที่ต้องการค้นหา\n` +
-            `เช่น ${safeCode("คณิต")} หรือ ${safeCode("แคลคูลัส")}\n` +
+            `${t("text.searchExamples")}\n` +
             ``,
             { parse_mode: "Markdown", ...cancelMenu },
         )
@@ -856,7 +852,7 @@ export function registerActionHandlers(bot, userState) {
             const pages = await fetchActive()
             if (!pages.length) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มีการบ้านอาทิตย์นี้เลย!")}\nพักผ่อนได้ 🏆`,
+                    `🎉 ${safeBold(t("week.empty"))}\n${t("week.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -867,7 +863,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("WEEK action:", err)
-            const errMsg = errorWithRetry("โหลดตารางไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("cmd.errors.loadWeek"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -880,7 +876,7 @@ export function registerActionHandlers(bot, userState) {
             const result = buildDeadline(pages)
             if (!result) {
                 return ctx.reply(
-                    `🎉 ${safeBold("ไม่มี deadline!")}\nพักผ่อนได้เลย 🏆`,
+                    `🎉 ${safeBold(t("deadline.empty"))}\n${t("deadline.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -890,7 +886,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("DEADLINE action:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("retry.activeFail"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -903,7 +899,7 @@ export function registerActionHandlers(bot, userState) {
             const result = buildProgress(activePages, donePages)
             if (!result) {
                 return ctx.reply(
-                    `📊 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    `📊 ${safeBold(t("progress.empty"))}\n${t("progress.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -913,7 +909,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("PROGRESS action:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("retry.activeFail"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -933,13 +929,13 @@ export function registerActionHandlers(bot, userState) {
             `💬 "${escapeMarkdown(quote.text)}"\n\n` +
             `— ${escapeMarkdown(quote.author)}\n` +
             `\n\n` +
-            `💪 ${safeBold("สู้ๆ นะ!")}`
+            `💪 ${safeBold(t("quote.cheer"))}`
         const keyboard = [
             [
-                Markup.button.callback("💬 อีกคำคม", "QUOTE"),
+                Markup.button.callback(t("quote.another"), "QUOTE"),
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+            [Markup.button.callback(t("cmd.menu.back"), "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -963,9 +959,9 @@ export function registerActionHandlers(bot, userState) {
 
             if (!hint) {
                 return ctx.reply(
-                    `📭 ${safeBold(`ไม่มีงานวิชา ${subject} ค้างอยู่`)}\n` +
+                    `📭 ${safeBold(t("hint.emptyForSubject", { subject }))}\n` +
                     `\n` +
-                    `ลองเลือกวิชาอื่น หรือเพิ่มการบ้านก่อน!`,
+                    t("hint.emptyForSubjectLine2"),
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -988,7 +984,7 @@ export function registerActionHandlers(bot, userState) {
             return ctx.reply(hint, { parse_mode: "Markdown", ...mainMenu })
         } catch (err) {
             logger.error("HINT action:", err)
-            const errMsg = errorWithRetry("ขออภัย เกิดข้อผิดพลาด", "RETRY_FETCH_ACTIVE")
+            const errMsg = errorWithRetry(t("cmd.errors.generic"), "RETRY_FETCH_ACTIVE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -1002,7 +998,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!activePages.length && !donePages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีการบ้านในระบบ")}\nลองเพิ่มการบ้านก่อน!`,
+                    `📭 ${safeBold(t("progress.empty"))}\n${t("progress.emptyLine2")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1011,20 +1007,20 @@ export function registerActionHandlers(bot, userState) {
             text += `=====================================\n\n`
 
             if (activePages.length) {
-                text += `📌 ยังไม่เสร็จ (${activePages.length}):\n`
+                text += `${t("export.active")} (${activePages.length}):\n`
                 activePages.forEach((p, i) => {
                     const { title, subject, due, priority } = getPageProps(p)
-                    const dueStr = due ? `ส่ง ${due.slice(5).replace("-", "/")}` : "ไม่มีกำหนด"
+                    const dueStr = due ? `${t("export.due")} ${due.slice(5).replace("-", "/")}` : t("vb.noDueShort")
                     text += `  ${i + 1}. [${subject}] ${title} — ${dueStr} ${priority}\n`
                 })
                 text += `\n`
             }
 
             if (donePages.length) {
-                text += `✅ ทำเสร็จแล้ว (${donePages.length}):\n`
+                text += `${t("export.done")} (${donePages.length}):\n`
                 donePages.forEach((p, i) => {
                     const { title, subject, completed, priority } = getPageProps(p)
-                    const doneStr = completed ? `เสร็จ ${completed.slice(5).replace("-", "/")}` : "เสร็จแล้ว"
+                    const doneStr = completed ? `${t("export.completedAt")} ${completed.slice(5).replace("-", "/")}` : t("export.doneShort")
                     text += `  ${i + 1}. [${subject}] ${title} — ${doneStr} ${priority}\n`
                 })
                 text += `\n`
@@ -1033,21 +1029,21 @@ export function registerActionHandlers(bot, userState) {
             const total = activePages.length + donePages.length
             const pct = total > 0 ? Math.round((donePages.length / total) * 100) : 0
             text += `=====================================\n`
-            text += `รวม ${total} รายการ | เสร็จ ${pct}%\n`
+            text += t("export.total", { total, pct }) + "\n"
 
             let msg =
                 `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
                 `\n` +
                 `${safeCode(text)}\n` +
                 `\n` +
-                `💡 คัดลอกข้อความในกรอบไปแชร์ต่อได้เลย!`
+                t("export.shareHint")
 
             const keyboard = [
                 [
-                    Markup.button.callback("➕ เพิ่ม", "ADD"),
+                    Markup.button.callback(t("cmd.menu.add"), "ADD"),
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
                 ],
-                [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+                [Markup.button.callback(t("cmd.menu.back"), "HOME")],
             ]
             // award EXPORT_3 badge
             try {
@@ -1067,8 +1063,8 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("EXPORT action:", err)
-            const errMsg = errorWithRetry("ส่งออกไม่ได้", "RETRY_FETCH_ACTIVE")
-            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errorWithRetry("ส่งออกไม่ได้", "RETRY_FETCH_ACTIVE").reply_markup })
+            const errMsg = errorWithRetry(t("export.err"), "RETRY_FETCH_ACTIVE")
+            return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errorWithRetry(t("export.err"), "RETRY_FETCH_ACTIVE").reply_markup })
         }
     })
 
@@ -1077,21 +1073,21 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id
         const state = userState.get(uid)
         if (!state?._pendingNoted) {
-            return ctx.answerCbQuery("⏱️ หมดเวลา กรุณาลองใหม่").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+            return ctx.answerCbQuery(t("retry.retrying")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         }
         const idx = parseInt(ctx.match[1])
         const { matched, note } = state._pendingNoted
         if (idx < 0 || idx >= matched.length) {
-            return ctx.answerCbQuery("❌ ไม่พบรายการ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+            return ctx.answerCbQuery(t("cmd.errors.notFound")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         }
         try {
             const page = matched[idx]
             const { title } = getPageProps(page)
             await updateHomework(page.id, { note })
             userState.delete(uid)
-            await ctx.answerCbQuery("✅ เพิ่มโน๊ตแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+            await ctx.answerCbQuery(t("noted.added")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
             return ctx.reply(
-                `📝 ${safeBold("เพิ่มโน๊ตแล้ว!")}\n` +
+                `📝 ${safeBold(t("noted.added"))}\n` +
                 `\n` +
                 `📌 "${escapeMarkdown(title)}"\n` +
                 `📝 ${escapeMarkdown(note)}`,
@@ -1114,7 +1110,7 @@ export function registerActionHandlers(bot, userState) {
             const page = pages.find(p => p.id === pageId)
             if (!page) {
                 return ctx.reply(
-                    `❌ ${safeBold("ไม่พบงานนี้")}\nอาจถูกลบไปแล้ว`,
+                    `❌ ${safeBold(t("cmd.errors.notFound"))}\n${t("cmd.error.retry")}",
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1140,21 +1136,21 @@ export function registerActionHandlers(bot, userState) {
                 badge = ` ⏰ เหลือ ${diff} วัน`
             }
 
-            let msg = `🎯 ${safeBold("โฟกัสงานนี้!")}\n`
+            let msg = `🎯 ${safeBold(t("action.focusTitle"))}\n`
             msg += `\n\n`
             msg += `${statusEmoji(status)} ${safeBold(title)}${badge}\n`
             msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
             msg += `\n`
-            msg += `💡 พิมพ์คำสั่งอื่นไม่ได้ขณะโฟกัส\nพิมพ์ /focus เพื่อดู หรือ /focus exit เพื่อออก`
+            msg += t("action.focusLine3")
 
             const keyboard = [
                 [
-                    Markup.button.callback("✅ เสร็จ", "FOCUS_STATUS_DONE"),
-                    Markup.button.callback("🔄 กำลังทำ", "FOCUS_STATUS_PROGRESS"),
+                    Markup.button.callback(t("cmd.btn.done"), "FOCUS_STATUS_DONE"),
+                    Markup.button.callback(t("cmd.btn.inProgress"), "FOCUS_STATUS_PROGRESS"),
                 ],
                 [
-                    Markup.button.callback("❌ เลิกโฟกัส", "FOCUS_EXIT"),
-                    Markup.button.callback("📋 ดูทั้งหมด", "LIST_ACTIVE"),
+                    Markup.button.callback(t("action.exitBtn") || "❌ เลิกโฟกัส", "FOCUS_EXIT"),
+                    Markup.button.callback(t("action.viewAll") || "📋 ดูทั้งหมด", "LIST_ACTIVE"),
                 ],
             ]
 
@@ -1185,9 +1181,9 @@ export function registerActionHandlers(bot, userState) {
         const pageId = state?._focusHomeworkId
 
         if (!pageId) {
-            await ctx.answerCbQuery("❌ ไม่มีงานในโฟกัส").catch(() => {})
+            await ctx.answerCbQuery(t("focus.noActive")).catch(() => {})
             return ctx.reply(
-                `❌ ${safeBold("ไม่มีงานในโฟกัส")}\nพิมพ์ /focus เพื่อเลือกงาน`,
+                `❌ ${safeBold(t("focus.noActive"))}\n${t("focus.noActiveLine2")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1218,7 +1214,7 @@ export function registerActionHandlers(bot, userState) {
             return ctx.reply(
                 `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
                 `\n` +
-                `เก่งมาก! ออกจากโฟกัสแล้ว${badgeMsg}`,
+            `${t("action.focusDoneLine2")} ${badgeMsg}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         } catch (err) {
@@ -1266,10 +1262,10 @@ export function registerActionHandlers(bot, userState) {
         await ctx.editMessageReplyMarkup(undefined).catch(() => {})
 
         return ctx.reply(
-            `❌ ${safeBold("ยกเลิกโฟกัสแล้ว")}\n` +
+            `❌ ${safeBold(t("action.focusExit"))}\n` +
             `\n` +
-            `${focusTitle ? `เลิกโฟกัส "${escapeMarkdown(focusTitle)}"` : "เลิกโฟกัสแล้ว"}\n` +
-            `กลับสู่หน้าหลัก`,
+            `${focusTitle ? t("action.focusExitLine2", { title: escapeMarkdown(focusTitle) }) : t("action.focusExitLine2") }\n` +
+            t("action.focusExitLine3"),
             { parse_mode: "Markdown", ...mainMenu },
         )
     })
@@ -1401,13 +1397,13 @@ export function registerActionHandlers(bot, userState) {
             deletedItems.set(pageId, { pageId, uid, name, _timestamp: Date.now() });
 
             const recoveryMsg = await ctx.reply(
-                `🗑️ ${safeBold("ลบแล้ว")}\n` +
+                `🗑️ ${safeBold(t("action.deleted"))}\n` +
                 `\n` +
-                `↩️ กู้คืนได้ใน 10 วินาที`,
+                t("action.recoverIn10s"),
                 {
                     parse_mode: "Markdown",
                     ...Markup.inlineKeyboard([
-                        [Markup.button.callback("↩️ กู้คืน", `RECOVER_DELETE_${pageId}`)],
+                        [Markup.button.callback(t("action.recoverBtn"), `RECOVER_DELETE_${pageId}`)],
                     ]),
                 },
             );
@@ -1420,14 +1416,14 @@ export function registerActionHandlers(bot, userState) {
             }, 10000).unref();
         } catch (err) {
             logger.error("DELETE confirm:", err);
-            const errMsg = errorWithRetry("ลบไม่ได้", `RETRY_ARCHIVE_${pageId}`);
+            const errMsg = errorWithRetry(t("cmd.errors.generic"), `RETRY_ARCHIVE_${pageId}`);
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
 
     /* CANCEL DELETE */
     bot.action(/cancel_del_(.+)/, async (ctx) => {
-        await ctx.answerCbQuery("✅ ยกเลิกการลบ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+        await ctx.answerCbQuery(t("action.recoverSuccess")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         try {
             await ctx.deleteMessage();
         } catch { logger.debug("Non-critical: cancel delete message failed") }
@@ -1448,14 +1444,14 @@ export function registerActionHandlers(bot, userState) {
             deletedItems.delete(pageId);
             await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             return ctx.reply(
-                `↩️ ${safeBold("กู้คืนแล้ว")}\n` +
+                `↩️ ${safeBold(t("action.recoverSuccess"))}\n` +
                 `\n` +
-                `${safeBold(item.name)} ถูกนำกลับมาแล้ว`,
+                t("action.recoverSuccessLine2", { title: safeBold(item.name) }),
                 { parse_mode: "Markdown", ...dashboardMenu() },
             );
         } catch (err) {
             logger.error("RECOVER_DELETE:", err);
-            const errMsg = errorWithRetry("กู้คืนไม่ได้", `RETRY_ARCHIVE_${pageId}`);
+            const errMsg = errorWithRetry(t("cmd.errors.generic"), `RETRY_ARCHIVE_${pageId}`);
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
@@ -1505,7 +1501,7 @@ export function registerActionHandlers(bot, userState) {
             [
                 Markup.button.callback("📊 Dashboard", "DASHBOARD"),
             ],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+            [Markup.button.callback(t("cmd.menu.back"), "HOME")],
         ]
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -1520,8 +1516,8 @@ export function registerActionHandlers(bot, userState) {
             const donePages = await fetchDone()
             if (!donePages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ยังไม่มีการบ้านที่ทำเสร็จ")}\n` +
-                    `ลองทำการบ้านให้เสร็จก่อน แล้วกลับมาดูสรุป!`,
+                    `📭 ${safeBold(t("review.empty"))}\n` +
+                    t("review.emptyLine2"),
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1543,7 +1539,7 @@ export function registerActionHandlers(bot, userState) {
                 return d && new Date(d + "T00:00:00") >= monthAgo
             }).length
 
-            let msg = `📋 ${safeBold("สรุปการบ้านที่ทำเสร็จแล้ว")}\n`
+            let msg = `📋 ${safeBold(t("review.title"))}\n`
             msg += `\n\n`
             msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
             msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
@@ -1559,7 +1555,7 @@ export function registerActionHandlers(bot, userState) {
                 ],
                 [
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
-                    Markup.button.callback("🏠 เมนูหลัก", "HOME"),
+                    Markup.button.callback(t("cmd.menu.back"), "HOME"),
                 ],
             ]
 
@@ -1569,7 +1565,7 @@ export function registerActionHandlers(bot, userState) {
             })
         } catch (err) {
             logger.error("REVIEW action:", err)
-            const errMsg = errorWithRetry("โหลดข้อมูลไม่ได้", "RETRY_FETCH_DONE")
+            const errMsg = errorWithRetry(t("retry.doneFail"), "RETRY_FETCH_DONE")
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup })
         }
     })
@@ -1593,13 +1589,13 @@ export function registerActionHandlers(bot, userState) {
             let periodLabel = ""
 
             if (period === "today") {
-                periodLabel = "วันนี้"
+                periodLabel = t("review.today")
             } else if (period === "7d") {
                 cutoff.setDate(today.getDate() - 7)
-                periodLabel = "7 วันที่ผ่านมา"
+                periodLabel = t("review.7d")
             } else if (period === "30d") {
                 cutoff.setDate(today.getDate() - 30)
-                periodLabel = "30 วันที่ผ่านมา"
+                periodLabel = t("review.30d")
             }
 
             const filtered = donePages.filter(p => {
@@ -1646,9 +1642,9 @@ export function registerActionHandlers(bot, userState) {
                 sentiment = "😐"
             }
 
-            let msg = `📋 ${safeBold("สรุปการบ้าน — " + periodLabel)}\n`
+            let msg = `📋 ${safeBold(t("review.title"))} ${periodLabel}\n`
             msg += `\n\n`
-            msg += `✅ ทำเสร็จ: ${totalInPeriod} รายการ\n`
+            msg += `${t("review.allTime", { total: totalInPeriod })}\n`
             if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
             msg += `📊 คิดเป็น ${completedPct}% ของทั้งหมด\n`
             if (overdueCount > 0) {
@@ -1659,11 +1655,11 @@ export function registerActionHandlers(bot, userState) {
 
             const keyboard = [
                 [
-                    Markup.button.callback("📋 ดูรายละเอียด", "REVIEW_DETAIL_0"),
+                    Markup.button.callback(t("review.today"), "REVIEW_DETAIL_0"),
                 ],
                 [
                     Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
-                    Markup.button.callback("🏠 เมนูหลัก", "HOME"),
+                    Markup.button.callback(t("cmd.menu.back"), "HOME"),
                 ],
             ]
 
@@ -1674,7 +1670,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("REVIEW_PERIOD:", err)
             return ctx.reply(
-                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.errors.generic"))}\n${t("cmd.error.retry")}",
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1691,7 +1687,7 @@ export function registerActionHandlers(bot, userState) {
             const page = pages.find(p => p.id === pageId)
             if (!page) {
                 return ctx.reply(
-                    `❌ ${safeBold("ไม่พบงานนี้")}\nอาจถูกลบไปแล้ว`,
+                    `❌ ${safeBold(t("cmd.errors.notFound"))}\n${t("cmd.error.retry")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1716,7 +1712,7 @@ export function registerActionHandlers(bot, userState) {
             const botUsername = process.env.BOT_USERNAME || "homeworkbot"
 
             return ctx.reply(
-                `👥 ${safeBold("แชร์งานนี้กับเพื่อน!")}\n` +
+                `👥 ${safeBold(t("collab.pickTask"))}\n` +
                 `\n\n` +
                 `${safeBold(title)}\n` +
                 `${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n` +
@@ -1729,7 +1725,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("COLLAB_SEL:", err)
             return ctx.reply(
-                `❌ ${safeBold("แชร์ไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("collab.saveErr"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1800,16 +1796,16 @@ export function registerActionHandlers(bot, userState) {
                 } catch { logger.debug("Non-critical: pomo badge check failed") }
 
                 const title = state._pomoHomeworkTitle || ""
-                let msg = `☕ ${safeBold("พักเบรก 5 นาที!")}\n`
+                let msg = `☕ ${safeBold(t("pomodoro.pomoBreak"))}\n`
                 msg += `\n`
                 msg += `🍅 เซสชันเสร็จแล้ว!\n`
                 if (title) msg += `📌 งานที่ทำ: ${escapeMarkdown(title)}\n`
-                msg += `\nพักผ่อนสักครู่ แล้วกลับมาลุยต่อ!`
+                msg += `\n${t("pomodoro.restMsg")}`
                 msg += badgeMsg
 
                 const keyboard = [
-                    [Markup.button.callback("⏭️ เริ่มรอบใหม่", "POMODORO_START")],
-                    [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+                    [Markup.button.callback(t("pomodoro.nextRound"), "POMODORO_START")],
+                    [Markup.button.callback(t("cmd.menu.back"), "HOME")],
                 ]
                 await bot.telegram.sendMessage(uid, msg, {
                     parse_mode: "Markdown",
@@ -1834,7 +1830,7 @@ export function registerActionHandlers(bot, userState) {
         })
 
         const title = homeworkTitle || ""
-        let msg = `🍅 ${safeBold("เริ่ม Pomodoro!")}\n`
+        let msg = `🍅 ${safeBold(t("pomodoro.startBtn"))}\n`
         msg += `\n`
         msg += `⏱️ 25 นาที — เริ่มเลย!\n`
         if (title) msg += `📌 งาน: ${escapeMarkdown(title)}\n`
@@ -1880,9 +1876,9 @@ export function registerActionHandlers(bot, userState) {
         })
 
         return ctx.reply(
-            `❌ ${safeBold("ยกเลิก Pomodoro แล้ว")}\n` +
+            `❌ ${safeBold(t("pomodoro.cancel"))}\n` +
             `\n` +
-            `พิมพ์ /pomodoro เพื่อเริ่มใหม่`,
+            t("pomodoro.cancelLine2"),
             { parse_mode: "Markdown", ...mainMenu },
         )
     })
@@ -1895,7 +1891,7 @@ export function registerActionHandlers(bot, userState) {
         const stats = pomoGetStats(uid)
         const streak = pomoGetStreak(uid)
 
-        let msg = `🍅 ${safeBold("สถิติ Pomodoro")}\n`
+        let msg = `🍅 ${safeBold(t("pomodoro.title"))}\n`
         msg += `\n`
         msg += `📅 วันนี้: ${stats.today} เซสชัน\n`
         msg += `📅 สัปดาห์: ${stats.week} เซสชัน\n`
@@ -1905,8 +1901,8 @@ export function registerActionHandlers(bot, userState) {
         msg += ``
 
         const keyboard = [
-            [Markup.button.callback("🍅 เริ่มใหม่", "POMODORO_START")],
-            [Markup.button.callback("🏠 เมนูหลัก", "HOME")],
+            [Markup.button.callback(t("pomodoro.startBtn"), "POMODORO_START")],
+            [Markup.button.callback(t("cmd.menu.back"), "HOME")],
         ]
 
         return ctx.reply(msg, {
@@ -1919,9 +1915,9 @@ export function registerActionHandlers(bot, userState) {
     bot.action("SUGGEST_REFRESH", async (ctx) => {
         await ctx.answerCbQuery().catch(() => {})
         return ctx.reply(
-            `🔄 ${safeBold("กำลังแนะนำใหม่...")}\n` +
+            `🔄 ${safeBold(t("suggest.generating"))}\n` +
             `\n` +
-            `พิมพ์ /suggest เพื่อรับคำแนะนำใหม่`,
+            t("suggest.title"),
             { parse_mode: "Markdown", ...mainMenu },
         )
     })
@@ -1930,14 +1926,14 @@ export function registerActionHandlers(bot, userState) {
     bot.action("SMARTBOOK_SAVE", async (ctx) => {
         const uid = ctx.from.id
         const state = userState.get(uid)
-        await ctx.answerCbQuery("💾 บันทึกแผนแล้ว!").catch(() => {})
+        await ctx.answerCbQuery(t("smartbook.savedPlan")).catch(() => {})
         if (state) {
             userState.set(uid, { ...state, _timestamp: Date.now() })
         }
         return ctx.reply(
-            `💾 ${safeBold("บันทึกแผนแล้ว!")}\n` +
+            `💾 ${safeBold(t("smartbook.savedPlan"))}\n` +
             `\n` +
-            `พิมพ์ /smartbook view เพื่อดูแผนที่บันทึกไว้`,
+            t("smartbook.savedPlanLine2"),
             { parse_mode: "Markdown", ...mainMenu },
         )
     })
@@ -2037,7 +2033,7 @@ export function registerActionHandlers(bot, userState) {
                 })
             }
 
-            let msg = `📋 ${safeBold("รายละเอียด (หน้า ${pageNum + 1}/${totalPages})")}\n`
+            let msg = `📋 ${safeBold(t("text.searchCount", { count: `${pageNum + 1}/${totalPages}` }))}\n`
             msg += `\n\n`
             for (let i = 0; i < pageItems.length; i++) {
                 const p = pageItems[i]
@@ -2050,15 +2046,15 @@ export function registerActionHandlers(bot, userState) {
             const keyboard = []
             const row = []
             if (pageNum > 0) {
-                row.push(Markup.button.callback("◀ ก่อนหน้า", `REVIEW_DETAIL_${pageNum - 1}`))
+                row.push(Markup.button.callback(t("text.searchAgain"), `REVIEW_DETAIL_${pageNum - 1}`))
             }
             if (pageNum + 1 < totalPages) {
-                row.push(Markup.button.callback("ถัดไป ▶", `REVIEW_DETAIL_${pageNum + 1}`))
+                row.push(Markup.button.callback(t("text.searchAgain"), `REVIEW_DETAIL_${pageNum + 1}`))
             }
             if (row.length) keyboard.push(row)
             keyboard.push([
                 Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
-                Markup.button.callback("🏠 เมนูหลัก", "HOME"),
+                Markup.button.callback(t("cmd.menu.back"), "HOME"),
             ])
 
             return ctx.reply(msg, {
