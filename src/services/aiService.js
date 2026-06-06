@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { logger } from "../utils/logger.js";
 import { formatDate, parseThaiDate } from "../utils/dateParser.js";
-import { detectSubject, cleanTitle } from "../utils/subjectDetector.js";
+import { detectSubject, cleanTitle, canonSubj } from "../utils/subjectDetector.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
 import { getAICache, setAICache } from "./aiCache.js";
 
@@ -9,28 +9,6 @@ const MODELS = [
     "typhoon-v2.5-30b-a3b-instruct",
     "typhoon-v2.1-12b-instruct",
 ];
-
-const SUBJECT_THAI_TO_EN = {
-    "คณิต": "Math",
-    "คณิตศาสตร์": "Math",
-    "ไทย": "Thai",
-    "ภาษาไทย": "Thai",
-    "อังกฤษ": "English",
-    "ฟิสิกส์": "Physics",
-    "เคมี": "Chemistry",
-    "ชีวะ": "Biology",
-    "สังคม": "Social Studies",
-    "ประวัติ": "History",
-    "คอม": "Computer",
-    "สุขศึกษา": "Health",
-    "ทั่วไป": "General",
-};
-const SUBJECT_EN_CANON = new Set(Object.values(SUBJECT_THAI_TO_EN));
-function canonSubject(s) {
-    if (!s) return "General";
-    if (SUBJECT_EN_CANON.has(s)) return s;
-    return SUBJECT_THAI_TO_EN[s] || s;
-}
 
 let client = null;
 let lastRequestTime = 0;
@@ -207,7 +185,7 @@ export async function parseHomework(text, opts = {}) {
         logger.info(`AI cache hit: "${text.slice(0, 30)}..." (${cached.source})`);
         return {
             title: cached.title || cleanTitle(text) || text,
-            subject: canonSubject(cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text)),
+            subject: canonSubj(cached.subject && cached.subject !== "ทั่วไป" ? cached.subject : detectSubject(text)),
             dueDate: cached.dueDate || parseThaiDate(text),
             priority: cached.priority,
             model: cached.source,
@@ -248,7 +226,7 @@ export async function parseHomework(text, opts = {}) {
 
         const result = {
             title: parsed.title || cleanTitle(text) || text,
-            subject: canonSubject(parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text)),
+            subject: canonSubj(parsed.subject && parsed.subject !== "ทั่วไป" ? parsed.subject : detectSubject(text)),
             dueDate: parsed.dueDate || parseThaiDate(text),
             priority,
             model,

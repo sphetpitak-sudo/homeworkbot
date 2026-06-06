@@ -512,7 +512,7 @@ describe('Web Dashboard API E2E', () => {
       });
       expect(res.status).toBe(200);
       expect(mockCreateHomework).toHaveBeenCalledWith(
-        expect.objectContaining({ priority: '🔴 สูง' }),
+        expect.objectContaining({ priority: '🔴 High' }),
       );
     });
   });
