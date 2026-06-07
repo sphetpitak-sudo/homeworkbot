@@ -1003,7 +1003,7 @@ export function registerActionHandlers(bot, userState) {
                 )
             }
 
-            let text = `📋 รายการการบ้าน (export ${today})\n`
+            let text = `📋 ${t("export.header", { date: today })}\n`
             text += `=====================================\n\n`
 
             if (activePages.length) {
@@ -1032,7 +1032,7 @@ export function registerActionHandlers(bot, userState) {
             text += t("export.total", { total, pct }) + "\n"
 
             let msg =
-                `📋 ${safeBold("รายการการบ้าน (export)")}\n` +
+                `📋 ${safeBold(t("export.title"))}\n` +
                 `\n` +
                 `${safeCode(text)}\n` +
                 `\n` +
@@ -1095,7 +1095,7 @@ export function registerActionHandlers(bot, userState) {
             )
         } catch (err) {
             logger.error("NOTED_SEL:", err)
-            return ctx.answerCbQuery("❌ บันทึกไม่ได้").catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
+            return ctx.answerCbQuery(t("noted.err")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message))
         }
     })
 
@@ -1110,7 +1110,7 @@ export function registerActionHandlers(bot, userState) {
             const page = pages.find(p => p.id === pageId)
             if (!page) {
                 return ctx.reply(
-                    `❌ ${safeBold(t("cmd.errors.notFound"))}\n${t("cmd.error.retry")}",
+                    `❌ ${safeBold(t("cmd.errors.notFound"))}\n${t("cmd.error.retry")}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1129,11 +1129,11 @@ export function registerActionHandlers(bot, userState) {
 
             let badge = ""
             if (diff !== null && diff < 0) {
-                badge = ` 🚨 เลย ${Math.abs(diff)} วัน`
+                badge = ` 🚨 ${t("focus.overdue", { days: Math.abs(diff) })}`
             } else if (diff !== null && diff <= 3) {
-                badge = ` 🔥 เหลือ ${diff} วัน`
+                badge = ` 🔥 ${t("focus.left", { days: diff })}`
             } else if (diff !== null && diff <= 7) {
-                badge = ` ⏰ เหลือ ${diff} วัน`
+                badge = ` ⏰ ${t("focus.left", { days: diff })}`
             }
 
             let msg = `🎯 ${safeBold(t("action.focusTitle"))}\n`
@@ -1149,8 +1149,8 @@ export function registerActionHandlers(bot, userState) {
                     Markup.button.callback(t("cmd.btn.inProgress"), "FOCUS_STATUS_PROGRESS"),
                 ],
                 [
-                    Markup.button.callback(t("action.exitBtn") || "❌ เลิกโฟกัส", "FOCUS_EXIT"),
-                    Markup.button.callback(t("action.viewAll") || "📋 ดูทั้งหมด", "LIST_ACTIVE"),
+                    Markup.button.callback(t("focus.exitBtn") || "❌ Exit focus", "FOCUS_EXIT"),
+                    Markup.button.callback(t("focus.viewAll") || "📋 View all", "LIST_ACTIVE"),
                 ],
             ]
 
@@ -1168,7 +1168,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("FOCUS_SEL:", err)
             return ctx.reply(
-                `❌ ${safeBold("เลือกงานไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("action.focusSelectErr"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1212,7 +1212,7 @@ export function registerActionHandlers(bot, userState) {
             } catch { logger.debug("Non-critical: task badge check failed in focus done") }
 
             return ctx.reply(
-                `✅ ${safeBold("เสร็จแล้ว!")} 🎉\n` +
+                `✅ ${safeBold(t("action.doneMsg"))}\n` +
                 `\n` +
             `${t("action.focusDoneLine2")} ${badgeMsg}`,
                 { parse_mode: "Markdown", ...mainMenu },
@@ -1220,7 +1220,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("FOCUS_STATUS_DONE:", err)
             return ctx.reply(
-                `❌ ${safeBold("อัปเดตไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("action.focusStatusErr"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1233,7 +1233,7 @@ export function registerActionHandlers(bot, userState) {
         const pageId = state?._focusHomeworkId
 
         if (!pageId) {
-            await ctx.answerCbQuery("❌ ไม่มีงานในโฟกัส").catch(() => {})
+            await ctx.answerCbQuery(t("focus.noActive")).catch(() => {})
             return
         }
 
@@ -1242,12 +1242,12 @@ export function registerActionHandlers(bot, userState) {
         try {
             await updateStatus(pageId, STATUS.IN_PROGRESS)
             return ctx.reply(
-                `✏️ ${safeBold("อัปเดตแล้ว")} — กำลังทำอยู่ 💪`,
+                `✏️ ${safeBold(t("action.progressMsg"))}`,
                 { parse_mode: "Markdown" },
             )
         } catch (err) {
             logger.error("FOCUS_STATUS_PROGRESS:", err)
-            await ctx.answerCbQuery("❌ อัปเดตไม่ได้").catch(() => {})
+            await ctx.answerCbQuery(t("action.focusStatusErr")).catch(() => {})
         }
     })
 
@@ -1303,7 +1303,7 @@ export function registerActionHandlers(bot, userState) {
 
             await ctx.editMessageReplyMarkup(undefined).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             const tip = showHintOnce(uid, "status_change",
-                `💡 *รู้ไหม?* แก้ไขหรือลบได้ที่ปุ่มใต้การ์ดแต่ละรายการ\nหรือพิมพ์ /undo เพื่อยกเลิกการเปลี่ยนสถานะล่าสุด`);
+                t("action.statusChangeHint"));
             const fullMsg = message + badgeMsg
             if (tip) {
                 await ctx.reply(`${fullMsg}\n\n────\n${tip.text}`, {
@@ -1318,9 +1318,9 @@ export function registerActionHandlers(bot, userState) {
             }
         } catch (err) {
             logger.error("setStatus:", err);
-            await ctx.answerCbQuery("❌ " + (err?.message || "Error")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
-            const action = status === STATUS.DONE ? "done" : status === STATUS.IN_PROGRESS ? "prog" : "todo";
-            const errMsg = errorWithRetry(`อัปเดตสถานะ "${action}" ไม่ได้`, `RETRY_STATUS_${pageId}_${action}`);
+            const actionLabel = status === STATUS.DONE ? "done" : status === STATUS.IN_PROGRESS ? "prog" : "todo";
+            await ctx.answerCbQuery("❌ " + t("retry.statusFail")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            const errMsg = errorWithRetry(t("retry.statusFail"), `RETRY_STATUS_${pageId}_${actionLabel}`);
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     }
@@ -1330,7 +1330,7 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.DONE,
-            `✅ ${safeBold("เสร็จแล้ว!")} — เก่งมาก! 🎉`,
+            `✅ ${safeBold(t("action.doneMsg"))}`,
         ),
     );
 
@@ -1339,7 +1339,7 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.IN_PROGRESS,
-            `✏️ ${safeBold("อัปเดตแล้ว")} — บันทึกเรียบร้อย`,
+            `✏️ ${safeBold(t("action.progressMsg"))}`,
         ),
     );
 
@@ -1348,7 +1348,7 @@ export function registerActionHandlers(bot, userState) {
             ctx,
             ctx.match[1],
             STATUS.TODO,
-            `↩️ ${safeBold("ย้ายกลับแล้ว")} — ยังไม่เสร็จก็ไม่เป็นไร`,
+            `↩️ ${safeBold(t("action.revertMsg"))}`,
         ),
     );
 
@@ -1360,22 +1360,22 @@ export function registerActionHandlers(bot, userState) {
         try {
             const title = await getPageTitle(pageId);
             return ctx.reply(
-                `🗑️ ${safeBold("ลบ " + title + "?")}\n` +
-                `การลบไม่สามารถยกเลิกได้\n` +
+                `🗑️ ${safeBold(t("action.delConfirm", { title }))}\n` +
+                `${t("action.delConfirmLine2")}\n` +
                 ``,
                 {
                     parse_mode: "Markdown",
                     ...Markup.inlineKeyboard([
                         [
-                            Markup.button.callback("✅ ยืนยันลบ", `confirm_del_${pageId}`),
-                            Markup.button.callback("❌ ยกเลิก", `cancel_del_${pageId}`),
+                            Markup.button.callback(t("action.confirmDelete"), `confirm_del_${pageId}`),
+                            Markup.button.callback(t("action.cancelDelete"), `cancel_del_${pageId}`),
                         ],
                     ]),
                 },
             );
         } catch (err) {
             logger.error("DELETE confirm fetch:", err);
-            const errMsg = errorWithRetry("โหลดข้อมูลลบไม่ได้", "RETRY_FETCH_ACTIVE");
+            const errMsg = errorWithRetry(t("cmd.errors.generic"), "RETRY_FETCH_ACTIVE");
             return ctx.reply(errMsg.text, { parse_mode: "Markdown", reply_markup: errMsg.reply_markup });
         }
     });
@@ -1437,12 +1437,12 @@ export function registerActionHandlers(bot, userState) {
            verify the clicker matches the user who deleted it. */
         const item = deletedItems.get(pageId);
         if (!item || item.uid !== uid || Date.now() - item._timestamp > 10000) {
-            return ctx.answerCbQuery("⏱️ หมดเวลากู้คืนแล้ว").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.recoverTimeout")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         try {
             await restorePage(pageId);
             deletedItems.delete(pageId);
-            await ctx.answerCbQuery("✅ กู้คืนสำเร็จ").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            await ctx.answerCbQuery("✅ " + t("action.recoverSuccess")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             return ctx.reply(
                 `↩️ ${safeBold(t("action.recoverSuccess"))}\n` +
                 `\n` +
@@ -1461,18 +1461,18 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id;
         const state = userState.get(uid);
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         const { title, subject, due, priority } = state.pending;
         const dueText = formatDueDisplay(due);
         const msg =
-            `📝 ${safeBold("ตั้งค่าเพิ่มเติม")}\n` +
+            `📝 ${safeBold(t("action.moreOptions"))}\n` +
             `\n` +
             `${subjectEmoji(subject)} ${safeBold(title)}\n` +
             `🎯 ${priority || "🟡 Medium"}  |  📅 ${dueText}\n` +
             `\n` +
-            `เลือกรายการด้านล่าง`;
+            t("action.moreOptionsLine2");
 
         return ctx.reply(msg, {
             parse_mode: "Markdown",
@@ -1485,7 +1485,7 @@ export function registerActionHandlers(bot, userState) {
         const uid = ctx.from.id;
         const state = userState.get(uid);
         if (!state?.pending) {
-            return ctx.answerCbQuery("❌ ไม่มีข้อมูล").catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
+            return ctx.answerCbQuery(t("action.noData")).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         }
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
         await ctx.deleteMessage().catch(() => {});
@@ -1541,17 +1541,17 @@ export function registerActionHandlers(bot, userState) {
 
             let msg = `📋 ${safeBold(t("review.title"))}\n`
             msg += `\n\n`
-            msg += `✅ เสร็จทั้งหมด: ${total} รายการ\n`
-            msg += `📅 สัปดาห์นี้: ${weekCount} รายการ\n`
-            msg += `📅 30 วัน: ${monthCount} รายการ\n`
+            msg += `✅ ${t("review.allTime", { total })}\n`
+            msg += `📅 ${t("review.thisWeek", { count: weekCount })}\n`
+            msg += `📅 ${t("review.last30", { count: monthCount })}\n`
             msg += `\n`
-            msg += `📊 ${safeBold("เลือกช่วงเวลาเพื่อดูรายละเอียด:")}`
+            msg += `📊 ${safeBold(t("review.pickRange"))}`
 
             const keyboard = [
                 [
-                    Markup.button.callback("📅 วันนี้", "REVIEW_PERIOD_today"),
-                    Markup.button.callback("📅 7 วัน", "REVIEW_PERIOD_7d"),
-                    Markup.button.callback("📅 30 วัน", "REVIEW_PERIOD_30d"),
+                    Markup.button.callback(t("review.today"), "REVIEW_PERIOD_today"),
+                    Markup.button.callback(t("review.7d"), "REVIEW_PERIOD_7d"),
+                    Markup.button.callback(t("review.30d"), "REVIEW_PERIOD_30d"),
                 ],
                 [
                     Markup.button.callback("📊 Dashboard", "DASHBOARD"),
@@ -1579,7 +1579,7 @@ export function registerActionHandlers(bot, userState) {
             const donePages = await fetchDone()
             if (!donePages.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ไม่มีงานที่ทำเสร็จในช่วงนี้")}`,
+                    `📭 ${safeBold(t("review.noCompleteInPeriod"))}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1605,9 +1605,9 @@ export function registerActionHandlers(bot, userState) {
 
             if (!filtered.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ไม่มีงานที่ทำเสร็จในช่วง")} ${periodLabel}\n` +
+                    `📭 ${safeBold(t("review.noCompleteInPeriodWithLabel", { period: periodLabel }))}\n` +
                     `\n` +
-                    `ลองเพิ่มการบ้านและทำให้เสร็จก่อน!`,
+                    t("review.addHomeworkFirst"),
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -1645,10 +1645,10 @@ export function registerActionHandlers(bot, userState) {
             let msg = `📋 ${safeBold(t("review.title"))} ${periodLabel}\n`
             msg += `\n\n`
             msg += `${t("review.allTime", { total: totalInPeriod })}\n`
-            if (topSubject) msg += `📚 วิชาที่ทำมากสุด: ${topSubject}\n`
-            msg += `📊 คิดเป็น ${completedPct}% ของทั้งหมด\n`
+            if (topSubject) msg += `📚 ${t("review.topSubjects", { subjects: topSubject })}\n`
+            msg += `📊 ${t("review.percentageOfAll", { pct: completedPct })}\n`
             if (overdueCount > 0) {
-                msg += `⚠️ Overdue: ${overdueCount} รายการ\n`
+                msg += `${t("review.overdueCount", { count: overdueCount })}\n`
             }
             msg += `\n`
             msg += `${sentiment}`
@@ -1658,7 +1658,7 @@ export function registerActionHandlers(bot, userState) {
                     Markup.button.callback(t("review.today"), "REVIEW_DETAIL_0"),
                 ],
                 [
-                    Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
+                    Markup.button.callback(t("review.changePeriod"), "REVIEW"),
                     Markup.button.callback(t("cmd.menu.back"), "HOME"),
                 ],
             ]
@@ -1670,7 +1670,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("REVIEW_PERIOD:", err)
             return ctx.reply(
-                `❌ ${safeBold(t("cmd.errors.generic"))}\n${t("cmd.error.retry")}",
+                `❌ ${safeBold(t("cmd.errors.generic"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1717,9 +1717,9 @@ export function registerActionHandlers(bot, userState) {
                 `${safeBold(title)}\n` +
                 `${subjectEmoji(subject)} ${priority} — ${formatDueDisplay(due)}\n\n` +
                 `\n` +
-                `📤 ส่งข้อความนี้ให้เพื่อน:\n\n` +
+                t("collab.shareMessage") +
                 `${safeCode(`@${botUsername} /collab accept ${token}`)}\n\n` +
-                `⏱️ token มีอายุ 24 ชม.`,
+                t("collab.tokenExpiryNote"),
                 { parse_mode: "Markdown", ...mainMenu },
             )
         } catch (err) {
@@ -1787,7 +1787,7 @@ export function registerActionHandlers(bot, userState) {
                     if (newBadgeIds.length) {
                         const awarded = awardBadges(uid, newBadgeIds)
                         if (awarded.length) {
-                            badgeMsg = `\n\n🏅 ${safeBold("ปลดล็อกเหรียญใหม่!")}\n`
+                            badgeMsg = `\n\n🏅 ${safeBold(t("action.newBadgeUnlocked"))}\n`
                             for (const b of awarded) {
                                 badgeMsg += `${b.icon} ${b.name} — ${b.desc}\n`
                             }
@@ -1796,10 +1796,10 @@ export function registerActionHandlers(bot, userState) {
                 } catch { logger.debug("Non-critical: pomo badge check failed") }
 
                 const title = state._pomoHomeworkTitle || ""
-                let msg = `☕ ${safeBold(t("pomodoro.pomoBreak"))}\n`
+                let msg = `☕ ${safeBold(t("action.pomoBreak"))}\n`
                 msg += `\n`
-                msg += `🍅 เซสชันเสร็จแล้ว!\n`
-                if (title) msg += `📌 งานที่ทำ: ${escapeMarkdown(title)}\n`
+                msg += `${t("action.pomoSessionComplete")}\n`
+                if (title) msg += `📌 ${t("action.pomoBreakLine2")} ${escapeMarkdown(title)}\n`
                 msg += `\n${t("pomodoro.restMsg")}`
                 msg += badgeMsg
 
@@ -1832,12 +1832,12 @@ export function registerActionHandlers(bot, userState) {
         const title = homeworkTitle || ""
         let msg = `🍅 ${safeBold(t("pomodoro.startBtn"))}\n`
         msg += `\n`
-        msg += `⏱️ 25 นาที — เริ่มเลย!\n`
-        if (title) msg += `📌 งาน: ${escapeMarkdown(title)}\n`
-        msg += `\n💪 สู้ๆ ไฟighting!`
+        msg += `${t("pomodoro.pomoStartLine2")}\n`
+        if (title) msg += `📌 ${t("pomodoro.task", { title: escapeMarkdown(title) })}\n`
+        msg += `\n${t("pomodoro.encouragement")}`
 
         const keyboard = [
-            [Markup.button.callback("❌ ยกเลิก", "POMODORO_CANCEL")],
+            [Markup.button.callback(t("pomodoro.cancel"), "POMODORO_CANCEL")],
         ]
 
         try {
@@ -1893,11 +1893,10 @@ export function registerActionHandlers(bot, userState) {
 
         let msg = `🍅 ${safeBold(t("pomodoro.title"))}\n`
         msg += `\n`
-        msg += `📅 วันนี้: ${stats.today} เซสชัน\n`
-        msg += `📅 สัปดาห์: ${stats.week} เซสชัน\n`
-        msg += `🏆 รวม: ${stats.count} เซสชัน\n`
-        msg += `⏱️ เวลาทั้งหมด: ${stats.totalHours} ชั่วโมง\n`
-        if (streak > 0) msg += `🔥 Streak: ${streak} วัน\n`
+        msg += `${t("pomodoro.sessionsToday", { count: stats.today })}\n`
+        msg += `${t("pomodoro.sessionsWeek", { count: stats.week })}\n`
+        msg += `${t("pomodoro.totalSessions", { count: stats.count, hours: stats.totalHours })}\n`
+        if (streak > 0) msg += `${t("pomodoro.streak", { days: streak })}\n`
         msg += ``
 
         const keyboard = [
@@ -1943,15 +1942,15 @@ export function registerActionHandlers(bot, userState) {
         try {
             // Re-trigger AI by sending /smartbook message
             return ctx.reply(
-                `🔄 ${safeBold("กำลังรีเฟรชแผน...")}\n` +
+                `🔄 ${safeBold(t("smartbook.refreshing"))}\n` +
                 `\n` +
-                `พิมพ์ /smartbook เพื่อสร้างแผนใหม่`,
+                t("smartbook.typeToCreate"),
                 { parse_mode: "Markdown", ...mainMenu },
             )
         } catch (err) {
             logger.error("SMARTBOOK_REFRESH:", err)
             return ctx.reply(
-                `❌ ${safeBold("รีเฟรชไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("smartbook.refreshErr"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1965,8 +1964,8 @@ export function registerActionHandlers(bot, userState) {
         const plan = state?._smartbookPlan
         if (!plan || !plan.plan || !plan.plan.length) {
             return ctx.reply(
-                `❌ ${safeBold("ไม่มีแผนที่บันทึกไว้")}\n` +
-                `พิมพ์ /smartbook เพื่อสร้างแผนก่อน`,
+                `❌ ${safeBold(t("smartbook.noPlanSaved"))}\n` +
+                t("smartbook.typeToCreateFirst"),
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -1987,7 +1986,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("SMARTBOOK_ICAL:", err)
             return ctx.reply(
-                `❌ ${safeBold("สร้าง iCal ไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("action.pomoErr"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
@@ -2014,7 +2013,7 @@ export function registerActionHandlers(bot, userState) {
 
             if (!filtered.length) {
                 return ctx.reply(
-                    `📭 ${safeBold("ไม่มีงานในช่วงนี้")}`,
+                    `📭 ${safeBold(t("review.noCompleteInPeriod"))}`,
                     { parse_mode: "Markdown", ...mainMenu },
                 )
             }
@@ -2040,7 +2039,7 @@ export function registerActionHandlers(bot, userState) {
                 const { title, subject, priority, completed } = getPageProps(p)
                 const doneDate = completed ? completed.slice(5).replace("-", "/") : "?"
                 msg += `${start + i + 1}. [${subject}] ${safeBold(title)}\n`
-                msg += `   ${priority} — เสร็จ ${doneDate}\n\n`
+                msg += `   ${priority} — ${t("export.completedAt")} ${doneDate}\n\n`
             }
 
             const keyboard = []
@@ -2053,7 +2052,7 @@ export function registerActionHandlers(bot, userState) {
             }
             if (row.length) keyboard.push(row)
             keyboard.push([
-                Markup.button.callback("📅 เปลี่ยนช่วง", "REVIEW"),
+                Markup.button.callback(t("review.changePeriod"), "REVIEW"),
                 Markup.button.callback(t("cmd.menu.back"), "HOME"),
             ])
 
@@ -2064,7 +2063,7 @@ export function registerActionHandlers(bot, userState) {
         } catch (err) {
             logger.error("REVIEW_DETAIL:", err)
             return ctx.reply(
-                `❌ ${safeBold("โหลดข้อมูลไม่ได้")}\nกรุณาลองใหม่`,
+                `❌ ${safeBold(t("cmd.errors.loadData"))}\n${t("cmd.error.retry")}`,
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
