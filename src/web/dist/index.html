@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f2ede7">
+<title>Homework Bot</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#e8854a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/assets/index-Bx3NF7SV.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DcGGf07a.css">
+</head>
+<body>
+
+<div class="app">
+<aside class="sidebar">
+  <div class="sidebar-logo"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+  <nav class="sidebar-nav">
+    <button class="sidebar-btn active" onclick="showHome()" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></button>
+    <button class="sidebar-btn" onclick="showDashboard()" aria-label="Dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
+    <button class="sidebar-btn" onclick="showCalendar()" aria-label="Calendar"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+    <button class="sidebar-btn" onclick="showList()" aria-label="List"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+    <button class="sidebar-btn" onclick="showBadges()" aria-label="Badges"><svg viewBox="0 0 24 24"><path d="M12 15l-5 3 1-5.5L4 8l5.5-.8L12 2l2.5 5.2L20 8l-4 4.5L17 18z"/></svg></button>
+  </nav>
+  <div class="sidebar-bottom">
+    <button class="sidebar-btn" onclick="toggleDark()" aria-label="Toggle dark mode" style="margin-bottom:8px;"><svg viewBox="0 0 24 24" id="darkIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+    <div class="sidebar-avatar"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+  </div>
+</aside>
+
+<div class="main" id="app">
+
+<!-- ── HOME ─ -->
+<div id="homeView" class="page">
+  <div class="header">
+    <div class="greeting"><h1 id="homeGreeting">Hi there!</h1><p>Your homework overview</p></div>
+    <button class="btn btn-primary" onclick="openAddModal()" style="display:flex;align-items:center;gap:6px;">
+      <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add
+    </button>
+  </div>
+  <div class="card" id="homeQuoteCard" style="margin-bottom:12px;padding:14px 18px;display:none;">
+    <div id="homeQuoteText" style="font-size:13px;font-style:italic;color:var(--text2);line-height:1.6;"></div>
+    <div id="homeQuoteAuthor" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>
+  </div>
+  <div class="stats" id="homeStats">
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card-warm">
+      <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Today <span style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;" id="homeTodayDate"></span></div>
+      <div id="homeTodayList"><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Attention</div>
+      <div id="homeOverdueAlert" class="hide">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="showList()">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(232,93,93,0.1);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--coral);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <div><div style="font-weight:600;font-size:13px;color:var(--coral);" id="homeOverdueCount"></div><div style="font-size:10px;color:var(--text3);">overdue</div></div>
+        </div>
+      </div>
+      <div id="homeNoOverdue" style="display:flex;align-items:center;gap:8px;">
+        <div style="width:32px;height:32px;border-radius:8px;background:rgba(61,184,158,0.1);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:var(--green);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div><div style="font-weight:600;font-size:13px;">All caught up!</div><div style="font-size:10px;color:var(--text3);">No overdue tasks</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" id="homePanicRow" style="display:none;">
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Top 3 Urgent Tasks</div>
+      <div id="homePanicList"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Progress by Subject</div>
+      <div id="homeSubjectProgress"></div>
+    </div>
+  </div>
+  <div class="quick-grid">
+    <div class="quick-card" onclick="showDashboard()"><div class="qc-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div class="qc-title">Dashboard</div><div class="qc-desc">Charts & stats</div></div>
+    <div class="quick-card" onclick="showCalendar()"><div class="qc-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="qc-title">Calendar</div><div class="qc-desc">Monthly view</div></div>
+    <div class="quick-card" onclick="showList()"><div class="qc-icon"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div><div class="qc-title">List</div><div class="qc-desc">Search & filter</div></div>
+  </div>
+  <div class="btn-group"><button class="btn btn-sm" onclick="refreshHome()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button><span style="color:var(--text3);font-size:10px;" id="homeTs"></span></div>
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="dashView" class="page hide">
+  <div class="header"><div class="greeting"><h1 id="dashGreeting">Good Morning</h1><p id="dashSub">Let's crush your goals today!</p></div></div>
+  <div class="stats" id="dashStats">
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card-warm">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Weekly Progress</div>
+      <div style="position:relative;height:140px;"><canvas id="weekChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Status</div>
+      <div style="max-width:160px;margin:0 auto;"><canvas id="statusChart"></canvas><div id="statusLegend" style="text-align:center;margin-top:8px;"></div></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Priority</div>
+      <div style="max-width:160px;margin:0 auto;"><canvas id="priorityChart"></canvas><div id="priorityLegend" style="text-align:center;margin-top:8px;"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Subjects</div>
+      <div class="pill-list" id="dashSubjects"></div>
+      <div style="margin-top:10px;"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Urgency</div><div class="urgency-bar" id="urgencyBar"></div></div>
+      <div style="margin-top:12px;"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Tags</div><div class="pill-list" id="dashTags"></div></div>
+    </div>
+  </div>
+  <div class="card full">
+    <div class="card-title"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>30-Day Trend</div>
+    <div style="position:relative;height:160px;"><canvas id="trendChart"></canvas></div>
+  </div>
+  <div class="card full">
+    <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Next 7 Days</div>
+    <div id="dashWeekGrid"></div>
+  </div>
+  <div class="card full">
+    <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Year Heatmap</div>
+    <div id="dashHeatmap" style="overflow-x:auto;"></div>
+  </div>
+  <div class="btn-group"><button class="btn btn-sm" onclick="refreshDash()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button><span style="color:var(--text3);font-size:10px;" id="dashTs"></span></div>
+</div>
+
+<!-- ── CALENDAR ── -->
+<div id="calView" class="page hide">
+  <div class="header"><div class="greeting"><h1>Calendar</h1><p>Monthly overview</p></div></div>
+  <div class="card-dark" style="margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-title" style="margin:0;" id="calTitle"></div>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-sm" style="background:rgba(255,255,255,0.08);color:#fff;border-color:rgba(255,255,255,0.08);" onclick="calMove(-1)"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <button class="btn btn-sm btn-primary" onclick="calToday()">Today</button>
+        <button class="btn btn-sm" style="background:rgba(255,255,255,0.08);color:#fff;border-color:rgba(255,255,255,0.08);" onclick="calMove(1)"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;"><polyline points="9 18 15 12 9 6"/></svg></button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div style="display:flex;gap:12px;margin-top:10px;font-size:9px;color:rgba(255,255,255,0.35);flex-wrap:wrap;">
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--coral);vertical-align:middle;margin-right:3px;"></span>To Do</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yellow);vertical-align:middle;margin-right:3px;"></span>In Progress</span>
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);vertical-align:middle;margin-right:3px;"></span>Done</span>
+      <span style="opacity:.5;">|</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);vertical-align:middle;margin-right:3px;box-shadow:0 0 6px rgba(232,133,74,0.4);"></span>Today</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--yellow);vertical-align:middle;margin-right:3px;"></span>Has Tasks</span>
+    </div>
+  </div>
+  <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Tasks on <span id="calDayLabel"></span></div><div id="calDayList"><div class="empty">Click a day to view tasks</div></div></div>
+</div>
+
+<!-- ── LIST ── -->
+<div id="listView" class="page hide">
+  <div class="header"><div class="greeting"><h1>All Tasks</h1><p>Search, filter, and manage</p></div></div>
+  <div class="card">
+    <div class="toolbar">
+      <input class="search" id="searchBox" placeholder="Search..." oninput="listFilter()">
+      <select class="btn" id="subjectFilter" onchange="listFilter()" style="min-width:90px;"><option value="">All</option></select>
+      <select class="btn" id="tagFilter" onchange="listFilter()" style="min-width:80px;"><option value="">All Tags</option></select>
+      <input type="date" id="dateFrom" class="btn" onchange="listFilter()">
+      <span style="color:var(--text3);font-size:11px;">to</span>
+      <input type="date" id="dateTo" class="btn" onchange="listFilter()">
+      <button class="btn btn-sm btn-primary" onclick="exportCSV()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button>
+      <button class="btn btn-sm" onclick="exportPDF()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>PDF</button>
+    </div>
+    <div id="bulkBar" class="bulk-bar hide">
+      <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button class="bulk-btn" onclick="bulkStatus('Todo')">To Do</button>
+      <button class="bulk-btn" onclick="bulkStatus('In Progress')">In Progress</button>
+      <button class="bulk-btn" onclick="bulkStatus('Done')">Done</button>
+      <button class="bulk-btn" style="color:var(--coral);border-color:var(--coral);" onclick="bulkDelete()">🗑 Delete</button>
+      <button class="bulk-btn bulk-clear" onclick="clearSelection()">Clear</button>
+    </div>
+    <div class="filter-group" id="listFilters" style="margin-bottom:10px;"></div>
+    <div id="filterChips" style="margin-bottom:6px;display:none;"></div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th style="width:30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="cursor:pointer;"></th>
+        <th style="width:55px;" onclick="listSort('status')">Status <span class="sort" id="sort-status">▾</span></th>
+        <th onclick="listSort('title')">Title <span class="sort" id="sort-title">▾</span></th>
+        <th style="width:55px;" onclick="listSort('subject')">Subject <span class="sort" id="sort-subject">▾</span></th>
+        <th style="width:65px;" onclick="listSort('priority')">Priority <span class="sort" id="sort-priority">▾</span></th>
+        <th style="width:80px;" onclick="listSort('due')">Due <span class="sort active" id="sort-due">▾</span></th>
+        <th style="width:70px;">Remaining</th>
+        <th style="width:70px;">Done</th>
+        <th style="width:70px;">Tags</th>
+      </tr></thead><tbody id="listTable"><tr><td colspan="9"><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div><div class="skel-wrap"><div class="skel skel-b"></div></div></td></tr></tbody></table>
+    </div>
+    <div class="pagination" id="listPagination"><div class="page-info" id="pageInfo"></div><div class="page-btns" id="pageBtns"></div></div>
+    <div class="meta"><span id="listStatus"></span><span id="listTs"></span></div>
+  </div>
+</div>
+
+</div>
+
+<!-- ── BADGES ── -->
+<div id="badgesView" class="page hide">
+  <div class="header"><div class="greeting"><h1>Badges</h1><p id="badgesSub">Achievements & rewards</p></div></div>
+  <div class="stats" id="badgesStats">
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+    <div class="skel-wrap"><div class="skel skel-c"></div></div><div class="skel-wrap"><div class="skel skel-c"></div></div>
+  </div>
+  <div class="card"><div class="card-title"><svg viewBox="0 0 24 24"><path d="M12 15l-5 3 1-5.5L4 8l5.5-.8L12 2l2.5 5.2L20 8l-4 4.5L17 18z"/></svg>Earned Badges</div>
+    <div id="badgesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;"></div>
+  </div>
+  <div class="card" style="margin-top:12px;"><div class="card-title"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>All Badges</div>
+    <div id="badgesAllGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;"></div>
+  </div>
+  <div class="btn-group"><button class="btn btn-sm" onclick="loadBadges()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button></div>
+</div>
+
+</div>
+
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <div id="detailContent"></div>
+</div>
+
+<div class="modal-overlay" id="editOverlay" onclick="closeEditModal()"></div>
+<div class="modal-panel" id="editPanel" onclick="event.stopPropagation()">
+  <button class="detail-close" onclick="closeEditModal()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Edit Homework</h2>
+  <form onsubmit="submitEdit(event)">
+    <input type="hidden" id="editId">
+    <label>Title <input id="editTitle" required placeholder="Homework title"></label>
+    <label>Subject <select id="editSubject"></select></label>
+    <label>Due <input type="date" id="editDue"></label>
+    <label>Priority <span id="editPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
+      <select id="editPriority">
+        <option value="🔴 High">🔴 High</option>
+        <option value="🟡 Medium" selected>🟡 Medium</option>
+        <option value="🟢 Low">🟢 Low</option>
+      </select>
+    </label>
+    <label>Note <textarea id="editNote" rows="2" placeholder="Optional note..."></textarea></label>
+    <label>Tags <div id="editTags" class="tag-picker"></div></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button type="button" class="btn" onclick="closeEditModal()" style="flex:1;">Cancel</button>
+      <button type="submit" class="btn btn-primary" style="flex:1;">Save Changes</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal-overlay" id="addOverlay" onclick="closeAddModal()"></div>
+<div class="modal-panel" id="addPanel" onclick="event.stopPropagation()">
+  <button class="detail-close" onclick="closeAddModal()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Add Homework</h2>
+  <form onsubmit="submitHomework(event)">
+    <label>Title <input id="addTitle" required placeholder="e.g. Math exercises ch. 5"></label>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <select id="addTpl" class="btn" style="font-size:11px;flex:1;" onchange="if(this.value){const t=loadTemplateList().find(x=>x.name===this.value)?.data;if(t)applyTemplate(t);this.value=''}"><option value="">— Load Template —</option></select>
+      <button class="btn btn-sm" onclick="openAddModal()" style="padding:4px 8px;font-size:11px;">Clear</button>
+    </div>
+    <label>Subject <select id="addSubject"></select></label>
+    <label>Due <input type="date" id="addDue"></label>
+    <label>Priority <span id="addPriorityPreview" style="font-size:11px;color:var(--text3);"></span>
+      <select id="addPriority">
+        <option value="🔴 High">🔴 High</option>
+        <option value="🟡 Medium" selected>🟡 Medium</option>
+        <option value="🟢 Low">🟢 Low</option>
+      </select>
+    </label>
+    <label>Note <textarea id="addNote" rows="2" placeholder="Optional note..."></textarea></label>
+    <label>Tags <div id="addTags" class="tag-picker"></div></label>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;">Save</button>
+  </form>
+</div>
+</body></html>
