@@ -125,6 +125,10 @@
     <div class="card-title"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Next 7 Days</div>
     <div id="dashWeekGrid"></div>
   </div>
+  <div class="card full">
+    <div class="card-title"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Year Heatmap</div>
+    <div id="dashHeatmap" style="overflow-x:auto;"></div>
+  </div>
   <div class="btn-group"><button class="btn btn-sm" onclick="refreshDash()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Refresh</button><span style="color:var(--text3);font-size:10px;" id="dashTs"></span></div>
 </div>
 
@@ -165,6 +169,7 @@
       <span style="color:var(--text3);font-size:11px;">to</span>
       <input type="date" id="dateTo" class="btn" onchange="listFilter()">
       <button class="btn btn-sm btn-primary" onclick="exportCSV()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button>
+      <button class="btn btn-sm" onclick="exportPDF()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>PDF</button>
     </div>
     <div id="bulkBar" class="bulk-bar hide">
       <span class="bulk-count" id="bulkCount">0 selected</span>
@@ -251,6 +256,10 @@
   <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Add Homework</h2>
   <form onsubmit="submitHomework(event)">
     <label>Title <input id="addTitle" required placeholder="e.g. Math exercises ch. 5"></label>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <select id="addTpl" class="btn" style="font-size:11px;flex:1;" onchange="if(this.value){const t=loadTemplateList().find(x=>x.name===this.value)?.data;if(t)applyTemplate(t);this.value=''}"><option value="">— Load Template —</option></select>
+      <button class="btn btn-sm" onclick="openAddModal()" style="padding:4px 8px;font-size:11px;">Clear</button>
+    </div>
     <label>Subject <select id="addSubject"></select></label>
     <label>Due <input type="date" id="addDue"></label>
     <label>Priority <span id="addPriorityPreview" style="font-size:11px;color:var(--text3);"></span>

@@ -12,6 +12,7 @@ import { isQaReady, askAI } from "../services/qaService.js";
 import { recalcPriority } from "../utils/priority.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
 import { createDashboardUrl } from "../web/server.js";
+import { getTemplates, addTemplate, deleteTemplate as deleteTpl } from "../services/templateService.js";
 import { logger } from "../utils/logger.js";
 import { QUOTES } from "../utils/quotes.js";
 import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
@@ -1497,6 +1498,63 @@ export function registerCommandHandlers(bot, userState) {
             parse_mode: "Markdown",
             ...Markup.inlineKeyboard(keyboard),
         })
+    })
+
+    /* ── /template — save/load homework templates ── */
+    bot.command("template", async (ctx) => {
+        const uid = ctx.from.id
+        const text = ctx.message.text.trim()
+        const parts = text.split(/\s+/)
+        const subcmd = parts[1]?.toLowerCase()
+        const name = parts.slice(2).join(" ")
+
+        if (subcmd === "save" && name) {
+            const state = userState.get(uid) || {}
+            const { pending } = state
+            if (!pending || !pending.title) {
+                return ctx.reply(t("cmd.tmpl.save") + ": " + t("cmd.tmpl.nameEmpty"), { parse_mode: "Markdown" })
+            }
+            const existing = getTemplates().filter((t) => t.name === name)
+            if (existing.length) deleteTpl(existing[0].id)
+            addTemplate({
+                name,
+                title: pending.title,
+                subject: pending.subject || "",
+                dueOffset: pending.due ? 1 : 0,
+                priority: pending.priority || PRIORITY.MEDIUM,
+                note: pending.note || "",
+                tags: pending.tags || [],
+            })
+            return ctx.reply(t("cmd.tmpl.saved", { name }), { parse_mode: "Markdown" })
+        }
+
+        if (subcmd === "save") {
+            return ctx.reply(t("cmd.tmpl.nameEmpty"), { parse_mode: "Markdown" })
+        }
+
+        if (subcmd === "delete" && name) {
+            const match = getTemplates().find((t) => t.name === name)
+            if (!match) return ctx.reply(t("cmd.tmpl.notFound", { name }), { parse_mode: "Markdown" })
+            deleteTpl(match.id)
+            return ctx.reply(t("cmd.tmpl.deleted", { name }), { parse_mode: "Markdown" })
+        }
+
+        if (subcmd === "list" || !subcmd) {
+            const templates = getTemplates()
+            if (!templates.length) return ctx.reply(t("cmd.tmpl.empty"), { parse_mode: "Markdown" })
+            const lines = templates.map((t, i) =>
+                `${i + 1}. ${safeBold(t.name)} — ${t.title} (${t.subject}, ${t.dueOffset > 0 ? t.dueOffset + "d" : "No due"})`
+            )
+            return ctx.reply(t("cmd.tmpl.list", { count: templates.length }) + "\n\n" + lines.join("\n"), {
+                parse_mode: "Markdown",
+                ...Markup.inlineKeyboard([
+                    ...templates.map((t) => [Markup.button.callback(t("cmd.tmpl.load") + " " + t.name, `TEMPLATE_LOAD_${t.id}`)]),
+                    [Markup.button.callback(t("cmd.btn.home"), "HOME")],
+                ]),
+            })
+        }
+
+        return ctx.reply(t("cmd.tmpl.list", { count: 0 }) + "\n\n" + t("cmd.tmpl.nameEmpty"), { parse_mode: "Markdown" })
     })
 
     /* ── /suggest — AI suggest what to do first ── */

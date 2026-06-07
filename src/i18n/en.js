@@ -15,6 +15,22 @@ export default {
     overdue: "{days} days overdue",
     left: "{days} days left",
   },
+  tmpl: {
+    saved: "✅ Template \"{name}\" saved!",
+    deleted: "🗑️ Template \"{name}\" deleted",
+    empty: "No templates yet. Save a homework as template with /template save <name>.",
+    list: "📋 *Templates ({count})*",
+    pickOne: "Pick a template:",
+    confirmUse: "Apply template \"{name}\"?",
+    applied: "✅ Template \"{name}\" applied!",
+    used: "(used {n}x)",
+    title: "Template",
+    save: "Save as Template",
+    load: "Load Template",
+    name: "Template name",
+    nameEmpty: "Please provide a name: `/template save MyTemplate`",
+    notFound: "Template \"{name}\" not found",
+  },
   cmd: {
     error: {
       retry: "Please try again",

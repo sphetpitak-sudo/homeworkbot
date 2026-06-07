@@ -20,6 +20,7 @@ import {
 } from "../services/notionService.js";
 
 import { mainMenu, cancelMenu, showConfirm, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard, runSuggest } from "./commandHandlers.js";
+import { getTemplates as getTpls } from "../services/templateService.js";
 import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
 import {
     escapeMarkdown,
@@ -2069,5 +2070,35 @@ export function registerActionHandlers(bot, userState) {
                 { parse_mode: "Markdown", ...mainMenu },
             )
         }
+    })
+
+    /* ── TEMPLATE LOAD — apply a saved template ── */
+    bot.action(/TEMPLATE_LOAD_(\d+)/, async (ctx) => {
+        await ctx.answerCbQuery().catch(() => {})
+        const id = ctx.match[1]
+        const uid = ctx.from.id
+        const ts = getTpls()
+        const tmpl = ts.find((t) => t.id === id)
+        if (!tmpl) {
+            return ctx.reply(t("cmd.tmpl.notFound", { name: id }), { parse_mode: "Markdown", ...mainMenu })
+        }
+        const dueDate = tmpl.dueOffset > 0 ? new Date(Date.now() + tmpl.dueOffset * 86400000) : null
+        const dueStr = dueDate ? dueDate.toISOString().slice(0, 10) : ""
+        const state = {
+            mode: "CONFIRM",
+            pending: {
+                title: tmpl.title,
+                subject: tmpl.subject,
+                due: dueStr,
+                rawText: "",
+                priority: tmpl.priority,
+                note: tmpl.note,
+                tags: tmpl.tags,
+            },
+            _timestamp: Date.now(),
+        }
+        userState.set(uid, state)
+        const { showConfirm } = await import("./commandHandlers.js")
+        return showConfirm(ctx, state.pending, tmpl.name)
     })
 }

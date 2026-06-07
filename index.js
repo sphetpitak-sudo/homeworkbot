@@ -18,6 +18,7 @@ import { flushCorrections }    from "./src/services/aiCache.js";
 import { flushBadges }         from "./src/services/badgeService.js";
 import { flushPomodoros, recoverInterruptedSessions }       from "./src/services/pomodoroService.js";
 import { flushShareTokens, pruneShareTokens }    from "./src/services/shareTokenService.js";
+import { flushTemplates } from "./src/services/templateService.js";
 
 /* ── validate env + Notion schema ── */
 validateEnv();
@@ -99,6 +100,7 @@ const BOT_COMMANDS_TH = [
     { command: "pomodoro", description: "🍅 ตัวจับเวลา Pomodoro" },
     { command: "suggest", description: "💡 AI แนะนำว่าควรทำอะไรก่อน" },
     { command: "ask", description: "🤖 ถามเกี่ยวกับการบ้าน" },
+    { command: "template", description: "📝 บันทึก/เรียกใช้ template การบ้าน" },
     { command: "undo", description: "↩️ ยกเลิกการกระทำล่าสุด" },
     { command: "help", description: "🆘 วิธีใช้งาน" },
 ]
@@ -123,6 +125,7 @@ const BOT_COMMANDS_EN = [
     { command: "pomodoro", description: "🍅 Pomodoro timer" },
     { command: "suggest", description: "💡 AI suggestion" },
     { command: "ask", description: "🤖 Ask the bot" },
+    { command: "template", description: "📝 Save/load homework templates" },
     { command: "undo", description: "↩️ Undo last action" },
     { command: "help", description: "🆘 How to use" },
 ]
