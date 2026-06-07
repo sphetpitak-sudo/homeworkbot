@@ -3,7 +3,7 @@ import { formatDate, parseThaiDate } from "../utils/dateParser.js";
 import { detectSubject, cleanTitle, canonSubj } from "../utils/subjectDetector.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
 import { getAICache, setAICache } from "./aiCache.js";
-import { MODELS, getClient, initAI as modelInit, callWithModelFallback } from "./modelClient.js";
+import { getClient, initAI as modelInit, callWithModelFallback } from "./modelClient.js";
 
 export function initAI() {
     return modelInit();
