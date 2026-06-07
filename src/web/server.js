@@ -642,6 +642,41 @@ export function startWebServer(port = 8080) {
         }
     });
 
+    /* ── LINE webhook endpoint ── */
+    app.post("/webhook/line", express.raw({ type: "application/json" }), async (req, res) => {
+        const signature = req.headers["x-line-signature"];
+        const body = req.body.toString("utf-8");
+        const { validateSignature, isLineEnabled } = await import("../platforms/lineAdapter.js");
+
+        if (!isLineEnabled()) {
+            return res.status(503).send("LINE not configured");
+        }
+        if (!validateSignature(body, signature)) {
+            logger.warn("Invalid LINE signature");
+            return res.status(401).send("Unauthorized");
+        }
+
+        try {
+            const events = JSON.parse(body).events;
+            for (const event of events) {
+                if (event.type === "message" && event.message?.type === "text") {
+                    const { message: msg, replyToken, source } = event;
+                    const userId = source.userId;
+                    const { parseHomework } = await import("../services/aiService.js");
+                    const parsed = await parseHomework(`[${userId}] ${msg.text}`);
+                    if (parsed?.title) {
+                        const { sendLineReply } = await import("../platforms/lineAdapter.js");
+                        await sendLineReply(replyToken, `✅ Saved: ${parsed.title}`);
+                    }
+                }
+            }
+            res.send("OK");
+        } catch (err) {
+            logger.error("LINE webhook error:", err.message);
+            res.status(500).send("Error");
+        }
+    });
+
     return app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`))
         .on("error", (err) => logger.error(`Web server failed to listen on ${port}:`, err.message));
 }
