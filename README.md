@@ -122,6 +122,8 @@ cd homeworkbot
 npm install
 ```
 
+> Note: this repository mixes JavaScript and TypeScript sources and runs on Node.js 20+. The runtime entry uses `tsx` so prefer `npx tsx index.js` or `npm start` (which maps to that command) when running locally.
+
 #### 3️⃣ Set up environment
 
 ```bash
@@ -187,7 +189,11 @@ Tests:       1306 passed, 1306 total
 #### 6️⃣ Run
 
 ```bash
-node index.js
+Run (recommended)
+
+```bash
+npx tsx index.js
+```
 ```
 
 On boot, the bot will:
@@ -539,6 +545,23 @@ gh workflow run "Build and Push to JustRunMy" --ref deploy
 Notes
 - Make sure the repository secrets are set before running the workflow — otherwise the job will fail at login.
 - Check the Actions run logs for `Log in to JustRunMy registry` and `Build and push image` steps to confirm successful push.
+
+### Troubleshooting
+
+- If JustRunMy shows "No matching nodes" for Git-based deploys, push the image directly to the registry (see Registry-based deploy) or use the GitHub Actions workflow.
+- If the GitHub Action fails at login, verify `JRM_USERNAME` and `JRM_PASSWORD` repository secrets are set.
+- If Docker build fails locally, ensure Docker Desktop/daemon is running and you used `--password-stdin` for login.
+
+### Helpful file locations
+
+- Bot entry: `index.js`
+- Web dashboard server: `src/web/server.js` (built assets in `src/web/dist`)
+- AI model client: `src/services/modelClient.ts`
+- LINE adapter: `src/platforms/lineAdapter.ts`
+- Templates service: `src/services/templateService.ts`
+- Atomic JSON stores: `src/utils/jsonStore.ts`
+
+See `AGENTS.md` and `CHANGELOG.md` for additional notes.
 
 ### Environment Variables (Production)
 
