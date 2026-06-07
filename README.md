@@ -478,6 +478,33 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 - Port 8080 exposed
 - Set environment variables in dashboard settings
 
+### Registry-based deploy (recommended)
+
+If the platform's Git-based deploy is unreliable you can push a Docker image directly to the JustRunMy registry. This repository includes a GitHub Actions workflow that can build and push the image for you (see below).
+
+1) Log in (secure):
+
+```bash
+echo "Yb9t4PFz" | docker login -u Qk93AqLs4 --password-stdin jdr-q93on76yt8.justrunmy.app
+```
+
+2) Build:
+
+```bash
+docker build -t jdr-q93on76yt8.justrunmy.app/q93on76yt8:v1_autodeploy .
+```
+
+3) Push (triggers deploy):
+
+```bash
+docker push jdr-q93on76yt8.justrunmy.app/q93on76yt8:v1_autodeploy
+```
+
+Notes:
+- Prefer `--password-stdin` to avoid leaking credentials in shell history
+- Use a descriptive tag (commit SHA or semver) instead of always `latest`
+- This repo includes `.github/workflows/justrunmy-deploy.yml` which will build & push the image on demand — see the "CI / Deploy" section below.
+
 ### Environment Variables (Production)
 
 | Variable | Required | Default | Description |
@@ -487,10 +514,21 @@ git push https://<token>@justrunmy.app/git/<app-id> HEAD:deploy
 | `DATABASE_ID` | ✅ | — | Notion database ID |
 | `DASHBOARD_TOKEN` | ❌ | — | Web dashboard auth (generate `openssl rand -hex 32`; unset = no auth) |
 | `TYPHOON_API_KEY` | ❌ | — | AI parsing (free: 5 req/s, 200 req/min) |
+| `AI_PROVIDERS` | ❌ | `typhoon` | Comma-separated provider order for AI fallback (e.g. `typhoon,openai,anthropic`) |
 | `REMINDER_CHAT_ID` | ❌ | — | Chat ID for daily reminders + weekly summary |
 | `WEB_URL` | ❌ | — | Web dashboard URL (shows 🌐 button in bot menu) |
 | `PORT` | ❌ | `8080` | Web server port |
 | `TZ` | ❌ | `Asia/Bangkok` | Timezone (hardcoded in index.js) |
+
+### LINE Platform (optional)
+
+Set these to enable LINE webhook support and reminders via LINE:
+
+```
+LINE_CHANNEL_ACCESS_TOKEN=
+LINE_CHANNEL_SECRET=
+LINE_REMINDER_USER_ID=
+```
 
 ---
 
