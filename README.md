@@ -91,8 +91,20 @@
 - Rate limiting: 60 req/min via `express-rate-limit`
 - `TELEGRAM_TOKEN` never exposed in URLs
 - Notion API retry with exponential backoff + jitter
-- Input validation on all API endpoints
+- Input validation on all API endpoints (title length, date format, priority values, tag limits)
 - **Service worker auto-invalidation** — `CACHE_NAME` embedded with `package.json` version, stale caches purged on deploy
+- Service worker error handling with fallback responses
+
+### 🛠️ Code Quality & Development
+
+- **ESLint** — Code linting with recommended rules
+- **Prettier** — Code formatting with consistent style
+- **TypeScript Strict Mode** — Enabled with additional type checking (noUnusedLocals, noUnusedParameters, noImplicitReturns, noFallthroughCasesInSwitch)
+- **Structured Logging** — JSON format support via `LOG_FORMAT=json` environment variable
+- **Input Validation** — Comprehensive validation on all API endpoints
+- **Error Handling** — Global error handler in web server, detailed error logging
+- **Cron Timeout Guards** — 5-minute timeout on all cron jobs to prevent hanging
+- **Flexible Timezone** — Configurable via `TZ` environment variable (defaults to Asia/Bangkok)
 
 ---
 

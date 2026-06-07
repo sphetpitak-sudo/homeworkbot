@@ -40,41 +40,45 @@ This is recommended when the platform's Git-based builder is returning "No match
 ## Architecture
 
 ```
-index.js                     ← entry (bot.launch, 4 crons, state cleanup, graceful shutdown, version banner, Notion schema check)
-src/
-  handlers/
-    commandHandlers.js       ← /menu, /help, /stats, /ask, /panic, /tomorrow, /week, /deadline, /progress, /search, /quote, /export, /noted, /hint, /undo, /focus, /badges, /review, /collab, /smartbook, /pomodoro, /suggest, text router, confirm/preview, errorWithRetry
-    actionHandlers.js        ← inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
-    viewBuilders.js          ← buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress (shared text renderers, statusEmoji, priorityWeight)
-  services/
-    aiService.js             ← Typhoon AI via OpenAI SDK, 2-model chain + regex fallback
-    aiCache.js               ← .corrections.json persistence + in-memory AI cache (1h TTL)
-    qaService.js             ← AI Q&A with homework context (Typhoon models)
-    notionService.js         ← Notion SDK, TTL-cached, auto-invalidate on write, validateNotionSchema() on boot, getHomeworkStats()
-    cache.js                 ← generic in-memory TTL Map with pattern-based invalidation
-    hintService.js           ← getStudyTip() (primary) / askHint() (deprecated alias) / FALLBACK_TIPS per subject
-    shareTokenService.js     ← collab share-link tokens via createJsonStore, .share_tokens.json, 24h TTL
-    badgeService.js          ← task/usage/pomodoro badges (checkTaskBadges / awardBadges / buildBadgeGrid / getBadgeCount / getRarestBadge), persisted via createJsonStore
-    pomodoroService.js       ← focus timer (25/5 min) + getStreak, persisted via createJsonStore
-  web/
-    server.js                ← Express (REST API + static files, rate-limited, ticket-based auth, security headers, SW versioning)
-    public/
-      index.html             ← Dashboard (Chart.js, calendar, dark mode, PWA, bulk actions, CSV export)
-      manifest.json          ← PWA manifest
-      sw.js                  ← Service worker (CACHE_NAME injected at boot from package.json)
-  utils/
-    jsonStore.js             ← atomic JSON-file persistence (tmp + rename, per-file generation sidecar, setImmediate-deferred writes, round-trip flush)
-    dateParser.js            ← Thai date regex: parseThaiDate, formatDueDisplay, parseYMDToLocalDate, THAI_DAYS, THAI_MONTHS
-    subjectDetector.js       ← 50+ keywords → 10 subjects, misspelling support, subjectEmoji
-    tagDetector.js           ← Tag inference + #hashtag parsing
-    telegramFormat.js        ← Markdown escape helpers (safeBold, safeItalic, safeCode, escapeMarkdown)
-    constants.js             ← STATUS, PRIORITY, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS, dashboard limits
-    priority.js              ← recalcPriority(due): ≤3d HIGH, ≤14d MEDIUM, >14d LOW
-    quotes.js                ← 36 motivational Thai quotes
-    logger.js                ← console wrapper with Thai timestamps + emoji levels
-    validateEnv.js           ← required env validation (TELEGRAM_TOKEN, NOTION_TOKEN, DATABASE_ID, DASHBOARD_TOKEN); exits(1) if missing
-scripts/
-  backup.js                  ← Notion + corrections export to backups/
+📦 homeworkbot
+ ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
+ ┣ 📦 src
+ ┃ ┣ 📂 handlers
+ ┃ ┃ ┣ 📄 commandHandlers.js          ← 22 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
+ ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
+ ┃ ┃ ┗ 📄 viewBuilders.js             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
+ ┃ ┣ 📂 services
+ ┃ ┃ ┣ 📄 aiService.js                ← Typhoon AI via OpenAI SDK (2-model chain + regex fallback)
+ ┃ ┃ ┣ 📄 aiCache.js                  ← .corrections.json persistence + in-memory AI cache
+ ┃ ┃ ┣ 📄 qaService.js                ← AI Q&A with homework context
+ ┃ ┃ ┣ 📄 notionService.js            ← Notion SDK wrapper (TTL cache, retry, validateNotionSchema)
+ ┃ ┃ ┣ 📄 cache.js                    ← Generic in-memory TTL Map with pattern-based invalidation
+ ┃ ┃ ┣ 📄 badgeService.js             ← 🏅 Badge engine (.badges.json, rarities)
+ ┃ ┃ ┣ 📄 pomodoroService.js          ← 🍅 Pomodoro timer (.pomodoros.json, stats, streaks)
+ ┃ ┃ ┣ 📄 hintService.js              ← 💡 Thai hint generation per subject (getStudyTip / askHint)
+ ┃ ┃ ┗ 📄 shareTokenService.js        ← 🔗 Collab share-link tokens (.share_tokens.json, 24h TTL)
+ ┃ ┣ 📂 web
+ ┃ ┃ ┣ 📄 server.js                   ← Express (REST API + static, rate-limited, ticket auth, security headers, SW versioning)
+ ┃ ┃ ┗ 📂 public
+ ┃ ┃    ┣ 📄 index.html               ← Dashboard (Chart.js, calendar, dark mode, PWA, bulk actions)
+ ┃ ┃    ┣ 📄 manifest.json            ← PWA manifest
+ ┃ ┃    ┗ 📄 sw.js                    ← Service worker (CACHE_NAME auto-versioned from package.json)
+ ┃ ┗ 📂 utils
+ ┃    ┣ 📄 dateParser.js              ← Thai date regex parsing (วันนี้/พรุ่งนี้/มะรืน/อีก X วัน/dd/mm/yy)
+ ┃    ┣ 📄 subjectDetector.js         ← 50+ keywords → 10 subjects (ไทย→สุขศึกษา)
+ ┃    ┣ 📄 tagDetector.js             ← Tag inference + #hashtag parsing
+ ┃    ┣ 📄 telegramFormat.js          ← Markdown escape helpers (safeBold, safeItalic, safeCode, escapeMarkdown)
+ ┃    ┣ 📄 constants.js               ← STATUS, PRIORITY, PRIORITY_ORDER, PRIORITY_DEFAULT, URGENT_DAYS, dashboard limits
+ ┃    ┣ 📄 priority.js                ← recalcPriority(due): ≤3d HIGH, ≤14d MEDIUM, >14d LOW
+ ┃    ┣ 📄 quotes.js                  ← 36 motivational Thai quotes
+ ┃    ┣ 📄 logger.js                  ← Console wrapper with Thai timestamps + emoji levels
+ ┃    ┣ 📄 validateEnv.js             ← Environment variable validation
+ ┃    ┗ 📄 jsonStore.js               ← Atomic JSON-file persistence (tmp + rename, per-file generation sidecar, setImmediate-deferred writes)
+ ┣ 📄 Dockerfile                      ← node:20-alpine, port 8080
+ ┣ 📄 .gitignore
+ ┣ 📄 package.json
+ ┣ 📄 .env.example
+ ┗ 📄 AGENTS.md ไม่ตรงตามจริง
 ```
 
 ## AI pipeline

@@ -12,6 +12,13 @@ import { logger } from "../utils/logger.js";
 import { buildBadgeGrid, getBadgeCount, getRarestBadge } from "../services/badgeService.js";
 import { QUOTES } from "../utils/quotes.js";
 import crypto from "crypto";
+import {
+  validateHomeworkInput,
+  validateStatusUpdate,
+  validateBulkStatusUpdate,
+  validateHomeworkUpdate,
+  validateDeleteRequest,
+} from "../utils/validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -519,8 +526,12 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/homework", requireAuth, async (req, res) => {
+        const validation = validateHomeworkInput(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
+        }
+
         const { title, subject, due, priority, note, tags } = req.body;
-        if (!title?.trim()) return res.status(400).json({ error: "Title required" });
         try {
             const effectivePriority = priority || recalcPriority(due || null);
             await createHomework({
@@ -539,11 +550,12 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/status", requireAuth, async (req, res) => {
-        const { id, status } = req.body;
-        if (!id || !status) return res.status(400).json({ error: "id and status required" });
-        if (![STATUS.TODO, STATUS.IN_PROGRESS, STATUS.DONE].includes(status)) {
-            return res.status(400).json({ error: "Invalid status, must be Todo, In Progress, or Done" });
+        const validation = validateStatusUpdate(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
         }
+
+        const { id, status } = req.body;
         try {
             await updateStatus(id, status);
             res.json({ success: true });
@@ -554,8 +566,12 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/homework/update", requireAuth, async (req, res) => {
+        const validation = validateHomeworkUpdate(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
+        }
+
         const { id, title, subject, due, priority, note, tags } = req.body;
-        if (!id) return res.status(400).json({ error: "id required" });
         try {
             await updateHomework(id, {
                 title,
@@ -573,8 +589,12 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/homework/delete", requireAuth, async (req, res) => {
+        const validation = validateDeleteRequest(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
+        }
+
         const { id } = req.body;
-        if (!id) return res.status(400).json({ error: "id required" });
         try {
             await archivePage(id);
             res.json({ success: true });
@@ -626,11 +646,12 @@ export function startWebServer(port = 8080) {
     });
 
     app.post("/api/bulk-status", requireAuth, async (req, res) => {
-        const { ids, status } = req.body;
-        if (!ids?.length || !status) return res.status(400).json({ error: "ids and status required" });
-        if (![STATUS.TODO, STATUS.IN_PROGRESS, STATUS.DONE].includes(status)) {
-            return res.status(400).json({ error: "Invalid status" });
+        const validation = validateBulkStatusUpdate(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
         }
+
+        const { ids, status } = req.body;
         try {
             const results = await Promise.allSettled(ids.map((id) => updateStatus(id, status)));
             const succeeded = results.filter(r => r.status === "fulfilled").length;
@@ -675,6 +696,12 @@ export function startWebServer(port = 8080) {
             logger.error("LINE webhook error:", err.message);
             res.status(500).send("Error");
         }
+    });
+
+    /* Global error handler */
+    app.use((err, req, res, next) => {
+        logger.error("Unhandled error:", err);
+        res.status(500).json({ error: "Internal server error" });
     });
 
     return app.listen(port, () => logger.info(`Web Dashboard on http://0.0.0.0:${port}`))

@@ -1,5 +1,5 @@
 import "dotenv/config";
-process.env.TZ = "Asia/Bangkok";
+process.env.TZ = process.env.TZ || "Asia/Bangkok";
 import { Telegraf }    from "telegraf";
 import cron            from "node-cron";
 import { validateEnv } from "./src/utils/validateEnv.js";
@@ -144,8 +144,9 @@ bot.catch((err) => {
     logger.error(`Bot error: ${desc}`);
 });
 
-/* ── cron overlap guards ── */
+/* ── cron overlap guards with timeout ── */
 const cronRunning = { priority: false, archive: false, reminder: false, weekly: false };
+const CRON_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes timeout for cron jobs
 
 /* ── reminder ── */
 async function sendReminders() {
@@ -153,6 +154,11 @@ async function sendReminders() {
     cronRunning.reminder = true;
     const chatId = process.env.REMINDER_CHAT_ID;
     if (!chatId) { cronRunning.reminder = false; return; }
+
+    const timeoutId = setTimeout(() => {
+        logger.warn("Reminder cron job timed out after 5 minutes");
+        cronRunning.reminder = false;
+    }, CRON_TIMEOUT_MS);
 
     try {
         const today = new Date();
@@ -200,6 +206,7 @@ async function sendReminders() {
         const desc = err?.response?.description || err?.message || err;
         logger.error(`Reminder failed to ${chatId}: ${desc}`);
     } finally {
+        clearTimeout(timeoutId);
         cronRunning.reminder = false;
     }
 }
@@ -208,6 +215,12 @@ async function sendReminders() {
 async function autoUpdatePriority() {
     if (cronRunning.priority) return;
     cronRunning.priority = true;
+
+    const timeoutId = setTimeout(() => {
+        logger.warn("Auto-priority cron job timed out after 5 minutes");
+        cronRunning.priority = false;
+    }, CRON_TIMEOUT_MS);
+
     try {
         const pages = await fetchActive();
         const needsUpdate = [];
@@ -229,6 +242,7 @@ async function autoUpdatePriority() {
     } catch (err) {
         logger.error("autoUpdatePriority:", err);
     } finally {
+        clearTimeout(timeoutId);
         cronRunning.priority = false;
     }
 }
@@ -237,6 +251,12 @@ async function autoUpdatePriority() {
 async function autoArchive() {
     if (cronRunning.archive) return;
     cronRunning.archive = true;
+
+    const timeoutId = setTimeout(() => {
+        logger.warn("Auto-archive cron job timed out after 5 minutes");
+        cronRunning.archive = false;
+    }, CRON_TIMEOUT_MS);
+
     try {
         const pages = await fetchDone();
         const cutoff = new Date();
@@ -265,6 +285,7 @@ async function autoArchive() {
     } catch (err) {
         logger.error("autoArchive:", err);
     } finally {
+        clearTimeout(timeoutId);
         cronRunning.archive = false;
     }
 }
@@ -275,6 +296,11 @@ async function sendWeeklySummary() {
     cronRunning.weekly = true;
     const chatId = process.env.REMINDER_CHAT_ID;
     if (!chatId) { cronRunning.weekly = false; return; }
+
+    const timeoutId = setTimeout(() => {
+        logger.warn("Weekly summary cron job timed out after 5 minutes");
+        cronRunning.weekly = false;
+    }, CRON_TIMEOUT_MS);
 
     try {
         const today = new Date();
@@ -313,6 +339,7 @@ async function sendWeeklySummary() {
     } catch (err) {
         logger.error("Weekly summary:", err);
     } finally {
+        clearTimeout(timeoutId);
         cronRunning.weekly = false;
     }
 }
