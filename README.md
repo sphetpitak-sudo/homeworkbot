@@ -505,6 +505,41 @@ Notes:
 - Use a descriptive tag (commit SHA or semver) instead of always `latest`
 - This repo includes `.github/workflows/justrunmy-deploy.yml` which will build & push the image on demand — see the "CI / Deploy" section below.
 
+## CI / Registry Deploy (GitHub Actions)
+
+A GitHub Actions workflow is included to build and push the Docker image to the JustRunMy registry for you. This is useful when the platform's Git-based builder is unstable.
+
+Setup
+- Add repository secrets in GitHub (Settings → Secrets and variables → Actions):
+  - `JRM_USERNAME` — registry username (e.g. Qk93AqLs4)
+  - `JRM_PASSWORD` — registry password (e.g. Yb9t4PFz)
+
+How it runs
+- The workflow is triggered when you push to the `deploy` branch or when manually started in the Actions UI (`workflow_dispatch`).
+- It builds the image and pushes these tags to `jdr-q93on76yt8.justrunmy.app/q93on76yt8`:
+  - `${{ github.sha }}` (commit SHA)
+  - `latest`
+  - `v1_autodeploy`
+
+Run manually (examples)
+- Push to `deploy` branch (recommended):
+
+```bash
+git push origin HEAD:deploy -u
+```
+
+- Or trigger from GitHub UI: Actions → "Build and Push to JustRunMy" → Run workflow
+
+- With GitHub CLI:
+
+```bash
+gh workflow run "Build and Push to JustRunMy" --ref deploy
+```
+
+Notes
+- Make sure the repository secrets are set before running the workflow — otherwise the job will fail at login.
+- Check the Actions run logs for `Log in to JustRunMy registry` and `Build and push image` steps to confirm successful push.
+
 ### Environment Variables (Production)
 
 | Variable | Required | Default | Description |
