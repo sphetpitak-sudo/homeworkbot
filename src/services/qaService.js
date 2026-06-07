@@ -1,7 +1,7 @@
 import { fetchActive, getPageProps } from "./notionService.js";
 import { statusLabel } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
-import { MODELS, getClient } from "./modelClient.js";
+import { getClient } from "./modelClient.js";
 
 export function isQaReady() {
     return !!getClient();
