@@ -40,7 +40,7 @@ export function buildPanic(sorted, topN = 3) {
         const subject = p.properties.Subject?.rich_text?.[0]?.plain_text || t("fallback.subject")
         const priority = p.properties.Priority?.select?.name || PRIORITY.MEDIUM
         const dt = due ? parseYMDToLocalDate(due) : null
-        const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+        const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
 
         msg += `${statusEmoji(status)} ${safeBold(title)}${badgeForDiff(diff)}\n`
         msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}\n\n`
@@ -72,7 +72,7 @@ export function buildTomorrow(dueTomorrow) {
         const subject = p.properties.Subject?.rich_text?.[0]?.plain_text || t("fallback.subject")
         const priority = p.properties.Priority?.select?.name || PRIORITY.MEDIUM
         const dt = due ? parseYMDToLocalDate(due) : null
-        const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+        const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
         msg += `${statusEmoji(status)} ${safeBold(title)}${badgeForDiff(diff)}\n`
         msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}\n\n`
     }
@@ -126,7 +126,7 @@ export function buildWeek(pages) {
             const subject = p.properties.Subject?.rich_text?.[0]?.plain_text || t("fallback.subject")
             const priority = p.properties.Priority?.select?.name || PRIORITY.MEDIUM
             const dt = due ? parseYMDToLocalDate(due) : null
-            const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+            const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
             const dayLabel = diff !== null
                 ? (diff < 0 ? t("vb.overdueBy", { days: Math.abs(diff) }) : (diff === 0 ? `${t("vb.today")}!` : t("vb.daysLeft", { days: diff })))
                 : ""
@@ -174,7 +174,7 @@ export function buildDeadline(pages) {
         const due = p.properties.Due?.date?.start
         if (!due) continue
         const dt = parseYMDToLocalDate(due)
-        const diff = Math.ceil((dt - today) / 86400000)
+        const diff = Math.ceil((dt.getTime() - today.getTime()) / 86400000)
         if (Math.abs(diff) < Math.abs(closestDiff)) {
             closest = p
             closestDiff = diff
@@ -187,7 +187,7 @@ export function buildDeadline(pages) {
     const priority = closest.properties.Priority?.select?.name || PRIORITY.MEDIUM
     const due = closest.properties.Due?.date?.start
     const dt = parseYMDToLocalDate(due)
-    const diffMs = dt - now
+    const diffMs = dt.getTime() - now.getTime()
     const absDiffMs = Math.abs(diffMs)
     const totalDays = Math.floor(absDiffMs / 86400000)
     const totalHours = Math.floor((absDiffMs % 86400000) / 3600000)
@@ -241,7 +241,7 @@ export function buildDeadline(pages) {
 
 /* ── /progress ── */
 export function buildProgress(activePages, donePages) {
-    const bySubject = {}
+    const bySubject: Record<string, { done: number; total: number }> = {}
     for (const p of activePages) {
         const sub = p.properties.Subject?.rich_text?.[0]?.plain_text || t("fallback.subject")
         if (!bySubject[sub]) bySubject[sub] = { done: 0, total: 0 }

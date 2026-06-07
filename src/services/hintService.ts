@@ -45,9 +45,6 @@ export async function getStudyTip(subject, homeworkItems) {
     return msg
 }
 
-/* @deprecated Misleading name — no AI involved. Use getStudyTip. */
-export const askHint = getStudyTip
-
 export function getFallbackTipForSubject(subject) {
     return getFallbackTip(subject)
 }

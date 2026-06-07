@@ -85,17 +85,17 @@ export function createJsonStore(filename, initial = {}) {
         /* Defer via setImmediate so the write runs in the Check phase,
            after any concurrent import's Poll-phase module evaluation. */
         writeChain = writeChain.then(
-            () => new Promise((resolve) => setImmediate(() => { doWrite(); resolve() })),
-            () => new Promise((resolve) => setImmediate(() => { doWrite(); resolve() }))
+            () => new Promise<void>((resolve) => setImmediate(() => { doWrite(); resolve() })),
+            () => new Promise<void>((resolve) => setImmediate(() => { doWrite(); resolve() }))
         )
     }
 
     async function flush() {
-        await new Promise((resolve) => {
+        await new Promise<void>((resolve) => {
             writeChain = writeChain.then(
-                () => setImmediate(() => { doWrite(); resolve() }),
-                () => setImmediate(() => { doWrite(); resolve() })
-            )
+                () => new Promise<void>((resolve2) => setImmediate(() => { doWrite(); resolve2() })),
+                () => new Promise<void>((resolve2) => setImmediate(() => { doWrite(); resolve2() }))
+            ).then(() => resolve())
         })
     }
 

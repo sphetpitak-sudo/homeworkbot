@@ -1,76 +1,16 @@
-import OpenAI from "openai";
 import { logger } from "../utils/logger.js";
 import { formatDate, parseThaiDate } from "../utils/dateParser.js";
 import { detectSubject, cleanTitle, canonSubj } from "../utils/subjectDetector.js";
 import { inferAndParseTags } from "../utils/tagDetector.js";
 import { getAICache, setAICache } from "./aiCache.js";
-
-const MODELS = [
-    "typhoon-v2.5-30b-a3b-instruct",
-    "typhoon-v2.1-12b-instruct",
-];
-
-let client = null;
-let lastRequestTime = 0;
-const MIN_INTERVAL_MS = 500;
+import { MODELS, getClient, initAI as modelInit, callWithModelFallback } from "./modelClient.js";
 
 export function initAI() {
-    const key = process.env.TYPHOON_API_KEY?.trim();
-    if (!key) {
-        logger.warn("TYPHOON_API_KEY not set — AI parsing disabled, using regex fallback");
-        return;
-    }
-    try {
-        client = new OpenAI({
-            apiKey: key,
-            baseURL: "https://api.opentyphoon.ai/v1",
-        });
-        logger.info(`AI service ready ✅ (${MODELS.length} models, primary: ${MODELS[0]})`);
-    } catch (e) {
-        logger.error("AI init failed:", e.message);
-    }
+    return modelInit();
 }
 
 export function isAIReady() {
-    return !!client;
-}
-
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms).unref());
-}
-
-async function completeWithRetry(systemMsg, userMsg) {
-    for (let attempt = 0; attempt < MODELS.length; attempt++) {
-        const model = MODELS[attempt];
-
-        const now = Date.now();
-        const wait = Math.max(0, MIN_INTERVAL_MS - (now - lastRequestTime));
-        if (wait > 0) await sleep(wait);
-
-        try {
-            lastRequestTime = Date.now();
-            const resp = await client.chat.completions.create({
-                model,
-                messages: [
-                    { role: "system", content: systemMsg },
-                    { role: "user", content: userMsg },
-                ],
-                temperature: 0.1,
-                max_tokens: 200,
-            });
-            return { resp, model };
-        } catch (err) {
-            const isRetryable = err.status === 429 || err.status >= 500 || (err.message && /^429\b/.test(String(err.message)));
-            if (isRetryable && attempt < MODELS.length - 1) {
-                logger.warn(`${model} quota hit, switching to ${MODELS[attempt + 1]}...`);
-                continue;
-            }
-            if (isRetryable) {
-                logger.warn(`All models exhausted — falling back to regex`);
-            }
-            throw err;
-        }
-    }
+    return !!getClient();
 }
 
 /**
@@ -178,7 +118,7 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
 }
 
 export async function parseHomework(text, opts = {}) {
-    if (!client) return null;
+    if (!getClient()) return null;
 
     const cached = getAICache(text);
     if (cached) {
@@ -202,17 +142,17 @@ export async function parseHomework(text, opts = {}) {
     const systemMsg = buildSystemMsg(today, tomorrow, nextWed, nextFri);
 
     try {
-        const { resp, model } = await completeWithRetry(systemMsg, text);
+        const fallbackResult = await callWithModelFallback({ systemMsg, userMsg: text });
+        if (!fallbackResult) return null;
+        const { resp, model } = fallbackResult;
         const raw = resp.choices[0]?.message?.content;
         let parsed = extractJson(raw);
 
         if (!parsed) {
             logger.warn(`${model} bad format, retrying once...`);
-            const { resp: resp2 } = await completeWithRetry(
-                "Extract homework as JSON: {\"title\":...,\"subject\":...,\"dueDate\":...}",
-                text,
-            );
-            const raw2 = resp2.choices[0]?.message?.content;
+            const retry = await callWithModelFallback({ systemMsg: "Extract homework as JSON: {\"title\":...,\"subject\":...,\"dueDate\":...}", userMsg: text });
+            if (!retry) return null;
+            const raw2 = retry.resp.choices[0]?.message?.content;
             parsed = extractJson(raw2);
         }
 

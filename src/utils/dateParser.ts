@@ -125,7 +125,7 @@ export function isPossiblyLastMonth(parsed, rawText) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const parsedDate = parseYMDToLocalDate(parsed);
-    const diffDays = Math.ceil((parsedDate - today) / 86400000);
+    const diffDays = Math.ceil((parsedDate.getTime() - today.getTime()) / 86400000);
     return diffDays > 20 && inputDay < today.getDate();
 }
 
@@ -135,7 +135,7 @@ export function formatDateLabel(dateStr, type = "due") {
     if (isNaN(dt.getTime())) return dateStr;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = Math.floor((dt - today) / 86_400_000);
+    const diff = Math.floor((dt.getTime() - today.getTime()) / 86_400_000);
     const label = `${THAI_DAYS[dt.getDay()]}${dt.getDate()} ${THAI_MONTHS[dt.getMonth()]}`;
 
     if (type === "completed") {

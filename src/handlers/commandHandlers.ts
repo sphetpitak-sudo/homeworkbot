@@ -268,8 +268,8 @@ export function sortByUrgency(pages) {
         const dtA = dueA ? parseYMDToLocalDate(dueA) : null
         const dtB = dueB ? parseYMDToLocalDate(dueB) : null
 
-        const diffA = dtA ? Math.ceil((dtA - today) / 86400000) : Infinity
-        const diffB = dtB ? Math.ceil((dtB - today) / 86400000) : Infinity
+        const diffA = dtA ? Math.ceil((dtA.getTime() - today.getTime()) / 86400000) : Infinity
+        const diffB = dtB ? Math.ceil((dtB.getTime() - today.getTime()) / 86400000) : Infinity
 
         if (diffA < 0 && diffB < 0) return diffA - diffB
         if (diffA < 0) return -1
@@ -288,7 +288,7 @@ export function sortByUrgency(pages) {
 
         if (!dtA) return 1
         if (!dtB) return -1
-        return dtA - dtB
+        return dtA.getTime() - dtB.getTime()
     })
 }
 
@@ -296,7 +296,7 @@ export function buildPanicCard(page) {
     const { title, status, due, subject, priority } = getPageProps(page)
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const dt = due ? parseYMDToLocalDate(due) : null
-    const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+    const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
 
     let badge = ""
     if (diff !== null && diff < 0) {
@@ -310,6 +310,113 @@ export function buildPanicCard(page) {
     let text = `${statusEmoji(status)} ${safeBold(title)} ${badge}\n`
     text += `${subjectEmoji(subject)} ${escapeMarkdown(subject)} • ${priority}  |  ${formatDueDisplay(due)}`
     return text
+}
+
+export async function runSuggest(ctx) {
+    const pages = await fetchActive()
+    if (!pages.length) {
+        return ctx.reply(
+            `🎉 ${safeBold(t("cmd.suggest.empty"))}\n${t("cmd.suggest.emptyLine2")} 🏆`,
+            { parse_mode: "Markdown", ...mainMenu },
+        )
+    }
+
+    const sorted = sortByUrgency(pages)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const bySubject = {}
+    let overdueCount = 0
+    const contextLines = sorted.map((p, i) => {
+        const { title, subject, due, priority } = getPageProps(p)
+        bySubject[subject] = (bySubject[subject] || 0) + 1
+        const dt = due ? new Date(due + "T00:00:00") : null
+        const isOverdue = dt && dt < today
+        if (isOverdue) overdueCount++
+        const daysLeft = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
+        const urgencyLabel = isOverdue
+            ? t("cmd.suggest.daysOverdue", { days: Math.abs(daysLeft) })
+            : daysLeft !== null
+                ? t("cmd.suggest.daysLeft", { days: daysLeft })
+                : t("cmd.suggest.noDue")
+        return `${i + 1}. [${subject}] ${title} — ${t("cmd.suggest.dueLabel")}: ${due || "N/A"} (${urgencyLabel}) — ${t("cmd.suggest.priorityLabel")}: ${priority}`
+    }).join("\n")
+
+    const subjectBreakdown = Object.entries(bySubject)
+        .map(([s, c]) => `- ${s}: ${c} ${t("cmd.suggest.items")}`)
+        .join("\n")
+
+    const prompt = t("cmd.suggest.promptIntro", { date: today.toISOString().slice(0, 10), contextLines, subjectBreakdown, overdueCount })
+
+    let suggestion = null
+    try {
+        const { askAI } = await import("../services/qaService.js")
+        suggestion = await askAI(prompt)
+    } catch {
+        logger.debug("AI suggest failed, using rule-based fallback")
+    }
+
+    if (!suggestion) {
+        const overdueItems = sorted.filter(p => {
+            const due = p.properties.Due?.date?.start
+            return due && new Date(due + "T00:00:00") < today
+        })
+        const urgentItems = sorted.filter(p => {
+            const due = p.properties.Due?.date?.start
+            if (!due) return false
+            const dt = new Date(due + "T00:00:00")
+            const diff = Math.ceil((dt.getTime() - today.getTime()) / 86400000)
+            return diff >= 0 && diff <= 3
+        })
+        const laterItems = sorted.filter(p => {
+            const due = p.properties.Due?.date?.start
+            if (!due) return false
+            const dt = new Date(due + "T00:00:00")
+            const diff = Math.ceil((dt.getTime() - today.getTime()) / 86400000)
+            return diff > 3
+        })
+
+        suggestion = ""
+        if (overdueItems.length) {
+            suggestion += t("cmd.suggest.fbOverdue", { count: overdueItems.length }) + "\n"
+            for (const p of overdueItems.slice(0, 3)) {
+                const { title, subject } = getPageProps(p)
+                suggestion += `  • ${title} (${subject})\n`
+            }
+        }
+        if (urgentItems.length) {
+            suggestion += t("cmd.suggest.fbUrgent", { count: urgentItems.length }) + ":\n"
+            for (const p of urgentItems.slice(0, 3)) {
+                const { title, subject } = getPageProps(p)
+                suggestion += `  • ${title} (${subject})\n`
+            }
+        }
+        if (laterItems.length) {
+            suggestion += t("cmd.suggest.fbLater", { count: laterItems.length }) + "\n"
+        }
+        if (!suggestion) suggestion = t("cmd.suggest.noSuggestion")
+    }
+
+    let msg = `💡 ${safeBold(t("cmd.suggest.title"))}\n`
+    msg += `\n\n`
+    msg += `${suggestion}\n`
+    msg += `\n`
+    msg += `\n📊 ${t("cmd.suggest.footer", { count: sorted.length })}`
+    if (overdueCount > 0) msg += ` (🚨 ${t("cmd.suggest.overdueSuffix", { count: overdueCount })})`
+
+    const keyboard = [
+        [Markup.button.callback(t("cmd.suggest.refresh"), "SUGGEST_REFRESH")],
+        [
+            Markup.button.callback(t("cmd.suggest.focusBtn"), "FOCUS"),
+            Markup.button.callback(t("cmd.suggest.viewAll"), "LIST_ACTIVE"),
+        ],
+        [Markup.button.callback(t("cmd.btn.home"), "HOME")],
+    ]
+
+    return ctx.reply(msg, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard(keyboard),
+    })
 }
 
 export function registerCommandHandlers(bot, userState) {
@@ -926,7 +1033,7 @@ export function registerCommandHandlers(bot, userState) {
                     const { title, status, due, subject, priority } = getPageProps(page)
                     const today = new Date(); today.setHours(0, 0, 0, 0)
                     const dt = due ? parseYMDToLocalDate(due) : null
-                    const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+                    const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
 
                     let badge = ""
                     if (diff !== null && diff < 0) badge = ` 🚨 ${t("cmd.focus.overdue", { days: Math.abs(diff) })}`
@@ -1114,6 +1221,7 @@ export function registerCommandHandlers(bot, userState) {
                     title: shareData.title,
                     subject: shareData.subject,
                     due: shareData.due,
+                    rawText: "",
                     priority: shareData.priority,
                     note: shareData.note || "",
                     tags: shareData.tags,
@@ -1395,112 +1503,7 @@ export function registerCommandHandlers(bot, userState) {
     bot.command("suggest", async (ctx) => {
         try {
             await ctx.reply(t("cmd.suggest.generating"), { parse_mode: "Markdown" })
-
-            const pages = await fetchActive()
-            if (!pages.length) {
-                return ctx.reply(
-                    `🎉 ${safeBold(t("cmd.suggest.empty"))}\n${t("cmd.suggest.emptyLine2")} 🏆`,
-                    { parse_mode: "Markdown", ...mainMenu },
-                )
-            }
-
-            const sorted = sortByUrgency(pages)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-
-            const bySubject = {}
-            let overdueCount = 0
-            const contextLines = sorted.map((p, i) => {
-                const { title, subject, due, priority } = getPageProps(p)
-                bySubject[subject] = (bySubject[subject] || 0) + 1
-                const dt = due ? new Date(due + "T00:00:00") : null
-                const isOverdue = dt && dt < today
-                if (isOverdue) overdueCount++
-                const daysLeft = dt ? Math.ceil((dt - today) / 86400000) : null
-                const urgencyLabel = isOverdue
-                    ? t("cmd.suggest.daysOverdue", { days: Math.abs(daysLeft) })
-                    : daysLeft !== null
-                        ? t("cmd.suggest.daysLeft", { days: daysLeft })
-                        : t("cmd.suggest.noDue")
-                return `${i + 1}. [${subject}] ${title} — ${t("cmd.suggest.dueLabel")}: ${due || "N/A"} (${urgencyLabel}) — ${t("cmd.suggest.priorityLabel")}: ${priority}`
-            }).join("\n")
-
-            const subjectBreakdown = Object.entries(bySubject)
-                .map(([s, c]) => `- ${s}: ${c} ${t("cmd.suggest.items")}`)
-                .join("\n")
-
-            const prompt = t("cmd.suggest.promptIntro", { date: today.toISOString().slice(0, 10), contextLines, subjectBreakdown, overdueCount })
-
-            let suggestion = null
-            try {
-                const { askAI } = await import("../services/qaService.js")
-                suggestion = await askAI(prompt)
-            } catch {
-                logger.debug("AI suggest failed, using rule-based fallback")
-            }
-
-            if (!suggestion) {
-                // Rule-based fallback
-                const overdueItems = sorted.filter(p => {
-                    const due = p.properties.Due?.date?.start
-                    return due && new Date(due + "T00:00:00") < today
-                })
-                const urgentItems = sorted.filter(p => {
-                    const due = p.properties.Due?.date?.start
-                    if (!due) return false
-                    const dt = new Date(due + "T00:00:00")
-                    const diff = Math.ceil((dt - today) / 86400000)
-                    return diff >= 0 && diff <= 3
-                })
-                const laterItems = sorted.filter(p => {
-                    const due = p.properties.Due?.date?.start
-                    if (!due) return false
-                    const dt = new Date(due + "T00:00:00")
-                    const diff = Math.ceil((dt - today) / 86400000)
-                    return diff > 3
-                })
-
-                suggestion = ""
-                if (overdueItems.length) {
-                    suggestion += t("cmd.suggest.fbOverdue", { count: overdueItems.length }) + "\n"
-                    for (const p of overdueItems.slice(0, 3)) {
-                        const { title, subject } = getPageProps(p)
-                        suggestion += `  • ${title} (${subject})\n`
-                    }
-                }
-                if (urgentItems.length) {
-                    suggestion += t("cmd.suggest.fbUrgent", { count: urgentItems.length }) + ":\n"
-                    for (const p of urgentItems.slice(0, 3)) {
-                        const { title, subject } = getPageProps(p)
-                        suggestion += `  • ${title} (${subject})\n`
-                    }
-                }
-                if (laterItems.length) {
-                    suggestion += t("cmd.suggest.fbLater", { count: laterItems.length }) + "\n"
-                }
-                if (!suggestion) suggestion = t("cmd.suggest.noSuggestion")
-            }
-
-            let msg = `💡 ${safeBold(t("cmd.suggest.title"))}\n`
-            msg += `\n\n`
-            msg += `${suggestion}\n`
-            msg += `\n`
-            msg += `\n📊 ${t("cmd.suggest.footer", { count: sorted.length })}`
-            if (overdueCount > 0) msg += ` (🚨 ${t("cmd.suggest.overdueSuffix", { count: overdueCount })})`
-
-            const keyboard = [
-                [Markup.button.callback(t("cmd.suggest.refresh"), "SUGGEST_REFRESH")],
-                [
-                    Markup.button.callback(t("cmd.suggest.focusBtn"), "FOCUS"),
-                    Markup.button.callback(t("cmd.suggest.viewAll"), "LIST_ACTIVE"),
-                ],
-                [Markup.button.callback(t("cmd.btn.home"), "HOME")],
-            ]
-
-            return ctx.reply(msg, {
-                parse_mode: "Markdown",
-                ...Markup.inlineKeyboard(keyboard),
-            })
+            return runSuggest(ctx)
         } catch (err) {
             logger.error("/suggest:", err)
             return ctx.reply(

@@ -9,6 +9,7 @@ import {
     fetchActive,
     fetchDone,
     createHomework,
+    updateHomework,
     updateStatus,
     updatePriority,
     archivePage,
@@ -18,7 +19,7 @@ import {
     getPageStatus,
 } from "../services/notionService.js";
 
-import { mainMenu, cancelMenu, showConfirm, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard } from "./commandHandlers.js";
+import { mainMenu, cancelMenu, showConfirm, moreOptionsMenu, errorWithRetry, sortByUrgency, buildPanicCard, runSuggest } from "./commandHandlers.js";
 import { buildPanic, buildTomorrow, buildWeek, buildDeadline, buildProgress, statusEmoji } from "./viewBuilders.js";
 import {
     escapeMarkdown,
@@ -47,14 +48,14 @@ import { startSession as pomoStartSession, savePomodoro, getStats as pomoGetStat
 import { t } from "../utils/i18n.js";
 
 /* ── pomodoro timer tracking for graceful shutdown ── */
-const pomoTimers = new Set()
+const pomoTimers = new Set<NodeJS.Timeout>()
 export function cleanupPomoTimers() {
     for (const t of pomoTimers) clearTimeout(t)
     pomoTimers.clear()
 }
-function trackPomoTimer(t) {
+function trackPomoTimer(t: NodeJS.Timeout) {
     pomoTimers.add(t)
-    t._pomoTimerId = Symbol()
+    ;(t as any)._pomoTimerId = Symbol()
 }
 import crypto from "crypto";
 
@@ -248,7 +249,7 @@ function dashboardMenu() {
             Markup.button.callback(t("cmd.btn.askAi"), "ASK_AI"),
             Markup.button.callback(t("cmd.btn.home"), "HOME"),
         ],
-    ]);
+    ]).reply_markup;
 }
 
 function actionButtons(pageId, mode = "active") {
@@ -322,12 +323,12 @@ function buildDashboard(activePages, donePages) {
     }
 
     msg += `\n📖 ${t("action.subjectsPending")}\n`;
-    const sorted = Object.entries(bySubject).sort((a, b) => b[1] - a[1]);
+    const sorted = Object.entries(bySubject).sort((a, b) => (b[1] as number) - (a[1] as number));
     if (!sorted.length) {
         msg += `🎉 ${t("action.noPending")}\n`;
     } else {
         for (const [subject, count] of sorted.slice(0, SUBJECT_DISPLAY_MAX)) {
-            msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)}  ${"█".repeat(Math.min(count, SUBJECT_BAR_MAX))} ${count}\n`;
+            msg += `${subjectEmoji(subject)} ${escapeMarkdown(subject)}  ${"█".repeat(Math.min(count as number, SUBJECT_BAR_MAX))} ${(count as number)}\n`;
         }
     }
 
@@ -400,7 +401,7 @@ export function registerActionHandlers(bot, userState) {
         await ctx.answerCbQuery().catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
         try {
-            const created = await createHomework({ title, subject, due, rawText, priority, tags });
+            const created = await createHomework({ title, subject, due, rawText, note: "", priority, tags });
 
             if (state.originalText) {
                 setCorrection(state.originalText, { title, subject, due, priority });
@@ -420,7 +421,7 @@ export function registerActionHandlers(bot, userState) {
                     `📅 ${dueText}\n` +
                     `\n` +
                     t("action.saveSuccessLine2"),
-                { parse_mode: "Markdown", ...dashboardMenu() },
+                { parse_mode: "Markdown", reply_markup: dashboardMenu() },
             ).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
 
             const tip = showHintOnce(uid, "post_save", t("action.saveHint"));
@@ -615,7 +616,7 @@ export function registerActionHandlers(bot, userState) {
         return msg;
     }
 
-    function renderDonePage(pages, page, uid) {
+    function renderDonePage(pages, page, uid?) {
         const start = page * ITEMS_PER_PAGE;
         const end = start + ITEMS_PER_PAGE;
         const display = pages.slice(start, end);
@@ -640,7 +641,7 @@ export function registerActionHandlers(bot, userState) {
             Markup.button.callback("📊 Dashboard", "DASHBOARD"),
         ]);
         buttons.push([Markup.button.callback(t("cmd.menu.back"), "HOME")]);
-        return Markup.inlineKeyboard(buttons);
+        return Markup.inlineKeyboard(buttons).reply_markup;
     }
 
     /* LIST ACTIVE — paginated */
@@ -661,7 +662,7 @@ export function registerActionHandlers(bot, userState) {
             if (!pages.length) {
                 return ctx.reply(
                     `🎉 ${safeBold(t("vb.noPendingLong"))}\n\n${t("vb.cheer")}`,
-                    { parse_mode: "Markdown", ...dashboardMenu() },
+                    { parse_mode: "Markdown", reply_markup: dashboardMenu() },
                 );
             }
 
@@ -671,7 +672,7 @@ export function registerActionHandlers(bot, userState) {
 
             return ctx.reply(renderListPage(pages, 0, uid), {
                 parse_mode: "Markdown",
-                ...listKeyboard("active", 0, totalPages),
+                reply_markup: listKeyboard("active", 0, totalPages),
             });
         } catch (err) {
             logger.error("LIST_ACTIVE:", err);
@@ -689,7 +690,7 @@ export function registerActionHandlers(bot, userState) {
             if (!pages.length) {
                 return ctx.reply(
                     `📭 ${safeBold(t("vb.noDoneLong"))}\n\n${t("quote.cheer")}`,
-                    { parse_mode: "Markdown", ...dashboardMenu() },
+                    { parse_mode: "Markdown", reply_markup: dashboardMenu() },
                 );
             }
 
@@ -697,9 +698,9 @@ export function registerActionHandlers(bot, userState) {
             const totalPages = Math.ceil(pages.length / ITEMS_PER_PAGE);
             userState.set(uid, { mode: "LIST_VIEW", listType: "done", listItems: pages, listPage: 0, _timestamp: Date.now() });
 
-            return ctx.reply(renderDonePage(pages, 0), {
+             return ctx.reply(renderDonePage(pages, 0), {
                 parse_mode: "Markdown",
-                ...listKeyboard("done", 0, totalPages),
+                reply_markup: listKeyboard("done", 0, totalPages),
             });
         } catch (err) {
             logger.error("LIST_DONE:", err);
@@ -733,12 +734,12 @@ export function registerActionHandlers(bot, userState) {
         try {
             await ctx.editMessageText(renderer(pages, page, uid), {
                 parse_mode: "Markdown",
-                ...listKeyboard(state.listType, page, totalPages),
+                reply_markup: listKeyboard(state.listType, page, totalPages),
             });
         } catch {
             await ctx.reply(renderer(pages, page, uid), {
                 parse_mode: "Markdown",
-                ...listKeyboard(state.listType, page, totalPages),
+                reply_markup: listKeyboard(state.listType, page, totalPages),
             });
         }
     });
@@ -754,7 +755,7 @@ export function registerActionHandlers(bot, userState) {
             ]);
             return ctx.reply(buildDashboard(activePages, donePages), {
                 parse_mode: "Markdown",
-                ...dashboardMenu(),
+                reply_markup: dashboardMenu(),
             });
         } catch (err) {
             logger.error("DASHBOARD:", err);
@@ -1125,7 +1126,7 @@ export function registerActionHandlers(bot, userState) {
 
             const today = new Date(); today.setHours(0, 0, 0, 0)
             const dt = due ? parseYMDToLocalDate(due) : null
-            const diff = dt ? Math.ceil((dt - today) / 86400000) : null
+            const diff = dt ? Math.ceil((dt.getTime() - today.getTime()) / 86400000) : null
 
             let badge = ""
             if (diff !== null && diff < 0) {
@@ -1270,8 +1271,6 @@ export function registerActionHandlers(bot, userState) {
         )
     })
 
-    /* FOCUS_NEXT — removed; no flow populates _focusPages (was a dead path) */
-
     /* STATUS helpers */
     async function setStatus(ctx, pageId, status, message) {
         try {
@@ -1308,12 +1307,12 @@ export function registerActionHandlers(bot, userState) {
             if (tip) {
                 await ctx.reply(`${fullMsg}\n\n────\n${tip.text}`, {
                     parse_mode: "Markdown",
-                    ...dashboardMenu(),
+                    reply_markup: dashboardMenu(),
                 }).catch((err) => logger.debug("Non-critical telegram action error:", err?.message));
             } else {
                 await ctx.reply(fullMsg, {
                     parse_mode: "Markdown",
-                    ...dashboardMenu(),
+                    reply_markup: dashboardMenu(),
                 });
             }
         } catch (err) {
@@ -1447,7 +1446,7 @@ export function registerActionHandlers(bot, userState) {
                 `↩️ ${safeBold(t("action.recoverSuccess"))}\n` +
                 `\n` +
                 t("action.recoverSuccessLine2", { title: safeBold(item.name) }),
-                { parse_mode: "Markdown", ...dashboardMenu() },
+                { parse_mode: "Markdown", reply_markup: dashboardMenu() },
             );
         } catch (err) {
             logger.error("RECOVER_DELETE:", err);
@@ -1625,7 +1624,7 @@ export function registerActionHandlers(bot, userState) {
             }
 
             const topSubject = Object.entries(bySubject)
-                .sort((a, b) => b[1] - a[1])
+                .sort((a, b) => (b[1] as number) - (a[1] as number))
                 .slice(0, 3)
                 .map(([s, c]) => `${subjectEmoji(s)} ${s} (${c})`)
                 .join(", ")
@@ -1913,12 +1912,15 @@ export function registerActionHandlers(bot, userState) {
     /* SUGGEST_REFRESH — re-trigger suggest */
     bot.action("SUGGEST_REFRESH", async (ctx) => {
         await ctx.answerCbQuery().catch(() => {})
-        return ctx.reply(
-            `🔄 ${safeBold(t("suggest.generating"))}\n` +
-            `\n` +
-            t("suggest.title"),
-            { parse_mode: "Markdown", ...mainMenu },
-        )
+        try {
+            return runSuggest(ctx)
+        } catch (err) {
+            logger.error("SUGGEST_REFRESH:", err)
+            return ctx.reply(
+                `❌ ${safeBold(t("action.error"))}\n${t("cmd.errors.retry")}`,
+                { parse_mode: "Markdown", ...mainMenu },
+            )
+        }
     })
 
     /* SMARTBOOK actions */

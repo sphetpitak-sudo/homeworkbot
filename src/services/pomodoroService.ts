@@ -54,18 +54,26 @@ export function getInFlightSession(userId) {
 
 export function listInFlightSessions() {
     const bucket = inFlightBucket()
-    return Object.entries(bucket).map(([userId, session]) => ({ userId, ...session }))
+    return Object.entries(bucket).map(([userId, session]) => ({ userId, ...session as any }))
 }
 
 /* Recover sessions that should have transitioned during downtime.
    Returns a list of { userId, action: "completed" | "ended" }
    so the caller can notify the user. Idempotent: clearing a
    session ensures we don't re-fire on the next boot. */
+interface InFlightSession {
+    startedAt: number
+    duration: number
+    phase: string
+    homeworkTitle?: string
+}
+
 export function recoverInterruptedSessions() {
     const now = Date.now()
-    const recovered = []
+    const recovered: Array<{ userId: string; action: string; homeworkTitle?: string }> = []
     const bucket = inFlightBucket()
-    for (const [userId, session] of Object.entries(bucket)) {
+    for (const [userId, raw] of Object.entries(bucket)) {
+        const session = raw as InFlightSession
         const elapsed = now - session.startedAt
         /* "ended" is stricter than "completed" — we mark a session
            ended only if downtime has exceeded BOTH the work phase
@@ -197,7 +205,7 @@ export function getStreak(userId) {
     for (let i = 0; i < sorted.length - 1; i++) {
         const curr = new Date(sorted[i])
         const next = new Date(sorted[i + 1])
-        const diff = (curr - next) / 86400000
+        const diff = (curr.getTime() - next.getTime()) / 86400000
         if (diff === 1) streak++
         else break
     }

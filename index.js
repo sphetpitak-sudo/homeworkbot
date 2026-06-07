@@ -220,6 +220,7 @@ async function autoUpdatePriority() {
             const results = await Promise.allSettled(needsUpdate.slice(i, i + CONCURRENCY).map(p => updatePriority(p.id, p.target)));
             const failed = results.filter(r => r.status === "rejected");
             if (failed.length) logger.warn(`Priority batch ${i / CONCURRENCY}: ${failed.length} failed`);
+            if (i + CONCURRENCY < needsUpdate.length) await new Promise(r => setTimeout(r, 100 + Math.random() * 200).unref());
         }
         logger.info(`Auto-priority updated ${needsUpdate.length} items`);
     } catch (err) {
@@ -255,6 +256,7 @@ async function autoArchive() {
             const results = await Promise.allSettled(toArchive.slice(i, i + CONCURRENCY).map(id => archivePage(id)));
             const failed = results.filter(r => r.status === "rejected");
             if (failed.length) logger.warn(`Archive batch ${i / CONCURRENCY}: ${failed.length} failed`);
+            if (i + CONCURRENCY < toArchive.length) await new Promise(r => setTimeout(r, 100 + Math.random() * 200).unref());
         }
         logger.info(`Auto-archived ${toArchive.length} items`);
     } catch (err) {

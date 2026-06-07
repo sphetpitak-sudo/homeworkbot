@@ -1,13 +1,13 @@
 import { Client } from "@notionhq/client";
 import { logger } from "../utils/logger.js";
 import { STATUS, PRIORITY_DEFAULT, NOTION_PAGE_SIZE, URGENT_DAYS } from "../utils/constants.js";
-import { cacheGet, cacheSet, cacheInvalidate } from "./cache.js";
+import { cacheGet, cacheSet, cacheInvalidate, cacheCleanup } from "./cache.js";
 import { cleanTitle } from "../utils/subjectDetector.js";
 
 const notion = new Client({ auth: process.env.NOTION_TOKEN?.trim() });
 const DB = process.env.DATABASE_ID;
 
-const NOTION_MAX_RETRIES = 3;
+const NOTION_MAX_RETRIES = Number(process.env.NOTION_MAX_RETRIES) || 3;
 const NOTION_RETRY_BASE_MS = 1000;
 
 async function notionWithRetry(fn, retries = NOTION_MAX_RETRIES) {
@@ -166,7 +166,7 @@ export async function fetchActive() {
         },
         sorts: [{ property: "Due", direction: "ascending" }],
     });
-    cacheSet("notion:active", data, 15_000);
+    cacheSet("notion:active", data, 30_000);
     return data;
 }
 
@@ -224,7 +224,7 @@ export async function createHomework({
 }) {
     const cleanNote = rawText ? cleanTitle(rawText).trim() : "";
     const noteToStore = cleanNote.length > 3 ? cleanNote : (noteProp || "");
-    const props = {
+    const props: Record<string, any> = {
         Name: { title: [{ text: { content: title } }] },
         Subject: { rich_text: [{ text: { content: subject } }] },
         Status: { select: { name: STATUS.TODO } },
@@ -247,7 +247,7 @@ export async function createHomework({
 }
 
 export async function updateStatus(pageId, status) {
-    const props = { Status: { select: { name: status } } };
+    const props: Record<string, any> = { Status: { select: { name: status } } };
     if (status === STATUS.DONE) {
         const today = new Date();
         const y = today.getFullYear();
@@ -261,19 +261,13 @@ export async function updateStatus(pageId, status) {
         page_id: pageId,
         properties: props,
     }));
-    /* C1: pageCache is keyed per-page with a 5s TTL and is invalidated
-       only by the "notion:" prefix here. That means a subsequent
-       getPageStatus/getPageTitle within 5s reads the OLD status, which
-       breaks /undo (reverts to wrong status) and double-toggle logic
-       (clicking Done twice succeeds because the second call still sees
-       Todo from cache). Invalidate the per-page entry too. */
-    pageCache.delete(pageId);
     cacheInvalidate("notion:");
+    cacheInvalidate("page:");
     logger.info(`Status updated: ${pageId} → ${status}`);
 }
 
-export async function updateHomework(pageId, { title, subject, due, priority, note, tags }) {
-    const props = {};
+export async function updateHomework(pageId, { title = "", subject = "", due = null, priority = "", note = "", tags = [] }: { title?: any; subject?: any; due?: any; priority?: any; note?: any; tags?: any }) {
+    const props: Record<string, any> = {};
     if (title !== undefined) props.Name = { title: [{ text: { content: title } }] };
     if (subject !== undefined) props.Subject = { rich_text: [{ text: { content: subject } }] };
     if (due !== undefined) props.Due = due ? { date: { start: due } } : { date: null };
@@ -281,7 +275,7 @@ export async function updateHomework(pageId, { title, subject, due, priority, no
     if (note !== undefined) props.Note = { rich_text: [{ text: { content: note || "" } }] };
     if (tags !== undefined) props.Tags = { multi_select: tags.map(name => ({ name })) };
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, properties: props }));
-    pageCache.delete(pageId);
+    cacheInvalidate("page:" + pageId);
     cacheInvalidate("notion:");
     logger.info(`Homework updated: ${pageId}`);
 }
@@ -291,52 +285,43 @@ export async function updatePriority(pageId, priority) {
         page_id: pageId,
         properties: { Priority: { select: { name: priority } } },
     }));
-    pageCache.delete(pageId);
+    cacheInvalidate("page:" + pageId);
     cacheInvalidate("notion:");
     logger.info(`Priority updated: ${pageId} → ${priority}`);
 }
 
-const pageCache = new Map();
 const PAGE_CACHE_TTL = 5000;
 
-function getCachedPage(pageId) {
-    const entry = pageCache.get(pageId);
-    if (entry && Date.now() < entry.expires) return entry.page;
-    return null;
-}
-
-function setCachedPage(pageId, page) {
-    pageCache.set(pageId, { page, expires: Date.now() + PAGE_CACHE_TTL });
-}
-
 export async function getPageStatus(pageId) {
-    let page = getCachedPage(pageId);
+    const cacheKey = "page:" + pageId;
+    let page = cacheGet(cacheKey);
     if (!page) {
         page = await notion.pages.retrieve({ page_id: pageId });
-        setCachedPage(pageId, page);
+        cacheSet(cacheKey, page, PAGE_CACHE_TTL);
     }
     return page.properties.Status?.select?.name || STATUS.TODO;
 }
 
 export async function getPageTitle(pageId) {
-    let page = getCachedPage(pageId);
+    const cacheKey = "page:" + pageId;
+    let page = cacheGet(cacheKey);
     if (!page) {
         page = await notion.pages.retrieve({ page_id: pageId });
-        setCachedPage(pageId, page);
+        cacheSet(cacheKey, page, PAGE_CACHE_TTL);
     }
     return page.properties.Name?.title?.[0]?.plain_text || "งานนี้";
 }
 
 export async function archivePage(pageId) {
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: true }));
-    pageCache.delete(pageId);
+    cacheInvalidate("page:" + pageId);
     cacheInvalidate("notion:");
     logger.info(`Archived: ${pageId}`);
 }
 
 export async function restorePage(pageId) {
     await notionWithRetry(() => notion.pages.update({ page_id: pageId, archived: false }));
-    pageCache.delete(pageId);
+    cacheInvalidate("page:" + pageId);
     cacheInvalidate("notion:");
     logger.info(`Restored: ${pageId}`);
 }

@@ -1,4 +1,4 @@
-import { askHint, getFallbackTipForSubject } from '../src/services/hintService.js'
+import { getStudyTip, getFallbackTipForSubject } from '../src/services/hintService.js'
 
 function makePage({ title, due, subject, priority } = {}) {
   return {
@@ -11,14 +11,14 @@ function makePage({ title, due, subject, priority } = {}) {
   }
 }
 
-describe('askHint', () => {
+describe('getStudyTip', () => {
   test('returns null for empty homeworkItems', async () => {
-    const result = await askHint('คณิต', [])
+    const result = await getStudyTip('คณิต', [])
     expect(result).toBeNull()
   })
 
   test('returns null for null homeworkItems', async () => {
-    const result = await askHint('คณิต', null)
+    const result = await getStudyTip('คณิต', null)
     expect(result).toBeNull()
   })
 
@@ -27,7 +27,7 @@ describe('askHint', () => {
       makePage({ title: 'แบบฝึกหัดหน้า 20', due: '2026-05-30', subject: 'คณิต' }),
       makePage({ title: 'ใบงานบทที่ 5', due: '2026-06-05', subject: 'คณิต' }),
     ]
-    const result = await askHint('คณิต', items)
+    const result = await getStudyTip('คณิต', items)
     expect(result).toContain('งาน คณิต ที่ค้าง')
     expect(result).toContain('แบบฝึกหัดหน้า 20')
     expect(result).toContain('ใบงานบทที่ 5')
@@ -50,27 +50,27 @@ describe('askHint', () => {
     ]
     for (const { subject, keyword } of tests) {
       const items = [makePage({ subject })]
-      const result = await askHint(subject, items)
+      const result = await getStudyTip(subject, items)
       expect(result).toContain(keyword)
     }
   })
 
   test('falls back to "ทั่วไป" tip for unknown subject', async () => {
     const items = [makePage({ subject: 'ดาราศาสตร์' })]
-    const result = await askHint('ดาราศาสตร์', items)
+    const result = await getStudyTip('ดาราศาสตร์', items)
     expect(result).toContain('เริ่มจากสิ่งที่รู้ก่อน')
   })
 
   test('handles single homework item', async () => {
     const items = [makePage({ title: 'รายงาน', due: '2026-06-10' })]
-    const result = await askHint('ไทย', items)
+    const result = await getStudyTip('ไทย', items)
     expect(result).toContain('1. รายงาน')
     expect(result).toContain('ไทย ที่ค้าง')
   })
 
   test('handles page with missing properties', async () => {
     const items = [{ properties: {} }]
-    const result = await askHint('ทั่วไป', items)
+    const result = await getStudyTip('ทั่วไป', items)
     expect(result).toContain('ไม่มีชื่อ')
     expect(result).toContain('ไม่มีกำหนด')
   })

@@ -21,7 +21,7 @@ function interpolate(str, params) {
     );
 }
 
-export function t(key, params) {
+export function t(key: string, params?: Record<string, any>): string {
     const dict = pickLocale();
     const val = getByPath(dict, key);
     if (val === undefined) {
@@ -32,10 +32,4 @@ export function t(key, params) {
 
 export function getLang() {
     return BOT_LANG;
-}
-
-export function setLang(lang) {
-    if (LOCALES[lang]) {
-        process.env.BOT_LANG = lang;
-    }
 }

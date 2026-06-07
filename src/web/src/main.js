@@ -83,7 +83,7 @@ const SUBJ_OPTIONS = [
 const VIEWS = ["homeView","dashView","calView","listView","badgesView"];
 
 const FAKE_TOKEN = "demo";
-const FAKE_DATA = {
+const FAKE_DATA = import.meta.env.PROD ? null : {
   stats: {todo:4,prog:2,done:3,total:9,pct:33,bySubject:{Math:2,English:1,Physics:1,Thai:1,"Social Studies":1},byPriority:{[PRI_HIGH]:2,[PRI_MED]:3,[PRI_LOW]:1},byTags:{Exam:2,Project:1,Group:2,Reading:1,Worksheet:2,Urgent:2},urgent:2,overdue:0},
   homework:[
     {id:"d1",title:"Math exercise: exponential",status:"Todo",due:"2026-05-20",subject:"Math",priority:PRI_HIGH,note:"Questions 1-15 in the textbook",tags:["Exam","Urgent"],url:"#"},

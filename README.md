@@ -298,6 +298,38 @@ Web Dashboard ←→ Express API ←→ Notion SDK ←→ Notion API
 
 ## 📁 Architecture
 
+```mermaid
+graph TB
+    subgraph "Telegram"
+        TG[User]
+    end
+    subgraph "Bot Layer"
+        BOT[Telegraf Bot]
+        CMDS[Command Handlers]
+        ACTS[Action Handlers]
+        VIEW[View Builders]
+    end
+    subgraph "Services"
+        AI[AI Pipeline<br/>Typhoon → regex]
+        NOTION[Notion SDK<br/>+ Cache]
+        JSON[jsonStore<br/>badges/pomodoros]
+    end
+    subgraph "Web"
+        WEB[Express API<br/>+ Dashboard]
+    end
+    TG <--> BOT
+    BOT --> CMDS & ACTS
+    CMDS & ACTS --> VIEW
+    CMDS & ACTS --> AI & NOTION
+    NOTION --> JSON
+    WEB --> NOTION
+    WEB --> JSON
+    style BOT fill:#4a9eff,color:#fff
+    style NOTION fill:#e8854a,color:#fff
+    style AI fill:#3db89e,color:#fff
+    style WEB fill:#e85d5d,color:#fff
+```
+
 ```
 📦 homeworkbot
  ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
@@ -350,6 +382,8 @@ Auth: Authorization: Bearer <DASHBOARD_TOKEN>
        OR  Cookie: hb_session=<DASHBOARD_TOKEN>  (set by /api/exchange)
 Rate Limit: 60 req/min
 ```
+
+Full OpenAPI 3.0 spec: [docs/openapi.yaml](docs/openapi.yaml)
 
 ### Homework
 
@@ -547,7 +581,20 @@ npm run test:watch       # Watch mode
 
 ---
 
+## 📚 Additional Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Developer's guide, conventions, testing |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Setup, debugging, architecture overview |
+| [AGENTS.md](AGENTS.md) | AI agent-oriented reference (caching, state, cron) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+| [docs/adr/](docs/adr/) | Architecture Decision Records |
+| [docs/openapi.yaml](docs/openapi.yaml) | OpenAPI 3.0 spec for web API |
+
 ## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
 
 1. Fork the repo
 2. Create a branch: `git checkout -b feature/awesome-feature`

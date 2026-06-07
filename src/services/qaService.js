@@ -1,25 +1,7 @@
-import OpenAI from "openai";
 import { fetchActive, getPageProps } from "./notionService.js";
 import { statusLabel } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
-
-const MODELS = [
-    "typhoon-v2.5-30b-a3b-instruct",
-    "typhoon-v2.1-12b-instruct",
-];
-
-let client = null;
-
-function getClient() {
-    if (client) return client;
-    const key = process.env.TYPHOON_API_KEY?.trim();
-    if (!key) return null;
-    client = new OpenAI({
-        apiKey: key,
-        baseURL: "https://api.opentyphoon.ai/v1",
-    });
-    return client;
-}
+import { MODELS, getClient } from "./modelClient.js";
 
 export function isQaReady() {
     return !!getClient();
@@ -68,7 +50,10 @@ export async function askAI(question) {
                 if (answer) return answer;
             } catch (err) {
                 lastErr = err;
-                if (err.status !== 429 && err.status < 500) break;
+                const status = err.status || (err.message && /^429\b/.test(String(err.message)) ? 429 : 0);
+                const isRetryable = status === 429 || status >= 500;
+                if (!isRetryable || attempt >= MODELS.length - 1) break;
+                logger.warn(`${model} quota hit, switching to ${MODELS[attempt + 1]}...`);
             }
         }
 

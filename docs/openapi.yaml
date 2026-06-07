@@ -1,0 +1,331 @@
+openapi: "3.0.3"
+info:
+  title: Homework Bot API
+  version: "1.0.0"
+  description: REST API for the Homework Bot web dashboard
+
+servers:
+  - url: /
+    description: Same origin as dashboard
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  bot: { type: string, enum: [starting, ready] }
+
+  /api/exchange:
+    get:
+      summary: Exchange one-time ticket for session cookie (Stage 1)
+      parameters:
+        - name: ticket
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Shows confirmation form with real ticket
+        "401":
+          description: Invalid or expired ticket
+
+    post:
+      summary: Consume ticket and set session cookie (Stage 2)
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                ticket: { type: string }
+      responses:
+        "302":
+          description: Redirects to dashboard on success
+        "401":
+          description: Invalid or consumed ticket
+
+  /api/all:
+    get:
+      summary: Get all dashboard data
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    $ref: "#/components/schemas/Stats"
+                  homework:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HomeworkItem"
+                  trend:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrendPoint"
+                  weeklyDone:
+                    type: array
+                    items:
+                      type: integer
+        "401":
+          description: Unauthorized
+
+  /api/stats:
+    get:
+      summary: Get stats summary only
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Stats summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+
+  /api/homework:
+    get:
+      summary: List all homework
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: List of homework items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HomeworkItem"
+
+    post:
+      summary: Create homework
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                subject: { type: string }
+                due: { type: string, format: date, nullable: true }
+                priority: { type: string }
+                note: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        "400":
+          description: Title required
+        "401":
+          description: Unauthorized
+
+  /api/homework/update:
+    post:
+      summary: Update homework
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                title: { type: string }
+                subject: { type: string }
+                due: { type: string, format: date, nullable: true }
+                priority: { type: string }
+                note: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: Updated
+        "401":
+          description: Unauthorized
+
+  /api/homework/delete:
+    post:
+      summary: Archive homework
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        "200":
+          description: Archived
+        "401":
+          description: Unauthorized
+
+  /api/status:
+    post:
+      summary: Update homework status
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, status]
+              properties:
+                id: { type: string }
+                status: { type: string, enum: [Todo, "In Progress", Done] }
+      responses:
+        "200":
+          description: Status updated
+        "400":
+          description: Invalid status
+        "401":
+          description: Unauthorized
+
+  /api/bulk-status:
+    post:
+      summary: Batch update status
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, status]
+              properties:
+                ids: { type: array, items: { type: string } }
+                status: { type: string, enum: [Todo, "In Progress", Done] }
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  updated: { type: integer }
+                  failed: { type: integer }
+
+  /api/badges:
+    get:
+      summary: Get badge grid
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Badge data
+
+  /api/badges/{userId}:
+    get:
+      summary: Get badges for specific user
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Badge data
+
+  /api/quote:
+    get:
+      summary: Random motivational quote
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Quote object
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: hb_session
+
+  schemas:
+    Stats:
+      type: object
+      properties:
+        todo: { type: integer }
+        prog: { type: integer }
+        done: { type: integer }
+        total: { type: integer }
+        pct: { type: integer }
+        bySubject: { type: object }
+        byPriority: { type: object }
+        byTags: { type: object }
+        urgent: { type: integer }
+        overdue: { type: integer }
+
+    HomeworkItem:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string }
+        due: { type: string, format: date, nullable: true }
+        subject: { type: string }
+        priority: { type: string }
+        note: { type: string }
+        tags: { type: array, items: { type: string } }
+        url: { type: string }
+
+    TrendPoint:
+      type: object
+      properties:
+        date: { type: string }
+        label: { type: string }
+        count: { type: integer }

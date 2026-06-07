@@ -7,7 +7,7 @@ const jsonStore = createJsonStore(SHARE_TOKENS_FILE, {})
 
 function pruneExpired() {
     const now = Date.now()
-    const data = jsonStore.data
+    const data = jsonStore.data as Record<string, { _timestamp?: number }>
     let changed = false
     for (const [k, v] of Object.entries(data)) {
         if (now - (v._timestamp || 0) > COLLAB_TOKEN_TTL) {
