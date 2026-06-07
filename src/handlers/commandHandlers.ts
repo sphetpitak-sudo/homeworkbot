@@ -47,30 +47,23 @@ export const shareTokens = {
 }
 const COLLAB_TOKEN_TTL = SHARE_TOKEN_TTL
 
-export function getMainMenu() {
-    return Markup.inlineKeyboard([
-        [
-            Markup.button.callback(t("cmd.menu.add"), "ADD"),
-            Markup.button.callback(t("cmd.menu.active"), "LIST_ACTIVE"),
-        ],
-        [
-            Markup.button.callback(t("cmd.menu.done"), "LIST_DONE"),
-            Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
-        ],
-        [
-            Markup.button.callback(t("cmd.menu.ask"), "ASK_AI"),
-            Markup.button.callback(t("cmd.menu.panic"), "PANIC"),
-        ],
-        ...(WEB_URL
-            ? [[Markup.button.url("🌐 Web Dashboard", createDashboardUrl(WEB_URL) || WEB_URL)]]
-            : []),
-    ]);
-}
-
-// Backward compatibility - generates new URL each time it's accessed
-export const mainMenu = new Proxy({}, {
-    get: () => getMainMenu()
-});
+export const mainMenu = Markup.inlineKeyboard([
+    [
+        Markup.button.callback(t("cmd.menu.add"), "ADD"),
+        Markup.button.callback(t("cmd.menu.active"), "LIST_ACTIVE"),
+    ],
+    [
+        Markup.button.callback(t("cmd.menu.done"), "LIST_DONE"),
+        Markup.button.callback(t("cmd.menu.dashboard"), "DASHBOARD"),
+    ],
+    [
+        Markup.button.callback(t("cmd.menu.ask"), "ASK_AI"),
+        Markup.button.callback(t("cmd.menu.panic"), "PANIC"),
+    ],
+    ...(WEB_URL
+        ? [[Markup.button.url("🌐 Web Dashboard", createDashboardUrl(WEB_URL) || WEB_URL)]]
+        : []),
+]);
 
 export const cancelMenu = Markup.inlineKeyboard([
     [Markup.button.callback(t("cmd.menu.cancel"), "CANCEL")],

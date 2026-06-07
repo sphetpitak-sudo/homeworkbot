@@ -61,7 +61,7 @@ if (DASHBOARD_TOKEN) {
    derived from DASHBOARD_TOKEN so it's deterministic across restarts
    (same process.env → same key → same signature). A consumed-ticket
    Set prevents replay within the same process lifetime. */
-const TICKET_TTL_MS = 300_000 // 5 minutes (up from 60s to give users time)
+const TICKET_TTL_MS = 3600_000 // 1 hour (increased from 5 min to prevent expired links)
 const SESSION_COOKIE = "hb_session"
 /* H2: Ticket consumption is a read-then-write that previously allowed
    a TOCTOU race (concurrent exchanges of the same ticket both passed
