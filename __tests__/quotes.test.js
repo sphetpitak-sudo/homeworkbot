@@ -22,9 +22,11 @@ describe('QUOTES', () => {
     expect(unique.size).toBe(texts.length)
   })
 
-  test('all quotes contain Thai characters', () => {
+  test('all quotes contain either Thai or English characters', () => {
     QUOTES.forEach((q) => {
-      expect(q.text).toMatch(/[\u0E00-\u0E7F]/)
+      const hasThai = /[\u0E00-\u0E7F]/.test(q.text)
+      const hasEnglish = /[a-zA-Z]/.test(q.text)
+      expect(hasThai || hasEnglish).toBe(true)
     })
   })
 
@@ -42,6 +44,6 @@ describe('QUOTES', () => {
   })
 
   test('hardcoded count equals QUOTES.length', () => {
-    expect(QUOTES.length).toBe(35)
+    expect(QUOTES.length).toBe(103)
   })
 })

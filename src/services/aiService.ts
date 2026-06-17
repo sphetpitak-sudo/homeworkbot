@@ -13,13 +13,7 @@ export function isAIReady() {
     return !!getClient();
 }
 
-/**
- * Extract JSON from AI response text.
- * Handles code fences, trims content, and finds the matching closing brace
- * using brace-depth tracking instead of lastIndexOf (which can fail if
- * "}" appears inside a string value).
- */
-function extractJson(raw) {
+function extractJson(raw: string | null): Record<string, any> | null {
     if (!raw) return null;
     let cleaned = raw.trim();
     const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -28,7 +22,6 @@ function extractJson(raw) {
     if (braceIdx === -1) return null;
     cleaned = cleaned.slice(braceIdx);
 
-    // Find matching closing brace by tracking depth, ignoring braces inside strings
     let depth = 0;
     let inString = false;
     let escapeNext = false;
@@ -69,7 +62,7 @@ function extractJson(raw) {
     }
 }
 
-function nextWeekday(dayNum) {
+function nextWeekday(dayNum: number) {
     const d = new Date();
     let diff = (dayNum - d.getDay() + 7) % 7;
     if (diff === 0) diff = 7;
@@ -77,7 +70,7 @@ function nextWeekday(dayNum) {
     return formatDate(d);
 }
 
-function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
+function buildSystemMsg(today: string, tomorrow: string, nextWed: string, nextFri: string) {
     return [
         "You are a Thai homework assistant. Extract homework info from Thai messages.",
         `Current date: ${today}.`,
@@ -117,7 +110,7 @@ function buildSystemMsg(today, tomorrow, nextWed, nextFri) {
     ].join("\n");
 }
 
-export async function parseHomework(text, opts = {}) {
+export async function parseHomework(text: string, opts: any = {}) {
     if (!getClient()) return null;
 
     const cached = getAICache(text);
@@ -161,8 +154,8 @@ export async function parseHomework(text, opts = {}) {
             return null;
         }
 
-        const PRIORITY_MAP = { สูง: "🔴 สูง", กลาง: "🟡 กลาง", ต่ำ: "🟢 ต่ำ" };
-        const priority = PRIORITY_MAP[parsed.priority] || "🟡 กลาง";
+        const PRIORITY_MAP: Record<string, string> = { สูง: "🔴 สูง", กลาง: "🟡 กลาง", ต่ำ: "🟢 ต่ำ" };
+        const priority = PRIORITY_MAP[parsed.priority as string] || "🟡 กลาง";
 
         const result = {
             title: parsed.title || cleanTitle(text) || text,
@@ -175,7 +168,7 @@ export async function parseHomework(text, opts = {}) {
 
         setAICache(text, result);
         return result;
-    } catch (err) {
+    } catch (err: any) {
         const msg = String(err.message || err).slice(0, 120);
         logger.error("AI error:", msg);
         return null;

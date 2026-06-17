@@ -5,16 +5,18 @@
 ```bash
 npm install
 cp .env.example .env   # fill in TELEGRAM_TOKEN, NOTION_TOKEN, DATABASE_ID
-npm test               # 1306 tests, 17 suites
-node index.js          # long-polling only (no webhook)
+npm test               # 1339 tests, 20 suites
+npm run start          # long-polling only (no webhook)
 ```
 
 ## Non-obvious commands
 
 - `npm test` uses `--experimental-vm-modules` (already in `package.json`)
 - `.mjs` files in `__tests__/` are standalone, **not** part of Jest suite
+- TypeScript is compiled at runtime via `tsx` (not pre-built)
+- Jest uses `ts-jest` with `moduleNameMapper` to resolve `.js` → `.ts` imports
 - No linter, typecheck, or formatter configured
-- `process.env.TZ` must be `Asia/Bangkok` for cron + date math (set in `index.js`)
+- `process.env.TZ` must be `Asia/Bangkok` for cron + date math (set in `index.ts`)
 
 ## Deploy
 
@@ -41,12 +43,12 @@ This is recommended when the platform's Git-based builder is returning "No match
 
 ```
 📦 homeworkbot
- ┣ 📄 index.js                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
+ ┣ 📄 index.ts                        ← Entry point: bot.launch(), 4 crons, state cleanup, version banner, Notion schema check, graceful shutdown
  ┣ 📦 src
  ┃ ┣ 📂 handlers
- ┃ ┃ ┣ 📄 commandHandlers.js          ← 22 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
- ┃ ┃ ┣ 📄 actionHandlers.js           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
- ┃ ┃ ┗ 📄 viewBuilders.js             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
+ ┃ ┃ ┣ 📄 commandHandlers.ts          ← 22 commands (/menu /stats /panic /tomorrow /week /deadline /progress /hint /search /quote /export /noted /focus /badges /review /collab /smartbook /pomodoro /suggest /ask /undo /help), text router, confirm/preview, errorWithRetry
+ ┃ ┃ ┣ 📄 actionHandlers.ts           ← Inline keyboard callbacks (ADD, EDIT, DELETE, LIST, DASHBOARD, FOCUS, BADGES, REVIEW, COLLAB, SMARTBOOK, POMODORO, SUGGEST, retry-with-backoff)
+ ┃ ┃ ┗ 📄 viewBuilders.ts             ← Shared text renderers (buildPanic / buildTomorrow / buildWeek / buildDeadline / buildProgress)
  ┃ ┣ 📂 services
  ┃ ┃ ┣ 📄 aiService.js                ← Typhoon AI via OpenAI SDK (2-model chain + regex fallback)
  ┃ ┃ ┣ 📄 aiCache.js                  ← .corrections.json persistence + in-memory AI cache
@@ -129,7 +131,7 @@ This is recommended when the platform's Git-based builder is returning "No match
 
 ## User state
 
-- `userState` Map in `index.js`, keyed by Telegram user ID
+- `userState` Map in `index.ts`, keyed by Telegram user ID
 - Two-tier TTL: `STALE_TTL=1h` for idle, `ACTIVE_TTL=12h` for `mode==="POMODORO"`, `mode==="CONFIRM"`, `_pomodoro`, `_confirming`
 - Cleanup interval is idempotent (guarded flag)
 - `originalText` stored on ADD → CONFIRM flow, used to save corrections on save
@@ -138,7 +140,7 @@ This is recommended when the platform's Git-based builder is returning "No match
 
 ## Telegram bot commands
 
-Registered via `bot.telegram.setMyCommands` in `index.js`:
+Registered via `bot.telegram.setMyCommands` in `index.ts`:
 
 | Command | Thai description |
 |---------|------------------|
@@ -209,7 +211,7 @@ Registered via `bot.telegram.setMyCommands` in `index.js`:
 
 All cron jobs have overlap guards (`cronRunning` object with per-job boolean flags).
 
-## Shutdown sequence (`index.js`)
+## Shutdown sequence (`index.ts`)
 
 1. `cron.getTasks().forEach(t => t.stop())` — stop scheduled crons
 2. `cleanupPomoTimers()` — clear in-memory pomodoro intervals
@@ -251,7 +253,7 @@ All cron jobs have overlap guards (`cronRunning` object with per-job boolean fla
 
 ## Testing quirks
 
-- Jest config in `package.json` (`testEnvironment: node`, `--experimental-vm-modules`)
+- Jest config in `jest.config.js` (`testEnvironment: node`, `--experimental-vm-modules`, `ts-jest` transform)
 - `.mjs` test files are standalone (`node __tests__/dateParser.test.mjs`)
 - Cache tests call `beforeEach(() => cacheInvalidate())` for isolation
 - TTL tests use real `setTimeout` (timing-sensitive)
@@ -289,4 +291,4 @@ All cron jobs have overlap guards (`cronRunning` object with per-job boolean fla
 - Dashboard, list, status messages
 - All actionHandlers.js inline callbacks (ADD, EDIT_TITLE, EDIT_SUBJECT, DELETE, LIST, POMODORO, COLLAB_SEL, etc.)
 
-Tests: 1319/2 baseline pass. Deploy via `git push -u https://Km4n7:Wf6w9DQz8@justrunmy.app/git/r_z8NWy HEAD:deploy`
+Tests: 1339 pass (20 suites). Deploy via `git push -u https://Km4n7:Wf6w9DQz8@justrunmy.app/git/r_z8NWy HEAD:deploy`

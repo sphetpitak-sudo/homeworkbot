@@ -255,7 +255,7 @@ describe('Web Dashboard API E2E', () => {
       });
       expect(res.status).toBe(400);
       const data = await res.json();
-      expect(data.error).toBe('Title required');
+      expect(data.error).toBe('Title is required and must be a non-empty string');
     });
 
     test('400 when title is whitespace only', async () => {
